@@ -3,6 +3,7 @@
 
 const CATALOGUE = {
   "MO-PRET": { nom: "Prêts et retours", detail: "Départ chez le client, retour, manquants à refacturer", eur: 15, xof: 7500 },
+  "MO-RES":  { nom: "Réservations et préparation", detail: "Disponibilité à une date, liste de préparation scannée, facture de casse", eur: 15, xof: 7500 },
   "MO-KIT":  { nom: "Kits", detail: "Sortir un ensemble complet en un geste", eur: 10, xof: 5000 },
   "MO-CMD":  { nom: "Commandes fournisseurs", detail: "Brouillons automatiques, validation, bon de commande", eur: 15, xof: 7500 },
   "MO-DASH": { nom: "Tableau de direction", detail: "Valeur du parc, pertes, rapport du mois", eur: 15, xof: 7500 },
@@ -36,13 +37,13 @@ function empreinte(uid, pin) {
 }
 
 const SEED = () => ({
-  version: 7,
+  version: 8,
   equipe: EQUIPE_DEMO.map(u => ({ id: u.id, nom: u.nom, poste: u.poste, role: u.role, admin: !!u.admin, actif: true, empreinte: empreinte(u.id, u.pin) })),
   connexions: [],
   essais: {},
   reglages: { verrou: 5 },
   monnaie: "EUR",
-  modules: { "MO-PRET": true, "MO-KIT": true, "MO-CMD": true, "MO-DASH": true, "AL-SMS": false, "AL-WA": false },
+  modules: { "MO-PRET": true, "MO-RES": true, "MO-KIT": true, "MO-CMD": true, "MO-DASH": true, "AL-SMS": false, "AL-WA": false },
   fournisseurs: [
     { id: "FOU-01", nom: "Fournisseur de mobilier (démo)", delai: 3 },
     { id: "FOU-02", nom: "Fournisseur de textile (démo)", delai: 7 },
@@ -54,24 +55,26 @@ const SEED = () => ({
     { id: "EMP-D1", nom: "Mezzanine · textile" },
   ],
   articles: [
-    { id: "ART-0001", nom: "Chaise pliante blanche", img: "chaise", type: "conso", unite: "chaise", emp: "EMP-A1", seuil: 80, cible: 300, prix: 18, fou: "FOU-01" },
-    { id: "ART-0002", nom: "Table ronde 180 cm", img: "table", type: "conso", unite: "table", emp: "EMP-A1", seuil: 8, cible: 30, prix: 145, fou: "FOU-01" },
-    { id: "ART-0003", nom: "Assiette plate", img: "assiette", type: "conso", unite: "assiette", emp: "EMP-B2", seuil: 200, cible: 800, prix: 2.4, fou: "FOU-01" },
-    { id: "ART-0004", nom: "Verre à pied", img: "verre", type: "conso", unite: "verre", emp: "EMP-B2", seuil: 200, cible: 900, prix: 1.6, fou: "FOU-01" },
-    { id: "ART-0005", nom: "Nappe ronde ivoire", img: "nappe", type: "conso", unite: "nappe", emp: "EMP-D1", seuil: 24, cible: 40, prix: 22, fou: "FOU-02" },
-    { id: "ART-0006", nom: "Enceinte 15 pouces n°1", img: "enceinte", type: "equip", unite: "enceinte", emp: "EMP-C1", seuil: 0, cible: 1, prix: 690, fou: "FOU-01", serie: "SN-EA15-4471" },
-    { id: "ART-0007", nom: "Enceinte 15 pouces n°2", img: "enceinte", type: "equip", unite: "enceinte", emp: "EMP-C1", seuil: 0, cible: 1, prix: 690, fou: "FOU-01", serie: "SN-EA15-4472" },
-    { id: "ART-0008", nom: "Groupe électrogène 3 kW", img: "groupe", type: "equip", unite: "groupe", emp: "EMP-C1", seuil: 0, cible: 1, prix: 1150, fou: "FOU-01", serie: "SN-GE3-0912" },
-    { id: "ART-0009", nom: "Rallonge 25 m", img: "rallonge", type: "conso", unite: "rallonge", emp: "EMP-C1", seuil: 6, cible: 20, prix: 34, fou: "FOU-01" },
-    { id: "ART-0010", nom: "Housse de chaise", img: "housse", type: "conso", unite: "housse", emp: "EMP-D1", seuil: 60, cible: 300, prix: 3.9, fou: "FOU-02" },
+    { id: "ART-0001", nom: "Chaise pliante blanche", img: "chaise", type: "conso", unite: "chaise", emp: "EMP-A1", seuil: 80, cible: 300, prix: 18, lot: 10, fou: "FOU-01" },
+    { id: "ART-0002", nom: "Table ronde 180 cm", img: "table", type: "conso", unite: "table", emp: "EMP-A1", seuil: 8, cible: 30, prix: 145, lot: 1, fou: "FOU-01" },
+    { id: "ART-0003", nom: "Assiette plate", img: "assiette", type: "conso", unite: "assiette", emp: "EMP-B2", seuil: 200, cible: 800, prix: 2.4, lot: 40, fou: "FOU-01" },
+    { id: "ART-0004", nom: "Verre à pied", img: "verre", type: "conso", unite: "verre", emp: "EMP-B2", seuil: 200, cible: 900, prix: 1.6, lot: 36, fou: "FOU-01" },
+    { id: "ART-0005", nom: "Nappe ronde ivoire", img: "nappe", type: "conso", unite: "nappe", emp: "EMP-D1", seuil: 24, cible: 40, prix: 22, lot: 5, fou: "FOU-02" },
+    { id: "ART-0006", nom: "Enceinte 15 pouces n°1", img: "enceinte", type: "equip", unite: "enceinte", emp: "EMP-C1", seuil: 0, cible: 1, prix: 690, lot: 1, fou: "FOU-01", serie: "SN-EA15-4471" },
+    { id: "ART-0007", nom: "Enceinte 15 pouces n°2", img: "enceinte", type: "equip", unite: "enceinte", emp: "EMP-C1", seuil: 0, cible: 1, prix: 690, lot: 1, fou: "FOU-01", serie: "SN-EA15-4472" },
+    { id: "ART-0008", nom: "Groupe électrogène 3 kW", img: "groupe", type: "equip", unite: "groupe", emp: "EMP-C1", seuil: 0, cible: 1, prix: 1150, lot: 1, fou: "FOU-01", serie: "SN-GE3-0912" },
+    { id: "ART-0009", nom: "Rallonge 25 m", img: "rallonge", type: "conso", unite: "rallonge", emp: "EMP-C1", seuil: 6, cible: 20, prix: 34, lot: 1, fou: "FOU-01" },
+    { id: "ART-0010", nom: "Housse de chaise", img: "housse", type: "conso", unite: "housse", emp: "EMP-D1", seuil: 60, cible: 300, prix: 3.9, lot: 25, fou: "FOU-02" },
   ],
   kits: [
     { id: "KIT-01", nom: "Kit 50 couverts", lignes: [["ART-0003", 50], ["ART-0004", 50], ["ART-0005", 5]] },
     { id: "KIT-02", nom: "Kit salle 100 places", lignes: [["ART-0001", 100], ["ART-0010", 100], ["ART-0002", 10], ["ART-0005", 10]] },
     { id: "KIT-03", nom: "Kit son", lignes: [["ART-0006", 1], ["ART-0007", 1], ["ART-0009", 4]] },
   ],
-  evenements: ["Mariage du 14 · salle des fêtes", "Séminaire · hôtel", "Anniversaire · particulier", "Fête de quartier · association"],
+  evenements: ["Mariage · salle des fêtes", "Séminaire · hôtel", "Anniversaire · particulier", "Fête de quartier · association"],
   mouvements: [],
+  reservations: [],
+  bons: [],
   commandes: [],
   alertes: [],
   messages: [],
@@ -118,5 +121,16 @@ function seedMouvements(state) {
   add(t0 + jour, "terrain", "ART-0006", "Prêt", 1, ev[1]);
   add(t0 + jour, "terrain", "ART-0009", "Prêt", 4, ev[1]);
   add(t0 + 2 * jour, "terrain", "ART-0004", "Prêt", 300, ev[2]);
+  // Réservations : les trois événements en cours, puis trois à venir
+  const iso = n => { const d = new Date(maintenant + n * jour); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+  state.reservations.push(
+    { id: "R-P01", nom: ev[0], debut: iso(-3), fin: iso(1), lignes: [["ART-0001", 120], ["ART-0003", 240], ["ART-0005", 12]], statut: "Partie", charge: {} },
+    { id: "R-P02", nom: ev[1], debut: iso(-2), fin: iso(1), lignes: [["ART-0006", 1], ["ART-0009", 4]], statut: "Partie", charge: {} },
+    { id: "R-P03", nom: ev[2], debut: iso(-1), fin: iso(2), lignes: [["ART-0004", 300]], statut: "Partie", charge: {} },
+    { id: "R-001", nom: "Mariage · samedi", debut: iso(3), fin: iso(4), lignes: [["ART-0001", 200], ["ART-0002", 20], ["ART-0003", 200], ["ART-0004", 216], ["ART-0005", 20], ["ART-0010", 200]], statut: "Confirmée", charge: {} },
+    { id: "R-002", nom: "Séminaire d'entreprise", debut: iso(6), fin: iso(6), lignes: [["ART-0001", 80], ["ART-0002", 8], ["ART-0006", 1], ["ART-0009", 4]], statut: "Confirmée", charge: {} },
+    { id: "R-003", nom: "Gala de fin d'année", debut: iso(10), fin: iso(11), lignes: [["ART-0001", 300], ["ART-0004", 600], ["ART-0002", 30]], statut: "Confirmée", charge: {} },
+  );
+  ["Mariage · samedi", "Séminaire d'entreprise", "Gala de fin d'année"].forEach(n => state.evenements.push(n));
   return state;
 }

@@ -451,3 +451,81 @@ table.t small { color: var(--gris); }
 .d .b-nav button { border-radius: 999px; padding: 9px 16px; }
 .marque span { white-space: nowrap; }
 @media (max-width: 400px) { .b-haut .marque span { display: none; } }
+
+/* ---------- Cibles de toucher : 44 px minimum partout ---------- */
+.b-nav button, .segments button, .filtres button { min-height: 44px; }
+.btn.petit { min-height: 44px; }
+
+/* ---------- Équipe et accès : sur téléphone, les boutons passent sous le nom ---------- */
+@media (max-width: 560px) {
+  .personne { grid-template-columns: auto 1fr; }
+  .personne .actions { grid-column: 2; justify-content: space-between; }
+}
+
+/* ---------- Réservations ---------- */
+.dispo-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; }
+.dispo-dates .btn { grid-column: 1 / -1; }
+.dispo-dates input, .champ input, .champ select { height: 48px; border-radius: 10px; border: 2px solid var(--trait-fort); background: var(--carte); color: var(--encre); padding: 0 12px; font: inherit; }
+.ligne-objet { display: grid; grid-template-columns: 40px 1fr; gap: 10px; align-items: center; }
+.ligne-objet .vignette { width: 40px; }
+.ligne-objet small { display: block; color: var(--gris); font-size: 13px; line-height: 1.3; margin-top: 2px; }
+.rouge { color: var(--alerte); }
+.statut { display: inline-block; font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: var(--carte2); color: var(--encre); white-space: nowrap; }
+.statut.s-confirme { box-shadow: inset 0 0 0 2px var(--compter); }
+.statut.s-prpare { background: var(--compter); color: #fff; }
+.statut.s-partie { background: var(--sortie); color: #fff; }
+.statut.s-revenue { background: var(--retour); color: #fff; }
+.resa-lignes { display: grid; gap: 8px; margin: 10px 0; }
+.resa-ligne { display: grid; grid-template-columns: 48px 1fr 92px; gap: 10px; align-items: center; background: var(--carte2); border-radius: 12px; padding: 6px 10px 6px 6px; }
+.resa-ligne .vignette { width: 48px; }
+.resa-ligne small { display: block; font-size: 13px; color: var(--gris); }
+.resa-ligne small.rouge { color: var(--alerte); font-weight: 700; }
+.resa-ligne input { height: 48px; width: 100%; text-align: center; font-size: 20px; font-weight: 800; border-radius: 10px; border: 2px solid var(--trait-fort); background: var(--carte); color: var(--encre); }
+
+/* ---------- Préparation ---------- */
+.t-tuile.large { width: 100%; margin-bottom: 12px; grid-template-columns: auto 1fr; align-items: center; min-height: 84px; display: grid; }
+.t-scan.petit { padding: 18px 16px; }
+.t-scan.petit svg { width: 56px; height: 56px; }
+.t-scan.petit b { font-size: 22px; }
+.prep-ligne { display: grid; grid-template-columns: 56px 1fr auto; gap: 10px; align-items: center; background: var(--carte); border-radius: 14px; padding: 8px; box-shadow: inset 4px 0 0 var(--sortie); }
+.prep-ligne.ok { box-shadow: inset 4px 0 0 var(--retour); }
+.prep-ligne small { display: block; color: var(--gris); }
+.prep-ligne .barre { display: block; height: 6px; border-radius: 3px; background: var(--trait); margin-top: 6px; overflow: hidden; }
+.prep-ligne .barre i { display: block; height: 100%; background: var(--sortie); }
+.prep-ligne.ok .barre i { background: var(--retour); }
+.prep-boutons { display: flex; gap: 6px; }
+.prep-boutons .btn { width: auto; min-width: 52px; padding: 0 10px; }
+.prep-bilan { margin: 14px 0 4px; padding: 14px 16px; border-radius: 12px; font-weight: 700; }
+.prep-bilan.manque { background: color-mix(in srgb, var(--sortie) 14%, var(--carte)); color: var(--encre); box-shadow: inset 0 0 0 2px var(--sortie); }
+.prep-bilan.complet { background: color-mix(in srgb, var(--retour) 14%, var(--carte)); box-shadow: inset 0 0 0 2px var(--retour); }
+
+/* ---------- Signature et photos ---------- */
+canvas.signature { width: 100%; height: auto; aspect-ratio: 600 / 220; background: #fff; border-radius: 12px; border: 2px dashed var(--trait-fort); touch-action: none; }
+.feuille-doc img.sig { display: block; max-width: 220px; height: auto; margin: 6px 0 2px; }
+.photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin: 12px 0; }
+.photos img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; }
+label.btn { cursor: pointer; }
+
+/* ---------- Démo guidée ---------- */
+.tour { position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 35; max-width: 620px; margin: 0 auto; background: var(--encre); color: var(--fond, #fff); border-radius: 16px; padding: 14px 16px; display: grid; gap: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+.tour small { opacity: .75; font-weight: 700; }
+.tour p { margin: 2px 0 0; font-size: 16px; line-height: 1.4; }
+.tour-boutons { display: flex; justify-content: flex-end; gap: 8px; }
+.tour .btn { color: var(--encre); }
+.tour .btn.plein { background: var(--marque); color: var(--sur-marque); border-color: var(--marque); }
+body:has(.tour) main { padding-bottom: 170px; }
+@media print { .tour { display: none !important; } }
+
+.dispo-dates input { width: 100%; min-width: 0; }
+.dispo-dates .champ { min-width: 0; }
+@media (max-width: 480px) {
+  table.dispo .masque-mobile { display: none; }
+  table.dispo th, table.dispo td { padding: 8px 6px; }
+  .ligne-objet { grid-template-columns: 32px 1fr; gap: 8px; }
+  .ligne-objet .vignette { width: 32px; }
+}
+@media (max-width: 400px) {
+  .prep-ligne { grid-template-columns: 48px 1fr; }
+  .prep-ligne .vignette { width: 48px; }
+  .prep-boutons { grid-column: 1 / -1; justify-content: flex-end; }
+}

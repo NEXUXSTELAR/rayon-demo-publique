@@ -1,6 +1,6 @@
 "use strict";
 
-const CLE = "rayon-demo-v7";
+const CLE = "rayon-demo-v8";
 const CLE_THEME = "rayon-theme";
 const EUR_XOF = 655.957;
 const SEUIL_VALIDATION_EUR = 500;
@@ -59,7 +59,7 @@ let vue = { nom: "profil", arg: null };
 
 /* ---------------- Stockage ---------------- */
 function charger() {
-  try { const b = localStorage.getItem(CLE); if (b) { const s = JSON.parse(b); if (s.version === 7) return s; } } catch (e) { /* stockage bloqué : données de démo */ }
+  try { const b = localStorage.getItem(CLE); if (b) { const s = JSON.parse(b); if (s.version === 8) return s; } } catch (e) { /* stockage bloqué : données de démo */ }
   return seedMouvements(SEED());
 }
 function sauver() { try { localStorage.setItem(CLE, JSON.stringify(S)); } catch (e) { /* mode privé */ } }
@@ -143,6 +143,7 @@ function rendre() {
   else r.innerHTML = cadreBureau(session.profil);
   brancher();
   if (vue.nom === "etiquettes") dessinerQr();
+  dessinerTour();
 }
 
 /* ---------------- Connexion : qui êtes-vous, puis votre code ---------------- */
@@ -154,7 +155,8 @@ function vueProfil() {
     <p class="sous">Touchez votre nom, puis tapez votre code personnel.</p>
     <div class="profils">${S.equipe.map(u => `<button data-profil="${u.role}" data-uid="${u.id}" ${u.actif ? "" : "disabled"}>${avatar(u)}<div><b>${esc(u.nom)}</b><span>${esc(u.poste)}${u.actif ? "" : " · accès retiré"}</span></div><span class="fleche">${I.fleche}</span></button>`).join("")}</div>
     <p class="indice">Codes de démonstration : ${EQUIPE_DEMO.map(u => `${esc(u.nom)} <span class="code">${u.pin}</span>`).join(" · ")}</p>
-    <p style="margin-top:22px"><button class="lien" data-act="reinit">Remettre la démo à zéro</button></p>
+    <button class="btn plein" data-act="tour" style="margin-top:18px">Montrer la démo en 7 étapes</button>
+    <p style="margin-top:18px"><button class="lien" data-act="reinit">Remettre la démo à zéro</button></p>
   </div>`;
 }
 let saisiePin = "";
@@ -227,7 +229,7 @@ function feuilleReglages() {
    PROFIL TERRAIN : une action à la fois, des photos, de gros boutons
    ================================================================= */
 function cadreTerrain() {
-  const corps = ({ terrain: tAccueil, objet: tObjet, kits: tKits, recuperer: tRecuperer, retourEv: tRetourEvenement, chercher: tChercher, jour: tJour, bon: tBon })[vue.nom] || tAccueil;
+  const corps = ({ terrain: tAccueil, objet: tObjet, kits: tKits, recuperer: tRecuperer, retourEv: tRetourEvenement, chercher: tChercher, jour: tJour, bon: tBon, preparer: tPreparer, preparation: tPreparation, facture: vFacture })[vue.nom] || tAccueil;
   const u = S.equipe.find(x => x.id === session.uid) || { nom: session.nom, role: "terrain" };
   return `${DEMO}<header class="t-haut">
       ${vue.nom === "terrain" ? `<div class="qui">${avatar(u)}<span>${esc(session.nom)}</span></div>` : `<button class="btn petit" data-aller="terrain">← Accueil</button>`}
@@ -240,6 +242,7 @@ function tAccueil() {
   <button class="t-scan" data-act="camera">${I.scan}<b>Scanner</b><span>Visez l'étiquette de l'objet</span></button>
   <form class="t-ou" data-form="code"><label class="cache" for="code">Code de l'étiquette</label>
     <input id="code" name="code" placeholder="ou tapez le code" autocomplete="off"><button class="btn plein petit" type="submit">OK</button></form>
+  ${actif("MO-RES") ? tuilePreparer() : ""}
   <div class="t-tuiles">
     ${actif("MO-KIT") ? `<button class="t-tuile" data-aller="kits"><span class="pastille">${I.kit}</span><div><b>Sortir un kit</b><small>Tout un ensemble d'un coup</small></div></button>` : ""}
     ${actif("MO-PRET") ? `<button class="t-tuile" data-aller="recuperer"><span class="pastille">${I.camion}</span><div><b>Retour d'un événement</b><small>${n} en cours</small></div></button>` : ""}
@@ -295,32 +298,43 @@ function tRetourEvenement(ev) {
   <div class="valider"><button type="button" class="btn" data-aller="recuperer">Annuler</button><button class="btn plein" style="background:var(--retour);border-color:var(--retour);color:#fff">Valider le retour</button></div></form>`;
 }
 /* Le bon remis au client est la sortie papier du magasinier. */
-function tBon(b) {
+function tuilePreparer() {
+  const p = S.reservations.filter(r => ["Confirmée", "Préparée"].includes(r.statut) && r.debut <= isoJour(Date.now() + 10 * JOUR_MS)).length;
+  return `<button class="t-tuile large" data-aller="preparer"><span class="pastille">${I.camion}</span><div><b>Préparer un départ</b><small>${p} départ${p > 1 ? "s" : ""} prévu${p > 1 ? "s" : ""} dans les 10 jours</small></div></button>`;
+}
+function tBon(arg) {
+  const b = bonDe(arg);
   if (!b) return tAccueil();
   const lignes = b.lignes.map(([id, q]) => `<tr><td>${esc(art(id).nom)}</td><td>${art(id).id}</td><td style="text-align:right">${q}</td></tr>`).join("");
   const manq = (b.manquants || []).map(([id, q]) => `<tr><td>${esc(art(id).nom)}</td><td style="text-align:right">${q}</td></tr>`).join("");
+  const loueur = (S.equipe.find(x => x.id === session.uid) || {}).nom || "";
   return `<div class="feuille-doc"><h1>${b.type === "sortie" ? "Bon de sortie" : "Bon de retour"}</h1>
-    <p>${esc(b.evenement)}<br>${quand(b.date)}</p>
-    <table><thead><tr><th>Objet</th><th>Code</th><th style="text-align:right">${b.type === "sortie" ? "Remis" : "Rendu"}</th></tr></thead><tbody>${lignes || '<tr><td colspan="3">Rien n\'est revenu.</td></tr>'}</tbody></table>
+    <p>${esc(b.evenement)}<br>${quand(b.date)} · n° ${b.id}</p>
+    <table><thead><tr><th>Objet</th><th>Code</th><th style="text-align:right">${b.type === "sortie" ? "Remis" : "Rendu"}</th></tr></thead><tbody>${lignes || `<tr><td colspan="3">Rien n'est revenu.</td></tr>`}</tbody></table>
     ${manq ? `<p><b>Manquants ou cassés, à refacturer :</b></p><table><tbody>${manq}</tbody></table>` : ""}
-    <div class="sign"><div>Pour le loueur</div><div>Pour le client</div></div></div>
+    ${b.photos.length ? `<div class="photos">${b.photos.map(p => `<img src="${p}" alt="Photo jointe au bon">`).join("")}</div>` : ""}
+    <div class="sign"><div>Pour le loueur<br><b>${esc(loueur)}</b></div><div>Pour le client${b.signature ? `<img class="sig" src="${b.signature}" alt="Signature du client"><b>${esc(b.signataire)}</b> · ${quand(b.signeLe)}` : ""}</div></div></div>
   <div class="t-actions pas-imprimer">
-    <button class="btn plein" data-act="partager">${I.partager}Envoyer au client</button>
+    ${b.signature ? "" : `<button class="btn plein" data-signer="${b.id}">Faire signer le client</button>`}
+    ${b.photos.length < 4 ? `<label class="btn">Ajouter des photos<input type="file" accept="image/*" capture="environment" multiple data-photos="${b.id}" class="cache"></label>` : ""}
+    ${manq ? `<button class="btn" data-facture="${esc(b.evenement)}">Voir la facture de casse</button>` : ""}
+    <button class="btn ${b.signature ? "plein" : ""}" data-act="partager">${I.partager}Envoyer au client</button>
     <button class="btn" data-act="imprimer">${I.imprimer}Imprimer</button>
     <button class="btn" data-aller="terrain">Terminé</button></div>`;
 }
-function texteBon(b) {
+function texteBon(arg) {
+  const b = bonDe(arg);
   const l = b.lignes.map(([id, q]) => `- ${art(id).nom} : ${q}`).join("\n");
   const m = (b.manquants || []).map(([id, q]) => `- ${art(id).nom} : ${q}`).join("\n");
-  return `${b.type === "sortie" ? "Bon de sortie" : "Bon de retour"} · ${b.evenement} · ${quand(b.date)}\n${l}${m ? "\nManquants à refacturer :\n" + m : ""}`;
+  return `${b.type === "sortie" ? "Bon de sortie" : "Bon de retour"} · ${b.evenement} · ${quand(b.date)}\n${l}${m ? "\nManquants à refacturer :\n" + m : ""}${b.signature ? "\nSigné par " + b.signataire + " le " + quand(b.signeLe) : ""}`;
 }
 
 /* =================================================================
    PROFILS BUREAU ET DIRECTION
    ================================================================= */
 function navBureau(p) {
-  if (p === "direction") return [["direction", "Synthèse", I.argent], ["docs", "Documents", I.docs]].concat(session.admin ? [["equipe", "Équipe et accès", I.equipe]] : []).concat([["abonnement", "Abonnement", I.abo]]);
-  const l = [["releve", "Relevé", I.releve], ["materiel", "Matériel", I.materiel], ["scanner", "Scanner", I.scan]];
+  if (p === "direction") return [["direction", "Synthèse", I.argent]].concat(actif("MO-RES") ? [["reservations", "Réservations", I.jour]] : []).concat([["docs", "Documents", I.docs]]).concat(session.admin ? [["equipe", "Équipe et accès", I.equipe]] : []).concat([["abonnement", "Abonnement", I.abo]]);
+  const l = [["releve", "Relevé", I.releve]].concat(actif("MO-RES") ? [["reservations", "Réservations", I.jour]] : []).concat([["materiel", "Matériel", I.materiel], ["scanner", "Scanner", I.scan]]);
   if (actif("MO-CMD")) l.push(["commandes", "Commandes", I.bon]);
   l.push(["journal", "Journal", I.journal], ["docs", "Documents", I.docs]);
   return l;
@@ -328,9 +342,9 @@ function navBureau(p) {
 function cadreBureau(p) {
   const nav = navBureau(p);
   const vues = { releve: bReleve, materiel: bMateriel, fiche: bFiche, commandes: bCommandes, journal: bJournal, docs: bDocs, etiquettes: bEtiquettes,
-    inventairePapier: bInventairePapier, refacturer: bRefacturer, rapport: dRapport, direction: dSynthese, abonnement: dAbonnement, scanner: bScanner, equipe: dEquipe };
+    inventairePapier: bInventairePapier, refacturer: bRefacturer, rapport: dRapport, direction: dSynthese, abonnement: dAbonnement, scanner: bScanner, equipe: dEquipe, reservations: bReservations, reservation: bReservation, facture: vFacture };
   const corps = vues[vue.nom] || (p === "direction" ? dSynthese : bReleve);
-  const parent = { fiche: "materiel", etiquettes: "docs", inventairePapier: "docs", refacturer: "docs", rapport: "docs" };
+  const parent = { fiche: "materiel", etiquettes: "docs", inventairePapier: "docs", refacturer: "docs", rapport: "docs", reservation: "reservations", facture: "docs" };
   const courant = nav.some(([k]) => k === vue.nom) ? vue.nom : parent[vue.nom];
   return `<div class="${p === "direction" ? "d" : "b"}">${DEMO}
     <header class="b-haut"><div class="marque">${I.logo}<span>Stock démo</span></div>
@@ -457,7 +471,8 @@ function bRefacturer() {
   return `${retourDocs}<div class="feuille-doc"><h1>Manquants à refacturer</h1>
   <table><thead><tr><th>Événement</th><th>Objet</th><th>Qté</th><th>Montant</th></tr></thead><tbody>
   ${l.map(m => `<tr><td>${esc(m.evenement)}</td><td>${esc(art(m.article).nom)}</td><td>${m.qte}</td><td>${argent(valeurM(m))}</td></tr>`).join("") || `<tr><td colspan="4">Rien à refacturer.</td></tr>`}</tbody></table>
-  <p style="text-align:right"><b>Total : ${argent(l.reduce((t, m) => t + valeurM(m), 0))}</b></p></div>`;
+  <p style="text-align:right"><b>Total : ${argent(l.reduce((t, m) => t + valeurM(m), 0))}</b></p></div>
+  ${l.length ? `<h2 class="pas-imprimer">Factures de casse par événement</h2><div class="boutons pas-imprimer">${[...new Set(l.map(m => m.evenement))].slice(-8).reverse().map(ev => `<button class="btn petit" data-facture="${esc(ev)}">${esc(ev)}</button>`).join("")}</div>` : ""}`;
 }
 
 /* Direction : peu d'éléments, des montants, une tendance, ce qui attend une décision. */
@@ -610,10 +625,10 @@ function feuille(id, type) {
       const attendu = d.find(x => x.evenement === ev).qte, rendu = Math.min(n, attendu);
       mouvement(id, "Retour", rendu, { evenement: ev });
       if (rendu < attendu) return manquants(ev, [[id, attendu - rendu]], [[id, rendu]]);
-      if (session.profil === "terrain") return aller("bon", { type: "retour", evenement: ev, date: Date.now(), lignes: [[id, rendu]] });
+      if (session.profil === "terrain") return aller("bon", creerBon({ type: "retour", evenement: ev, date: Date.now(), lignes: [[id, rendu]] }));
       toast("Retour enregistré."); return rendre();
     }
-    if (type === "Prêt") { mouvement(id, "Prêt", n, { evenement: ev }); return aller("bon", { type: "sortie", evenement: ev, date: Date.now(), lignes: [[id, n]] }); }
+    if (type === "Prêt") { mouvement(id, "Prêt", n, { evenement: ev }); return aller("bon", creerBon({ type: "sortie", evenement: ev, date: Date.now(), lignes: [[id, n]] })); }
     mouvement(id, type, n, { evenement: ev === "Au dépôt" ? "" : ev, motif, refac: type === "Perte" && ev !== "Au dépôt" && motif !== "Abîmé" });
     toast("Enregistré."); rendre();
   };
@@ -628,7 +643,7 @@ function manquants(ev, liste, rendus) {
     const perte = b.dataset.c === "perte";
     if (perte) liste.forEach(([id, q]) => mouvement(id, "Perte", q, { evenement: ev, motif: "Pas rendu", refac: true }));
     f.remove();
-    aller("bon", { type: "retour", evenement: ev, date: Date.now(), lignes: rendus.filter(([, q]) => q > 0), manquants: perte ? liste : [] });
+    aller("bon", creerBon({ type: "retour", evenement: ev, date: Date.now(), lignes: rendus.filter(([, q]) => q > 0), manquants: perte ? liste : [] }));
   });
 }
 function feuilleKit(kid) {
@@ -645,18 +660,19 @@ function feuilleKit(kid) {
     if (manque.length) return toast("Pas assez au dépôt : " + manque.map(([id]) => art(id).nom).join(", ") + ".");
     k.lignes.forEach(([id, q]) => mouvement(id, "Prêt", q * n, { evenement: ev }));
     f.remove();
-    aller("bon", { type: "sortie", evenement: ev, date: Date.now(), lignes: k.lignes.map(([id, q]) => [id, q * n]) });
+    aller("bon", creerBon({ type: "sortie", evenement: ev, date: Date.now(), lignes: k.lignes.map(([id, q]) => [id, q * n]) }));
   };
 }
 
 /* ---------------- Caméra ---------------- */
 const script = src => new Promise((ok, ko) => { if (document.querySelector(`script[src="${src}"]`)) return ok(); const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = ko; document.head.appendChild(s); });
 const code = t => { const m = String(t).toUpperCase().match(/ART-\d{4}/); return m ? m[0] : null; };
-function ouvrir(id) { if (!art(id)) return toast(`Aucun objet ${id} ici.`); aller(session.profil === "terrain" ? "objet" : "fiche", id); }
-async function camera() {
+function ouvrir(id) { if (!art(id)) return toast(`Aucun objet ${id} ici.`); if (vue.nom === "preparation") return scanPreparation(id); aller(session.profil === "terrain" ? "objet" : "fiche", id); }
+let dernierScan = { id: "", t: 0 };
+async function camera(rafale) {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return toast("Caméra indisponible : tapez le code de l'étiquette.");
   const c = document.createElement("div"); c.className = "camera";
-  c.innerHTML = `<video playsinline muted></video><div class="viseur"><div></div></div><div class="pied"><span>Visez l'étiquette</span><button class="btn" data-x>Annuler</button></div>`;
+  c.innerHTML = `<video playsinline muted></video><div class="viseur"><div></div></div><div class="pied"><span>${rafale ? "Visez chaque caisse. La caméra reste ouverte." : "Visez l'étiquette"}</span><button class="btn" data-x>${rafale ? "Terminé" : "Annuler"}</button></div>`;
   document.body.appendChild(c);
   const v = c.querySelector("video"); let flux, fini = false;
   const fermer = () => { fini = true; if (flux) flux.getTracks().forEach(t => t.stop()); c.remove(); };
@@ -674,7 +690,14 @@ async function camera() {
   }
   const boucle = async () => {
     if (fini) return;
-    try { const t = await lire(); const id = t && code(t); if (id) { if (navigator.vibrate) navigator.vibrate(60); fermer(); return ouvrir(id); } } catch (e) { /* image floue : on recommence */ }
+    try {
+      const t = await lire(), id = t && code(t);
+      if (id && rafale) {
+        // Mode rafale : on ne compte pas deux fois la même étiquette restée devant l'objectif.
+        if (id !== dernierScan.id || Date.now() - dernierScan.t > 1800) { if (navigator.vibrate) navigator.vibrate(60); scanPreparation(id); }
+        dernierScan = { id, t: Date.now() };
+      } else if (id) { if (navigator.vibrate) navigator.vibrate(60); fermer(); return ouvrir(id); }
+    } catch (e) { /* image floue : on recommence */ }
     setTimeout(boucle, 200);
   };
   boucle();
@@ -721,12 +744,16 @@ function brancher() {
       if (n) { mouvement(d.article, "Retour", n, { evenement: ev }); rendus.push([d.article, n]); }
       if (n < d.qte) manque.push([d.article, d.qte - n]);
     });
-    if (manque.length) manquants(ev, manque, rendus); else aller("bon", { type: "retour", evenement: ev, date: Date.now(), lignes: rendus });
+    if (manque.length) manquants(ev, manque, rendus); else aller("bon", creerBon({ type: "retour", evenement: ev, date: Date.now(), lignes: rendus }));
   };
   $$("[data-act]").forEach(b => { if (ACTIONS[b.dataset.act]) b.onclick = ACTIONS[b.dataset.act]; });
+  brancherPlus();
 }
 const ACTIONS = {
   camera: () => camera(),
+  scanRafale: () => camera(true),
+  camionPart: () => camionPart(),
+  tour: () => demarrerTour(),
   sortir: () => { session = null; verrouille = false; saisiePin = ""; clearTimeout(minuteur); vue = { nom: "profil" }; rendre(); },
   retourListe: () => { saisiePin = ""; vue = { nom: "profil" }; rendre(); },
   verrouiller: () => { verrouille = true; saisiePin = ""; clearTimeout(minuteur); rendre(); },
@@ -737,8 +764,7 @@ const ACTIONS = {
   csv: () => exporterCsv(),
   partager: async () => {
     const t = texteBon(vue.arg);
-    if (navigator.share) { try { await navigator.share({ title: "Bon", text: t }); } catch (e) { /* partage annulé */ } }
-    else window.open("https://wa.me/?text=" + encodeURIComponent(t), "_blank", "noopener");
+    partagerTexte(t);
   },
 };
 function lienProfond() { const id = code(location.hash); if (id && art(id)) vue = { nom: session.profil === "terrain" ? "objet" : "fiche", arg: id }; }
