@@ -1,6 +1,6 @@
 "use strict";
 
-const CLE = "rayon-demo-v9";
+const CLE = "rayon-demo-v10";
 const CLE_THEME = "rayon-theme";
 const EUR_XOF = 655.957;
 const SEUIL_VALIDATION_EUR = 500;
@@ -59,7 +59,7 @@ let vue = { nom: "profil", arg: null };
 
 /* ---------------- Stockage ---------------- */
 function charger() {
-  try { const b = localStorage.getItem(CLE); if (b) { const s = JSON.parse(b); if (s.version === 9) return s; } } catch (e) { /* stockage bloqué : données de démo */ }
+  try { const b = localStorage.getItem(CLE); if (b) { const s = JSON.parse(b); if (s.version === 10) return s; } } catch (e) { /* stockage bloqué : données de démo */ }
   return seedMouvements(SEED());
 }
 function sauver() { try { localStorage.setItem(CLE, JSON.stringify(S)); } catch (e) { /* mode privé */ } }
@@ -93,7 +93,6 @@ function argent(eur) {
   if (S.monnaie === "XOF") return Math.round(eur * EUR_XOF).toLocaleString("fr-FR") + " FCFA";
   return eur.toLocaleString("fr-FR", { maximumFractionDigits: eur >= 100 ? 0 : 2 }) + " €";
 }
-const prixAbo = o => S.monnaie === "XOF" ? o.xof.toLocaleString("fr-FR") + " FCFA" : o.eur + " €";
 const quand = t => { const d = new Date(t); return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) + " · " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }); };
 const img = a => `<div class="vignette"><img src="img/${a.img}.webp" alt="" loading="lazy" width="360" height="360"></div>`;
 const pic = ic => `<div class="vignette pic">${ic}</div>`;
@@ -340,7 +339,7 @@ function texteBon(arg) {
    PROFILS BUREAU ET DIRECTION
    ================================================================= */
 function navBureau(p) {
-  if (p === "direction") return [["direction", "Synthèse", I.argent]].concat(actif("MO-RES") ? [["reservations", "Réservations", I.jour]] : []).concat([["docs", "Documents", I.docs]]).concat(session.admin ? [["equipe", "Équipe et accès", I.equipe]] : []).concat([["abonnement", "Abonnement", I.abo]]);
+  if (p === "direction") return [["direction", "Synthèse", I.argent]].concat(actif("MO-RES") ? [["reservations", "Réservations", I.jour]] : []).concat([["docs", "Documents", I.docs]]).concat(session.admin ? [["equipe", "Équipe et accès", I.equipe]] : []).concat([["installation", "Installation", I.abo]]);
   const l = [["releve", "Relevé", I.releve]].concat(actif("MO-RES") ? [["reservations", "Réservations", I.jour]] : []).concat([["materiel", "Matériel", I.materiel], ["scanner", "Scanner", I.scan]]);
   if (actif("MO-CMD")) l.push(["commandes", "Commandes", I.bon]);
   l.push(["journal", "Journal", I.journal], ["docs", "Documents", I.docs]);
@@ -349,7 +348,7 @@ function navBureau(p) {
 function cadreBureau(p) {
   const nav = navBureau(p);
   const vues = { releve: bReleve, materiel: bMateriel, fiche: bFiche, commandes: bCommandes, journal: bJournal, docs: bDocs, etiquettes: bEtiquettes,
-    inventairePapier: bInventairePapier, refacturer: bRefacturer, rapport: dRapport, direction: dSynthese, abonnement: dAbonnement, scanner: bScanner, equipe: dEquipe, reservations: bReservations, reservation: bReservation, facture: vFacture };
+    inventairePapier: bInventairePapier, refacturer: bRefacturer, rapport: dRapport, direction: dSynthese, abonnement: dInstallation, installation: dInstallation, scanner: bScanner, equipe: dEquipe, reservations: bReservations, reservation: bReservation, facture: vFacture };
   const corps = vues[vue.nom] || (p === "direction" ? dSynthese : bReleve);
   const parent = { fiche: "materiel", etiquettes: "docs", inventairePapier: "docs", refacturer: "docs", rapport: "docs", reservation: "reservations", facture: "docs" };
   const courant = nav.some(([k]) => k === vue.nom) ? vue.nom : parent[vue.nom];
@@ -585,17 +584,44 @@ function dRapport() {
   <tr><td>Pièces sorties chez les clients</td><td>${sorties.reduce((t, m) => t + m.qte, 0)}</td></tr></tbody></table>
   <h2 style="font-size:17px">Objets les plus loués</h2><table><tbody>${Object.entries(top).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id, q]) => `<tr><td>${esc(art(id).nom)}</td><td>${q}</td></tr>`).join("") || "<tr><td>Aucune sortie.</td></tr>"}</tbody></table></div>`;
 }
-function dAbonnement() {
+function dInstallation() {
   const unite = S.monnaie === "XOF" ? "xof" : "eur";
-  const tot = OFFRE[unite] + Object.keys(CATALOGUE).filter(actif).reduce((t, k) => t + CATALOGUE[k][unite], 0);
-  return `<h1>Abonnement</h1><p class="sous">Offre ${OFFRE.nom} à ${prixAbo(OFFRE)} par mois, plus les modules choisis. Un module activé apparaît tout de suite dans l'appli et sur la facture du mois.</p>
-  ${Object.entries(CATALOGUE).map(([k, m]) => `<div class="module"><b>${m.nom} · ${prixAbo(m)} / mois</b><label class="inter"><input type="checkbox" data-module="${k}" ${actif(k) ? "checked" : ""} aria-label="${m.nom}"><span></span></label><p>${m.detail}</p></div>`).join("")}
-  <div class="total"><span>Total mensuel HT</span><span>${S.monnaie === "XOF" ? tot.toLocaleString("fr-FR") + " FCFA" : tot + " €"}</span></div>
+  const fmt = n => unite === "xof" ? n.toLocaleString("fr-FR") + " FCFA" : n.toLocaleString("fr-FR") + " €";
+  const inst = S.installation || { livreLe: Date.now(), heuresUtilisees: 0 };
+  const fin = inst.livreLe + OFFRE.jours * 86400000, jours = Math.max(0, Math.ceil((fin - Date.now()) / 86400000));
+  const restantes = Math.max(0, OFFRE.heures - inst.heuresUtilisees), enCours = jours > 0 && restantes > 0;
+  const google = S.equipe.filter(u => u.actif).length * (unite === "xof" ? 4460 : 6.8);
+  return `<h1>Votre installation</h1>
+  <p class="sous">Offre ${OFFRE.nom}, payée une fois : ${fmt(OFFRE[unite])} HT, livrée le ${new Date(inst.livreLe).toLocaleDateString("fr-FR")}. L'appli et les données vous appartiennent. Rien n'est dû chaque mois à RAYON.</p>
+  <div class="bloc"><div class="module"><b>Assistance incluse</b><span class="statut ${enCours ? "s-revenue" : "s-partie"}">${enCours ? "en cours" : "terminée"}</span>
+    <p>${enCours ? `Encore ${jours} jour${jours > 1 ? "s" : ""} et ${String(restantes).replace(".", ",")} h sur ${OFFRE.heures} h. ` : `Terminée le ${new Date(fin).toLocaleDateString("fr-FR")}. `}Elle couvre les corrections de notre paramétrage et les questions d'utilisation, pas les nouvelles fonctions.</p></div>
+  <div class="module"><b>Intervention ensuite</b><span>${fmt(TARIF_INTERVENTION[unite])} HT / h</span><p>À distance, par quart d'heure, 30 minutes au minimum, toujours sur devis accepté.</p></div>
+  <div class="module"><b>Payé chaque mois à Google, pas à RAYON</b><span>${fmt(Math.round(google * 100) / 100)}</span><p>Licences Google des ${S.equipe.filter(u => u.actif).length} personnes de l'équipe (environ 6,80 € HT par personne).</p></div></div>
+  <p style="margin-top:12px"><button class="btn plein" data-act="demanderIntervention">Demander une intervention</button></p>
+  ${(S.interventions || []).length ? `<h2>Vos demandes</h2><table class="t"><tbody>${S.interventions.slice().reverse().map(i => `<tr><td>${quand(i.date)}<br><small>${esc(i.texte)}</small></td><td class="n">${i.incluse ? "dans l'assistance" : "devis envoyé"}</td></tr>`).join("")}</tbody></table>` : ""}
+  <h2>Modules de votre appli</h2>
+  <p class="sous">Un module installé reste à vous. En ajouter un se paie une fois, après devis.</p>
+  ${Object.entries(CATALOGUE).map(([k, m]) => `<div class="module"><b>${m.nom}</b><label class="inter"><input type="checkbox" data-module="${k}" ${actif(k) ? "checked" : ""} aria-label="${m.nom}"><span></span></label><p>${actif(k) ? "Installé." : `Ajout possible : ${fmt(m[unite])} HT, une fois.`} ${m.detail}</p></div>`).join("")}
   <h2>Réglages</h2>
   <div class="module"><label for="metier"><b>Métier de l'entreprise</b></label><select id="metier" data-metier>${Object.entries(METIERS).map(([k, m]) => `<option value="${k}" ${(S.metier || "loueur") === k ? "selected" : ""}>${m.nom}</option>`).join("")}</select><p>Change les mots, les boutons du terrain et les objets de la démo.</p></div>
   <div class="module"><label for="monnaie"><b>Monnaie des montants</b></label><select id="monnaie" data-monnaie><option value="EUR" ${S.monnaie === "EUR" ? "selected" : ""}>Euro</option><option value="XOF" ${S.monnaie === "XOF" ? "selected" : ""}>Franc CFA</option></select><p>Pour les prix, les pertes et les factures.</p></div>`;
 }
-
+function feuilleIntervention() {
+  const inst = S.installation || { livreLe: Date.now(), heuresUtilisees: 0 };
+  const incluse = Date.now() < inst.livreLe + OFFRE.jours * 86400000 && inst.heuresUtilisees < OFFRE.heures;
+  const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="ti"><h1 id="ti" style="font-size:26px">Demander une intervention</h1>
+    <p class="sous">${incluse ? "Votre assistance incluse est en cours : si la demande entre dedans, elle ne vous coûte rien." : "Votre assistance incluse est terminée : vous recevrez un devis avant tout travail."}</p>
+    <label class="champ">Votre demande<textarea name="texte" rows="4" maxlength="400" style="border-radius:10px;border:2px solid var(--trait-fort);padding:10px;font:inherit;background:var(--carte);color:var(--encre)"></textarea></label>
+    <div class="valider"><button class="btn" data-x>Annuler</button><button class="btn plein" data-ok>Envoyer</button></div></div>`);
+  f.querySelector("[data-x]").onclick = () => f.remove();
+  f.querySelector("[data-ok]").onclick = () => {
+    const t = f.querySelector("[name=texte]").value.trim();
+    if (!t) return toast("Décrivez votre demande.");
+    (S.interventions = S.interventions || []).push({ date: Date.now(), texte: t, incluse });
+    sauver(); f.remove(); rendre();
+    toast(incluse ? "Demande envoyée (simulation). Réponse sous 2 jours ouvrés." : "Demande envoyée (simulation). Un devis vous sera envoyé.");
+  };
+}
 /* =================================================================
    Saisies
    ================================================================= */
@@ -748,7 +774,7 @@ function brancher() {
   $$("[data-mvt]").forEach(b => b.onclick = () => feuille(vue.arg, b.dataset.mvt));
   $$("[data-kit]").forEach(b => b.onclick = () => feuilleKit(b.dataset.kit));
   $$("[data-ev]").forEach(b => b.onclick = () => aller("retourEv", b.dataset.ev));
-  $$("[data-module]").forEach(c => c.onchange = () => { S.modules[c.dataset.module] = c.checked; sauver(); rendre(); toast(`${CATALOGUE[c.dataset.module].nom} ${c.checked ? "activé" : "retiré"}.`); });
+  $$("[data-module]").forEach(c => c.onchange = () => { S.modules[c.dataset.module] = c.checked; sauver(); rendre(); toast(c.checked ? `${CATALOGUE[c.dataset.module].nom} ajouté (démo). En vrai : devis, puis paiement unique.` : `${CATALOGUE[c.dataset.module].nom} retiré de la démo.`); });
   $$("[data-monnaie]").forEach(s => s.onchange = () => { S.monnaie = s.value; sauver(); rendre(); });
   $$("[data-cmd]").forEach(b => b.onclick = () => { creerCommande(b.dataset.cmd, b.dataset.statut); toast(b.dataset.statut === "Envoyée" ? "Bon de commande envoyé (simulation)." : "Demande envoyée au gérant."); rendre(); });
   $$("[data-valider]").forEach(b => b.onclick = () => { S.commandes.find(c => c.id === b.dataset.valider).statut = "Envoyée"; sauver(); toast("Commande validée et envoyée (simulation)."); rendre(); });
@@ -773,6 +799,7 @@ const ACTIONS = {
   scanRafale: () => camera(true),
   camionPart: () => camionPart(),
   tour: () => demarrerTour(),
+  demanderIntervention: () => feuilleIntervention(),
   sortir: () => { session = null; verrouille = false; saisiePin = ""; clearTimeout(minuteur); vue = { nom: "profil" }; rendre(); },
   retourListe: () => { saisiePin = ""; vue = { nom: "profil" }; rendre(); },
   verrouiller: () => { verrouille = true; saisiePin = ""; clearTimeout(minuteur); rendre(); },

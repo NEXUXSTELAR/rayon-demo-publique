@@ -1,22 +1,24 @@
 // Données de démonstration : un loueur de matériel de réception.
 // Tout est fictif et signalé comme tel dans l'interface.
 
+// Vente ponctuelle : chaque module est un ajout payé une fois, jamais un abonnement.
 const CATALOGUE = {
-  "MO-PRET": { nom: "Prêts et retours", detail: "Départ chez le client, retour, manquants à refacturer", eur: 15, xof: 7500 },
-  "MO-RES":  { nom: "Réservations et préparation", detail: "Disponibilité à une date, liste de préparation scannée, facture de casse", eur: 15, xof: 7500 },
-  "MO-KIT":  { nom: "Kits", detail: "Sortir un ensemble complet en un geste", eur: 10, xof: 5000 },
-  "MO-CMD":  { nom: "Commandes fournisseurs", detail: "Brouillons automatiques, validation, bon de commande", eur: 15, xof: 7500 },
-  "MO-DASH": { nom: "Tableau de direction", detail: "Valeur du parc, pertes, rapport du mois", eur: 15, xof: 7500 },
-  "AL-SMS":  { nom: "Alertes SMS", detail: "150 SMS par mois inclus", eur: 15, xof: 7500 },
-  "AL-WA":   { nom: "Alertes WhatsApp", detail: "300 messages par mois inclus", eur: 12, xof: 5000 },
+  "MO-PRET": { nom: "Prêts et retours", detail: "Départ chez le client, retour, manquants à refacturer", eur: 290, xof: 140000 },
+  "MO-RES":  { nom: "Réservations et préparation", detail: "Disponibilité à une date, liste de préparation scannée, facture de casse", eur: 490, xof: 230000 },
+  "MO-KIT":  { nom: "Kits", detail: "Sortir un ensemble complet en un geste", eur: 290, xof: 140000 },
+  "MO-CMD":  { nom: "Commandes fournisseurs", detail: "Brouillons automatiques, validation, bon de commande", eur: 290, xof: 140000 },
+  "MO-DASH": { nom: "Tableau de direction", detail: "Valeur du stock, pertes, rapport du mois", eur: 290, xof: 140000 },
+  "AL-SMS":  { nom: "Alertes SMS", detail: "Branchées sur le compte SMS du client, qui paie ses messages à son fournisseur", eur: 190, xof: 90000 },
+  "AL-WA":   { nom: "Alertes WhatsApp", detail: "Branchées sur le compte WhatsApp du client, qui paie ses messages à son fournisseur", eur: 190, xof: 90000 },
 };
-const OFFRE = { nom: "Essentiel", eur: 39, xof: 15000 };
+const OFFRE = { nom: "Complet", eur: 1990, xof: 950000, jours: 60, heures: 4 };
+const TARIF_INTERVENTION = { eur: 60, xof: 25000 };
 
 // Trois profils, trois façons de travailler, donc trois écrans différents.
 const PROFILS = {
   terrain:   { nom: "Magasinier", role: "Au dépôt et au camion", theme: "terrain", accueil: "terrain" },
   bureau:    { nom: "Responsable du parc", role: "Stock, commandes, étiquettes", theme: "bureau", accueil: "releve" },
-  direction: { nom: "Gérant", role: "Argent, pertes, abonnement", theme: "direction", accueil: "direction" },
+  direction: { nom: "Gérant", role: "Argent, pertes, installation", theme: "direction", accueil: "direction" },
 };
 
 // Équipe de démonstration. Chaque personne a son rôle et son code personnel.
@@ -37,7 +39,9 @@ function empreinte(uid, pin) {
 }
 
 const SEED = () => ({
-  version: 9,
+  version: 10,
+  installation: { livreLe: Date.now() - 20 * 86400000, heuresUtilisees: 1.5 },
+  interventions: [],
   metier: "loueur",
   equipe: EQUIPE_DEMO.map(u => ({ id: u.id, nom: u.nom, poste: u.poste, role: u.role, admin: !!u.admin, actif: true, empreinte: empreinte(u.id, u.pin) })),
   connexions: [],

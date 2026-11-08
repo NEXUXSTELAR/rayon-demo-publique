@@ -117,6 +117,8 @@ function construireDemo(m) {
   if (!METIERS[m] || m === "loueur") { const s = seedMouvements(SEED()); s.metier = "loueur"; return s; }
   const d = METIERS[m], st = SEED();
   st.metier = m;
+  st.installation = { livreLe: Date.now() - 20 * 86400000, heuresUtilisees: 1.5 };
+  st.interventions = [];
   st.modules = { "MO-PRET": d.articles.some(x => x[3] === "pret"), "MO-RES": false, "MO-KIT": d.kits.length > 0, "MO-CMD": true, "MO-DASH": true, "AL-SMS": false, "AL-WA": false };
   st.fournisseurs = d.fournisseurs; st.emplacements = d.emplacements; st.kits = d.kits; st.evenements = d.imputations.slice();
   st.articles = d.articles.map(([id, nom, im, lg, seuil, cible, prix, lot, emp, fou, jour, serie, dlcJours]) =>
