@@ -58,7 +58,8 @@ function bReservation(id) {
 }
 function feuilleReservation(d1, d2) {
   const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="trz"><h1 id="trz" style="font-size:26px">Nouvelle réservation</h1>
-    <label class="champ">Événement ou client<input name="nom" maxlength="60" placeholder="Mariage · samedi, Séminaire…" autocomplete="off"></label>
+    <label class="champ">Client<select name="client"><option value="">Sans fiche client</option>${(S.clientsLoc || []).map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join("")}</select></label>
+    <label class="champ">Événement<input name="nom" maxlength="60" placeholder="Mariage · samedi, Séminaire…" autocomplete="off"></label>
     <div class="dispo-dates"><label class="champ">Du<input type="date" name="d1" value="${d1}" min="${aujourdHui()}"></label><label class="champ">Au<input type="date" name="d2" value="${d2}" min="${aujourdHui()}"></label></div>
     <div class="resa-lignes">${S.articles.map(a => `<label class="resa-ligne">${img(a)}<span><b>${esc(a.nom)}</b><small data-libre="${a.id}"></small></span><input type="number" inputmode="numeric" min="0" value="0" name="${a.id}" aria-label="Quantité : ${esc(a.nom)}"></label>`).join("")}</div>
     <p class="message" data-bilan role="status"></p>
@@ -85,7 +86,7 @@ function feuilleReservation(d1, d2) {
     if (!lignes.length) return toast("Indiquez au moins une quantité.");
     if (maj() && !confirm("Certaines quantités ne sont pas disponibles. Réserver quand même ?")) return;
     const id = "R-" + String(S.reservations.length + 1).padStart(3, "0");
-    S.reservations.push({ id, nom, debut: a1, fin: a2, lignes, statut: "Confirmée", charge: {} });
+    S.reservations.push({ id, nom, debut: a1, fin: a2, lignes, statut: "Confirmée", charge: {}, client: f.querySelector("[name=client]").value });
     if (!S.evenements.includes(nom)) S.evenements.unshift(nom);
     sauver(); f.remove(); aller("reservation", id); toast("Réservation enregistrée.");
   };
@@ -195,11 +196,12 @@ function vFacture(ev) {
   const n = "FC-" + new Date().getFullYear() + "-" + String(Math.max(1, S.evenements.indexOf(ev) + 1)).padStart(3, "0");
   const bon = S.bons.slice().reverse().find(b => b.evenement === ev && b.type === "retour");
   return `<p class="pas-imprimer"><button class="lien" data-aller="${session.profil === "terrain" ? "terrain" : "docs"}">← Retour</button> · <button class="lien" data-act="imprimer">Imprimer ou enregistrer en PDF</button></p>
-  <div class="feuille-doc"><h1>Facture de casse n° ${n}</h1>
-  <p>Client : <b>${esc(ev)}</b><br>Établie le ${new Date().toLocaleDateString("fr-FR")}${bon && bon.signataire ? `<br>Retour signé par ${esc(bon.signataire)} le ${quand(bon.signeLe)}` : ""}</p>
+  <div class="feuille-doc">${enTeteDoc()}<h1>Facture de casse n° ${n}</h1>
+  <p>${clientDe(ev) ? `Client : <b>${esc(clientDe(ev).nom)}</b>${clientDe(ev).tel ? " · " + esc(clientDe(ev).tel) : ""}<br>Événement : ${esc(ev)}` : `Client : <b>${esc(ev)}</b>`}<br>Établie le ${new Date().toLocaleDateString("fr-FR")}${bon && bon.signataire ? `<br>Retour signé par ${esc(bon.signataire)} le ${quand(bon.signeLe)}` : ""}</p>
   <table><thead><tr><th>Objet</th><th>Qté</th><th>Valeur de remplacement</th><th>Montant</th></tr></thead><tbody>
   ${l.map(m => `<tr><td>${esc(art(m.article).nom)}<br><small>${esc(m.motif)}</small></td><td>${m.qte}</td><td>${argent(art(m.article).prix)}</td><td>${argent(valeurM(m))}</td></tr>`).join("") || `<tr><td colspan="4">Aucune casse refacturable pour cet événement.</td></tr>`}</tbody></table>
   <p style="text-align:right;font-size:18px"><b>Total : ${argent(tot)}</b></p>
+  ${clientDe(ev) && clientDe(ev).caution ? `<p>Caution versée : <b>${argent(clientDe(ev).caution)}</b>. Montant retenu sur la caution : <b>${argent(Math.min(tot, clientDe(ev).caution))}</b>${tot > clientDe(ev).caution ? `. Reste à payer : <b>${argent(tot - clientDe(ev).caution)}</b>` : `. Caution à rendre : <b>${argent(clientDe(ev).caution - tot)}</b>`}.</p>` : ""}
   <p class="petit">À régler à réception, ou à retenir sur la caution versée. Les photos et la signature du bon de retour font foi.</p></div>
   ${tot ? `<div class="t-actions pas-imprimer"><button class="btn plein" data-partager-facture="${esc(ev)}">${I.partager}Envoyer au client</button></div>` : ""}`;
 }

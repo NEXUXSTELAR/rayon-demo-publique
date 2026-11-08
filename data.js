@@ -39,7 +39,9 @@ function empreinte(uid, pin) {
 }
 
 const SEED = () => ({
-  version: 10,
+  version: 11,
+  entreprise: { nom: "Votre entreprise (démo)", adresse: "Adresse de l'entreprise", tel: "", email: "", logo: "" },
+  clientsLoc: [],
   installation: { livreLe: Date.now() - 20 * 86400000, heuresUtilisees: 1.5 },
   interventions: [],
   metier: "loueur",
@@ -137,7 +139,20 @@ function seedMouvements(state) {
     { id: "R-003", nom: "Gala de fin d'année", debut: iso(10), fin: iso(11), lignes: [["ART-0001", 300], ["ART-0004", 600], ["ART-0002", 30]], statut: "Confirmée", charge: {} },
   );
   ["Mariage · samedi", "Séminaire d'entreprise", "Gala de fin d'année"].forEach(n => state.evenements.push(n));
+  // Clients de location, liés aux réservations
+  state.clientsLoc = [
+    { id: "CL-001", nom: "Particulier · mariage (démo)", tel: "06 00 00 00 01", caution: 300 },
+    { id: "CL-002", nom: "Hôtel du centre (démo)", tel: "05 00 00 00 02", caution: 0 },
+    { id: "CL-003", nom: "Association de quartier (démo)", tel: "06 00 00 00 03", caution: 150 },
+  ];
+  const lien = { "R-P01": "CL-001", "R-P02": "CL-002", "R-P03": "CL-001", "R-001": "CL-001", "R-002": "CL-002", "R-003": "CL-003" };
+  state.reservations.forEach(r => { r.client = lien[r.id] || ""; });
+  // Une enceinte au nettoyage et des nappes en réparation, pour montrer l'atelier
+  add(maintenant - 2 * jour, "terrain", "ART-0010", "Réparation", 25, "", "Au nettoyage");
   // Une livraison attendue, à réceptionner depuis le terrain
   state.commandes.push({ id: "CMD-0001", date: maintenant - 2 * jour, fid: "FOU-02", fournisseur: "Fournisseur de textile (démo)", lignes: [{ id: "ART-0005", qte: 20 }, { id: "ART-0010", qte: 100 }], total: 20 * 22 + 100 * 3.9, statut: "Envoyée" });
+  // Événements passés reliés à un client (pour la caution sur la facture de casse)
+  state.clientsEv = {};
+  state.mouvements.forEach(m => { if (m.evenement) state.clientsEv[m.evenement] = /^Mariage/.test(m.evenement) ? "CL-001" : /^Fête/.test(m.evenement) ? "CL-003" : "CL-002"; });
   return state;
 }

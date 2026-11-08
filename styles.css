@@ -535,3 +535,8 @@ body:has(.tour) main { padding-bottom: 170px; }
 .t-retour.recep { align-items: start; }
 .t-retour .dlc { display: grid; gap: 4px; margin-top: 6px; font-size: 13px; font-weight: 700; color: var(--gris); }
 .t-retour .dlc input { height: 40px; border-radius: 8px; border: 2px solid var(--trait-fort); background: var(--carte); color: var(--encre); padding: 0 8px; font: inherit; max-width: 170px; }
+
+/* ---------- En-tête des documents ---------- */
+.entete-doc { display: flex; gap: 14px; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 14px; font-size: 13px; color: #333; }
+.entete-doc img { max-height: 56px; max-width: 140px; object-fit: contain; }
+.entete-doc b { font-size: 15px; color: #000; }

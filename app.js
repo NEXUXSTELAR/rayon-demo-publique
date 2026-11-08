@@ -1,6 +1,6 @@
 "use strict";
 
-const CLE = "rayon-demo-v10";
+const CLE = "rayon-demo-v11";
 const CLE_THEME = "rayon-theme";
 const EUR_XOF = 655.957;
 const SEUIL_VALIDATION_EUR = 500;
@@ -59,13 +59,13 @@ let vue = { nom: "profil", arg: null };
 
 /* ---------------- Stockage ---------------- */
 function charger() {
-  try { const b = localStorage.getItem(CLE); if (b) { const s = JSON.parse(b); if (s.version === 10) return s; } } catch (e) { /* stockage bloqué : données de démo */ }
+  try { const b = localStorage.getItem(CLE); if (b) { const s = JSON.parse(b); if (s.version === 11) return s; } } catch (e) { /* stockage bloqué : données de démo */ }
   return seedMouvements(SEED());
 }
 function sauver() { try { localStorage.setItem(CLE, JSON.stringify(S)); } catch (e) { /* mode privé */ } }
 
 /* ---------------- Calculs ---------------- */
-const SIGNE = { "Inventaire initial": 1, "Entrée": 1, "Retour": 1, "Prêt": -1, "Perte": -1, "Sortie": -1, "Ajustement": 1 };
+const SIGNE = { "Inventaire initial": 1, "Entrée": 1, "Retour": 1, "Prêt": -1, "Perte": -1, "Sortie": -1, "Ajustement": 1, "Réparation": -1, "Retour réparation": 1 };
 const art = id => S.articles.find(a => a.id === id);
 const actif = c => !!S.modules[c];
 const stock = id => S.mouvements.filter(m => m.article === id).reduce((t, m) => t + SIGNE[m.type] * m.qte, 0);
@@ -228,7 +228,7 @@ function feuilleReglages() {
    PROFIL TERRAIN : une action à la fois, des photos, de gros boutons
    ================================================================= */
 function cadreTerrain() {
-  const corps = ({ terrain: tAccueil, objet: tObjet, kits: tKits, recuperer: tRecuperer, retourEv: tRetourEvenement, chercher: tChercher, jour: tJour, bon: tBon, preparer: tPreparer, preparation: tPreparation, facture: vFacture, reception: tReception, receptionCmd: tReceptionCmd })[vue.nom] || tAccueil;
+  const corps = ({ terrain: tAccueil, objet: tObjet, kits: tKits, recuperer: tRecuperer, retourEv: tRetourEvenement, chercher: tChercher, jour: tJour, bon: tBon, preparer: tPreparer, preparation: tPreparation, facture: vFacture, reception: tReception, receptionCmd: tReceptionCmd, zones: tZones, zone: tZone })[vue.nom] || tAccueil;
   const u = S.equipe.find(x => x.id === session.uid) || { nom: session.nom, role: "terrain" };
   return `${DEMO}<header class="t-haut">
       ${vue.nom === "terrain" ? `<div class="qui">${avatar(u)}<span>${esc(session.nom)}</span></div>` : `<button class="btn petit" data-aller="terrain">← Accueil</button>`}
@@ -247,6 +247,7 @@ function tAccueil() {
     ${actif("MO-KIT") && S.kits.length ? `<button class="t-tuile" data-aller="kits"><span class="pastille">${I.kit}</span><div><b>Sortir un kit</b><small>Tout un ensemble d'un coup</small></div></button>` : ""}
     ${aDesPrets() ? `<button class="t-tuile" data-aller="recuperer"><span class="pastille">${I.retour}</span><div><b>${V("retourTitre")}</b><small>${n} ${V("retourSous")}</small></div></button>` : ""}
     <button class="t-tuile" data-aller="reception"><span class="pastille">${I.camion}</span><div><b>Réceptionner une livraison</b><small>${attendues} attendue${attendues > 1 ? "s" : ""}</small></div></button>
+    <button class="t-tuile" data-aller="zones"><span class="pastille">${I.compter}</span><div><b>Compter une zone</b><small>Allée par allée</small></div></button>
     <button class="t-tuile" data-aller="chercher"><span class="pastille">${I.loupe}</span><div><b>Chercher un objet</b><small>Sans étiquette sous la main</small></div></button>
     <button class="t-tuile" data-aller="jour"><span class="pastille">${I.jour}</span><div><b>Ma journée</b><small>Ce que j'ai enregistré</small></div></button>
   </div>`;
@@ -266,6 +267,7 @@ function tObjet(id) {
     ${lots.length ? `<p class="lot-premier">À sortir en premier : ${lots[0].qte} avec date limite au <b>${dateFr(lots[0].dlc)}</b></p>` : ""}</div>
   <div class="t-actions">${actions}
     <button class="t-action compter" data-mvt="Compter">${I.compter}<span>Compter<small>Je vérifie combien il y en a</small></span></button>
+    ${pret ? `<button class="btn" data-atelier="${a.id}">À réparer ou à nettoyer${totalAtelier(id) ? ` (${totalAtelier(id)} déjà à l'atelier)` : ""}</button>` : ""}
     <button class="t-action perte" data-mvt="Perte">${I.perte}<span>${metier().dlc ? "Périmé, cassé ou perdu" : "Cassé ou perdu"}</span></button>
   </div>`;
 }
@@ -314,7 +316,7 @@ function tBon(arg) {
   const lignes = b.lignes.map(([id, q]) => `<tr><td>${esc(art(id).nom)}</td><td>${art(id).id}</td><td style="text-align:right">${q}</td></tr>`).join("");
   const manq = (b.manquants || []).map(([id, q]) => `<tr><td>${esc(art(id).nom)}</td><td style="text-align:right">${q}</td></tr>`).join("");
   const loueur = (S.equipe.find(x => x.id === session.uid) || {}).nom || "";
-  return `<div class="feuille-doc"><h1>${b.type === "sortie" ? "Bon de sortie" : "Bon de retour"}</h1>
+  return `<div class="feuille-doc">${enTeteDoc()}<h1>${b.type === "sortie" ? "Bon de sortie" : "Bon de retour"}</h1>
     <p>${esc(b.evenement)}<br>${quand(b.date)} · n° ${b.id}</p>
     <table><thead><tr><th>Objet</th><th>Code</th><th style="text-align:right">${b.type === "sortie" ? "Remis" : "Rendu"}</th></tr></thead><tbody>${lignes || `<tr><td colspan="3">Rien n'est revenu.</td></tr>`}</tbody></table>
     ${manq ? `<p><b>Manquants ou cassés, à refacturer :</b></p><table><tbody>${manq}</tbody></table>` : ""}
@@ -340,7 +342,7 @@ function texteBon(arg) {
    ================================================================= */
 function navBureau(p) {
   if (p === "direction") return [["direction", "Synthèse", I.argent]].concat(actif("MO-RES") ? [["reservations", "Réservations", I.jour]] : []).concat([["docs", "Documents", I.docs]]).concat(session.admin ? [["equipe", "Équipe et accès", I.equipe]] : []).concat([["installation", "Installation", I.abo]]);
-  const l = [["releve", "Relevé", I.releve]].concat(actif("MO-RES") ? [["reservations", "Réservations", I.jour]] : []).concat([["materiel", "Matériel", I.materiel], ["scanner", "Scanner", I.scan]]);
+  const l = [["releve", "Relevé", I.releve]].concat(actif("MO-RES") ? [["reservations", "Réservations", I.jour], ["clients", "Clients", I.equipe]] : []).concat([["materiel", "Matériel", I.materiel], ["scanner", "Scanner", I.scan]]);
   if (actif("MO-CMD")) l.push(["commandes", "Commandes", I.bon]);
   l.push(["journal", "Journal", I.journal], ["docs", "Documents", I.docs]);
   return l;
@@ -348,9 +350,9 @@ function navBureau(p) {
 function cadreBureau(p) {
   const nav = navBureau(p);
   const vues = { releve: bReleve, materiel: bMateriel, fiche: bFiche, commandes: bCommandes, journal: bJournal, docs: bDocs, etiquettes: bEtiquettes,
-    inventairePapier: bInventairePapier, refacturer: bRefacturer, rapport: dRapport, direction: dSynthese, abonnement: dInstallation, installation: dInstallation, scanner: bScanner, equipe: dEquipe, reservations: bReservations, reservation: bReservation, facture: vFacture };
+    inventairePapier: bInventairePapier, refacturer: bRefacturer, rapport: dRapport, direction: dSynthese, abonnement: dInstallation, installation: dInstallation, scanner: bScanner, equipe: dEquipe, reservations: bReservations, reservation: bReservation, facture: vFacture, clients: bClients };
   const corps = vues[vue.nom] || (p === "direction" ? dSynthese : bReleve);
-  const parent = { fiche: "materiel", etiquettes: "docs", inventairePapier: "docs", refacturer: "docs", rapport: "docs", reservation: "reservations", facture: "docs" };
+  const parent = { fiche: "materiel", etiquettes: "docs", inventairePapier: "docs", refacturer: "docs", rapport: "docs", reservation: "reservations", facture: "docs", clients: "clients" };
   const courant = nav.some(([k]) => k === vue.nom) ? vue.nom : parent[vue.nom];
   return `<div class="${p === "direction" ? "d" : "b"}">${DEMO}
     <header class="b-haut"><div class="marque">${I.logo}<span>Stock démo</span></div>
@@ -373,6 +375,7 @@ function bReleve() {
   </div>
   ${actif("MO-CMD") && (rupt || bas) ? `<p style="margin-top:16px"><button class="btn plein" data-aller="commandes">${I.bon}Préparer les commandes</button></p>` : ""}
   ${metier().dlc ? blocPeremption() : ""}
+  ${blocAtelier()}
   <h2>${aDesPrets() ? "Le cycle du matériel" : "Le mouvement du stock"}</h2>
   ${cycle()}
   <h2>En un coup d'œil</h2>
@@ -418,7 +421,7 @@ function bFiche(id) {
       <div><dt>Seuil d'alerte</dt><dd>${a.seuil}</dd></div><div><dt>Niveau normal</dt><dd>${a.cible}</dd></div>
       <div><dt>Prix unitaire</dt><dd>${argent(a.prix)}</dd></div><div><dt>Valeur au dépôt</dt><dd>${argent(Math.max(0, q) * a.prix)}</dd></div>
       ${a.serie ? `<div><dt>N° de série</dt><dd class="code">${a.serie}</dd></div>` : ""}</dl>
-    <div class="boutons"><button class="btn petit" data-mvt="Entrée">Entrée en stock</button><button class="btn petit" data-mvt="Compter">Compter</button><button class="btn petit" data-mvt="Perte">Perte</button></div>
+    <div class="boutons">${totalAtelier(id) ? `<p class="sous" style="width:100%;margin:0 0 6px">À l'atelier : ${aLAtelier(id).map(x => x.qte + " " + (x.motif === "Au nettoyage" ? "au nettoyage" : "en réparation")).join(", ")}</p>` : ""}<button class="btn petit" data-atelier="${a.id}">Envoyer à l'atelier</button><button class="btn petit" data-mvt="Entrée">Entrée en stock</button><button class="btn petit" data-mvt="Compter">Compter</button><button class="btn petit" data-mvt="Perte">Perte</button></div>
   </div></div>
   ${metier().dlc && lotsEnStock(id).length ? `<h2>Lots en stock</h2><table class="t"><tbody>${lotsEnStock(id).map(l => `<tr><td>Date limite au ${dateFr(l.dlc)}</td><td class="n">${l.qte}</td></tr>`).join("")}</tbody></table>` : ""}
   ${d.length ? `<h2>Chez qui</h2><table class="t"><tbody>${d.map(x => `<tr><td>${esc(x.evenement)}</td><td class="n">${x.qte}</td></tr>`).join("")}</tbody></table>` : ""}
@@ -466,21 +469,21 @@ function creerCommande(fid, statut) {
 /* Les sorties (documents) changent selon le profil. */
 function bDocs() {
   const d = session.profil === "direction"
-    ? [["rapport", I.argent, "Rapport du mois", "Valeur, pertes, refacturable, à imprimer ou garder en PDF"], ["csv", I.excel, "Export pour le comptable", "Tous les mouvements avec leur valeur"], ["refacturer", I.perte, "Manquants à refacturer", "Par événement, avec les montants"]]
+    ? [["rapport", I.argent, "Rapport du mois", "Valeur, pertes, refacturable, à imprimer ou garder en PDF"], ["csv", I.excel, "Export pour le comptable", "Tous les mouvements avec leur valeur"], ["finAnnee", I.excel, "Inventaire de fin d'année", "Stock valorisé par objet et pertes de l'année"], ["refacturer", I.perte, "Manquants à refacturer", "Par événement, avec les montants"]]
     : [["etiquettes", I.etiquette, "Planche d'étiquettes", "QR à imprimer et coller"], ["inventairePapier", I.compter, "Fiche d'inventaire papier", "Pour compter sans téléphone, allée par allée"],
-       ["refacturer", I.perte, "Manquants à refacturer", "Par événement, avec les montants"], ["csv", I.excel, "Export Excel", "Tous les mouvements"]];
+       ["refacturer", I.perte, "Manquants à refacturer", "Par événement, avec les montants"], ["csv", I.excel, "Export Excel", "Tous les mouvements"], ["finAnnee", I.excel, "Inventaire de fin d'année", "Stock valorisé par objet et pertes de l'année"]];
   return `<h1>Documents</h1><p class="sous">Ce que vous pouvez imprimer, envoyer ou transmettre.</p>
-  <div class="docs">${d.map(([k, ic, t, s]) => `<button class="doc-carte" ${k === "csv" ? 'data-act="csv"' : `data-aller="${k}"`}><span class="pastille">${ic}</span><span><b>${t}</b><small>${s}</small></span></button>`).join("")}</div>`;
+  <div class="docs">${d.map(([k, ic, t, s]) => `<button class="doc-carte" ${["csv", "finAnnee"].includes(k) ? `data-act="${k}"` : `data-aller="${k}"`}><span class="pastille">${ic}</span><span><b>${t}</b><small>${s}</small></span></button>`).join("")}</div>`;
 }
 const retourDocs = `<p class="pas-imprimer"><button class="lien" data-aller="docs">← Documents</button> · <button class="lien" data-act="imprimer">Imprimer ou enregistrer en PDF</button></p>`;
 const bEtiquettes = () => `${retourDocs}<div class="pas-imprimer"><h1>Planche d'étiquettes</h1><p class="sous">Scanné avec l'appareil photo, le QR ouvre directement la fiche de l'objet.</p></div>
   <div class="planche">${S.articles.map(a => `<div class="etiquette"><div data-qr="${a.id}"></div><div><b>${esc(a.nom)}</b><span class="code">${a.id}</span></div></div>`).join("")}</div>`;
-const bInventairePapier = () => `${retourDocs}<div class="feuille-doc"><h1>Fiche d'inventaire</h1><p>Date : ____ / ____ / ________ · Compté par : ______________________</p>
+const bInventairePapier = () => `${retourDocs}<div class="feuille-doc">${enTeteDoc()}<h1>Fiche d'inventaire</h1><p>Date : ____ / ____ / ________ · Compté par : ______________________</p>
   ${S.emplacements.map(e => `<h2 style="font-size:17px">${esc(e.nom)}</h2><table><thead><tr><th>Code</th><th>Objet</th><th>Attendu</th><th>Compté</th></tr></thead><tbody>
   ${S.articles.filter(a => a.emp === e.id).map(a => `<tr><td>${a.id}</td><td>${esc(a.nom)}</td><td>${stock(a.id)}</td><td style="width:90px"></td></tr>`).join("")}</tbody></table>`).join("")}</div>`;
 function bRefacturer() {
   const l = S.mouvements.filter(m => m.type === "Perte" && m.refac);
-  return `${retourDocs}<div class="feuille-doc"><h1>Manquants à refacturer</h1>
+  return `${retourDocs}<div class="feuille-doc">${enTeteDoc()}<h1>Manquants à refacturer</h1>
   <table><thead><tr><th>Événement</th><th>Objet</th><th>Qté</th><th>Montant</th></tr></thead><tbody>
   ${l.map(m => `<tr><td>${esc(m.evenement)}</td><td>${esc(art(m.article).nom)}</td><td>${m.qte}</td><td>${argent(valeurM(m))}</td></tr>`).join("") || `<tr><td colspan="4">Rien à refacturer.</td></tr>`}</tbody></table>
   <p style="text-align:right"><b>Total : ${argent(l.reduce((t, m) => t + valeurM(m), 0))}</b></p></div>
@@ -578,7 +581,7 @@ function dRapport() {
   const p = pertesN(30);
   const sorties = S.mouvements.filter(m => m.type === "Prêt" && m.date >= Date.now() - 30 * 86400000);
   const top = {}; sorties.forEach(m => top[m.article] = (top[m.article] || 0) + m.qte);
-  return `${retourDocs}<div class="feuille-doc"><h1>Rapport des 30 derniers jours</h1><p>Édité le ${new Date().toLocaleDateString("fr-FR")}</p>
+  return `${retourDocs}<div class="feuille-doc">${enTeteDoc()}<h1>Rapport des 30 derniers jours</h1><p>Édité le ${new Date().toLocaleDateString("fr-FR")}</p>
   <table><tbody><tr><td>Valeur du matériel au dépôt</td><td>${argent(valeur)}</td></tr><tr><td>Cassé ou perdu</td><td>${argent(p.reduce((t, m) => t + valeurM(m), 0))}</td></tr>
   <tr><td>Refacturable aux clients</td><td>${argent(p.filter(m => m.refac).reduce((t, m) => t + valeurM(m), 0))}</td></tr>
   <tr><td>Pièces sorties chez les clients</td><td>${sorties.reduce((t, m) => t + m.qte, 0)}</td></tr></tbody></table>
@@ -603,6 +606,7 @@ function dInstallation() {
   <p class="sous">Un module installé reste à vous. En ajouter un se paie une fois, après devis.</p>
   ${Object.entries(CATALOGUE).map(([k, m]) => `<div class="module"><b>${m.nom}</b><label class="inter"><input type="checkbox" data-module="${k}" ${actif(k) ? "checked" : ""} aria-label="${m.nom}"><span></span></label><p>${actif(k) ? "Installé." : `Ajout possible : ${fmt(m[unite])} HT, une fois.`} ${m.detail}</p></div>`).join("")}
   <h2>Réglages</h2>
+  <div class="module"><b>Vos coordonnées sur les documents</b><button class="btn petit" data-act="coordonnees">Modifier</button><p>${S.entreprise && S.entreprise.nom ? esc(S.entreprise.nom) : "Nom, adresse, téléphone et logo en haut des bons et des factures."}</p></div>
   <div class="module"><label for="metier"><b>Métier de l'entreprise</b></label><select id="metier" data-metier>${Object.entries(METIERS).map(([k, m]) => `<option value="${k}" ${(S.metier || "loueur") === k ? "selected" : ""}>${m.nom}</option>`).join("")}</select><p>Change les mots, les boutons du terrain et les objets de la démo.</p></div>
   <div class="module"><label for="monnaie"><b>Monnaie des montants</b></label><select id="monnaie" data-monnaie><option value="EUR" ${S.monnaie === "EUR" ? "selected" : ""}>Euro</option><option value="XOF" ${S.monnaie === "XOF" ? "selected" : ""}>Franc CFA</option></select><p>Pour les prix, les pertes et les factures.</p></div>`;
 }
@@ -793,6 +797,7 @@ function brancher() {
   $$("[data-act]").forEach(b => { if (ACTIONS[b.dataset.act]) b.onclick = ACTIONS[b.dataset.act]; });
   brancherPlus();
   brancherMetiers();
+  brancherOutils();
 }
 const ACTIONS = {
   camera: () => camera(),
@@ -800,6 +805,9 @@ const ACTIONS = {
   camionPart: () => camionPart(),
   tour: () => demarrerTour(),
   demanderIntervention: () => feuilleIntervention(),
+  coordonnees: () => feuilleCoordonnees(),
+  nouveauClient: () => feuilleClient(),
+  finAnnee: () => exporterFinAnnee(),
   sortir: () => { session = null; verrouille = false; saisiePin = ""; clearTimeout(minuteur); vue = { nom: "profil" }; rendre(); },
   retourListe: () => { saisiePin = ""; vue = { nom: "profil" }; rendre(); },
   verrouiller: () => { verrouille = true; saisiePin = ""; clearTimeout(minuteur); rendre(); },
