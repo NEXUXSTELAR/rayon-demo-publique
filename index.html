@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Suivi de parc · démonstration</title>
+<meta name="description" content="Démonstration du suivi de matériel par étiquettes QR pour les loueurs de matériel de réception : départ, retour, pertes, commandes.">
+<meta name="theme-color" content="#f2f3f5">
+<script>/* Thème avant l'affichage, pour éviter un flash blanc en mode sombre */try{var c=localStorage.getItem("rayon-theme")||"clair";if(c==="auto")c=matchMedia("(prefers-color-scheme: dark)").matches?"sombre":"clair";document.documentElement.dataset.theme=c}catch(e){}</script>
+<meta property="og:title" content="Suivi de parc · démonstration">
+<meta property="og:description" content="Scanner une étiquette, savoir ce qui est au dépôt et ce qui est chez les clients.">
+<meta property="og:image" content="partage.png">
+<link rel="icon" href="icone.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icone-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;700;800&family=Atkinson+Hyperlegible+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="racine"></div>
+<noscript>Cette démonstration a besoin de JavaScript.</noscript>
+<script src="data.js"></script>
+<script src="graphes.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

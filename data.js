@@ -1,0 +1,122 @@
+// Données de démonstration : un loueur de matériel de réception.
+// Tout est fictif et signalé comme tel dans l'interface.
+
+const CATALOGUE = {
+  "MO-PRET": { nom: "Prêts et retours", detail: "Départ chez le client, retour, manquants à refacturer", eur: 15, xof: 7500 },
+  "MO-KIT":  { nom: "Kits", detail: "Sortir un ensemble complet en un geste", eur: 10, xof: 5000 },
+  "MO-CMD":  { nom: "Commandes fournisseurs", detail: "Brouillons automatiques, validation, bon de commande", eur: 15, xof: 7500 },
+  "MO-DASH": { nom: "Tableau de direction", detail: "Valeur du parc, pertes, rapport du mois", eur: 15, xof: 7500 },
+  "AL-SMS":  { nom: "Alertes SMS", detail: "150 SMS par mois inclus", eur: 15, xof: 7500 },
+  "AL-WA":   { nom: "Alertes WhatsApp", detail: "300 messages par mois inclus", eur: 12, xof: 5000 },
+};
+const OFFRE = { nom: "Essentiel", eur: 39, xof: 15000 };
+
+// Trois profils, trois façons de travailler, donc trois écrans différents.
+const PROFILS = {
+  terrain:   { nom: "Magasinier", role: "Au dépôt et au camion", theme: "terrain", accueil: "terrain" },
+  bureau:    { nom: "Responsable du parc", role: "Stock, commandes, étiquettes", theme: "bureau", accueil: "releve" },
+  direction: { nom: "Gérant", role: "Argent, pertes, abonnement", theme: "direction", accueil: "direction" },
+};
+
+// Équipe de démonstration. Chaque personne a son rôle et son code personnel.
+// Les codes de démo sont affichés sur l'écran de connexion. Seule leur empreinte est enregistrée.
+const EQUIPE_DEMO = [
+  { id: "U-01", nom: "Ousmane", poste: "Magasinier", role: "terrain", pin: "1111" },
+  { id: "U-02", nom: "Léa", poste: "Magasinière", role: "terrain", pin: "2222" },
+  { id: "U-03", nom: "Karim", poste: "Responsable du parc", role: "bureau", pin: "3333" },
+  { id: "U-04", nom: "Awa", poste: "Gérante", role: "direction", pin: "4444", admin: true },
+];
+// Empreinte du code (FNV-1a sur l'identifiant et le code). En démo, tout reste dans le navigateur ;
+// en production, le code est vérifié par le serveur et n'est jamais stocké sur le téléphone.
+function empreinte(uid, pin) {
+  let h = 0x811c9dc5;
+  const s = "rayon|" + uid + "|" + pin;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(16).padStart(8, "0");
+}
+
+const SEED = () => ({
+  version: 7,
+  equipe: EQUIPE_DEMO.map(u => ({ id: u.id, nom: u.nom, poste: u.poste, role: u.role, admin: !!u.admin, actif: true, empreinte: empreinte(u.id, u.pin) })),
+  connexions: [],
+  essais: {},
+  reglages: { verrou: 5 },
+  monnaie: "EUR",
+  modules: { "MO-PRET": true, "MO-KIT": true, "MO-CMD": true, "MO-DASH": true, "AL-SMS": false, "AL-WA": false },
+  fournisseurs: [
+    { id: "FOU-01", nom: "Fournisseur de mobilier (démo)", delai: 3 },
+    { id: "FOU-02", nom: "Fournisseur de textile (démo)", delai: 7 },
+  ],
+  emplacements: [
+    { id: "EMP-A1", nom: "Allée A · chaises et tables" },
+    { id: "EMP-B2", nom: "Allée B · vaisselle" },
+    { id: "EMP-C1", nom: "Cage technique · son et énergie" },
+    { id: "EMP-D1", nom: "Mezzanine · textile" },
+  ],
+  articles: [
+    { id: "ART-0001", nom: "Chaise pliante blanche", img: "chaise", type: "conso", unite: "chaise", emp: "EMP-A1", seuil: 80, cible: 300, prix: 18, fou: "FOU-01" },
+    { id: "ART-0002", nom: "Table ronde 180 cm", img: "table", type: "conso", unite: "table", emp: "EMP-A1", seuil: 8, cible: 30, prix: 145, fou: "FOU-01" },
+    { id: "ART-0003", nom: "Assiette plate", img: "assiette", type: "conso", unite: "assiette", emp: "EMP-B2", seuil: 200, cible: 800, prix: 2.4, fou: "FOU-01" },
+    { id: "ART-0004", nom: "Verre à pied", img: "verre", type: "conso", unite: "verre", emp: "EMP-B2", seuil: 200, cible: 900, prix: 1.6, fou: "FOU-01" },
+    { id: "ART-0005", nom: "Nappe ronde ivoire", img: "nappe", type: "conso", unite: "nappe", emp: "EMP-D1", seuil: 24, cible: 40, prix: 22, fou: "FOU-02" },
+    { id: "ART-0006", nom: "Enceinte 15 pouces n°1", img: "enceinte", type: "equip", unite: "enceinte", emp: "EMP-C1", seuil: 0, cible: 1, prix: 690, fou: "FOU-01", serie: "SN-EA15-4471" },
+    { id: "ART-0007", nom: "Enceinte 15 pouces n°2", img: "enceinte", type: "equip", unite: "enceinte", emp: "EMP-C1", seuil: 0, cible: 1, prix: 690, fou: "FOU-01", serie: "SN-EA15-4472" },
+    { id: "ART-0008", nom: "Groupe électrogène 3 kW", img: "groupe", type: "equip", unite: "groupe", emp: "EMP-C1", seuil: 0, cible: 1, prix: 1150, fou: "FOU-01", serie: "SN-GE3-0912" },
+    { id: "ART-0009", nom: "Rallonge 25 m", img: "rallonge", type: "conso", unite: "rallonge", emp: "EMP-C1", seuil: 6, cible: 20, prix: 34, fou: "FOU-01" },
+    { id: "ART-0010", nom: "Housse de chaise", img: "housse", type: "conso", unite: "housse", emp: "EMP-D1", seuil: 60, cible: 300, prix: 3.9, fou: "FOU-02" },
+  ],
+  kits: [
+    { id: "KIT-01", nom: "Kit 50 couverts", lignes: [["ART-0003", 50], ["ART-0004", 50], ["ART-0005", 5]] },
+    { id: "KIT-02", nom: "Kit salle 100 places", lignes: [["ART-0001", 100], ["ART-0010", 100], ["ART-0002", 10], ["ART-0005", 10]] },
+    { id: "KIT-03", nom: "Kit son", lignes: [["ART-0006", 1], ["ART-0007", 1], ["ART-0009", 4]] },
+  ],
+  evenements: ["Mariage du 14 · salle des fêtes", "Séminaire · hôtel", "Anniversaire · particulier", "Fête de quartier · association"],
+  mouvements: [],
+  commandes: [],
+  alertes: [],
+  messages: [],
+});
+
+// Historique de démonstration : huit semaines d'événements, puis quelques sorties en cours.
+// Générateur pseudo-aléatoire à graine fixe : la démo est identique à chaque remise à zéro.
+function seedMouvements(state) {
+  let graine = 7;
+  const alea = () => (graine = (graine * 16807) % 2147483647) / 2147483647;
+  const entre = (a, b) => Math.round(a + alea() * (b - a));
+  const jour = 86400000, maintenant = Date.now();
+  const debut = maintenant - 62 * jour;
+  let n = 0;
+  const add = (t, profil, art, type, qte, evenement, motif, refac) => {
+    if (qte <= 0) return;
+    n += 1;
+    state.mouvements.push({ id: "MV-" + String(n).padStart(5, "0"), date: t, profil, qui: profil === "bureau" ? "Karim" : (n % 3 ? "Ousmane" : "Léa"), article: art, type, qte, evenement: evenement || "", motif: motif || "", refac: !!refac });
+  };
+  const init = { "ART-0001": 420, "ART-0002": 44, "ART-0003": 1000, "ART-0004": 1100, "ART-0005": 34, "ART-0006": 1, "ART-0007": 1, "ART-0008": 1, "ART-0009": 22, "ART-0010": 420 };
+  Object.entries(init).forEach(([a, q]) => add(debut, "bureau", a, "Inventaire initial", q));
+  const types = ["Mariage", "Séminaire", "Anniversaire", "Gala", "Salon", "Fête d'association", "Repas d'entreprise"];
+  const mois = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+  // Événements passés, tous revenus (avec un peu de casse)
+  for (let j = 58; j >= 8; j -= entre(3, 5)) {
+    const t = maintenant - j * jour + 9 * 3600000, d = new Date(t + 2 * jour);
+    const ev = `${types[entre(0, types.length - 1)]} · ${d.getDate()} ${mois[d.getMonth()]}`;
+    const lot = [["ART-0001", entre(60, 220)], ["ART-0003", entre(80, 300)], ["ART-0004", entre(80, 320)], ["ART-0002", entre(6, 18)], ["ART-0010", entre(0, 160)], ["ART-0005", entre(4, 10)]];
+    if (alea() > .5) lot.push(["ART-0006", 1], ["ART-0009", entre(2, 5)]);
+    lot.forEach(([a, q]) => add(t, "terrain", a, "Prêt", q, ev));
+    lot.forEach(([a, q]) => {
+      const casse = a === "ART-0003" || a === "ART-0004" ? entre(0, Math.ceil(q * .03)) : a === "ART-0001" ? entre(0, 3) : 0;
+      const refac = alea() < .45;
+      add(t + 2 * jour + 3600000, "terrain", a, "Retour", q - casse, ev);
+      add(t + 2 * jour + 3700000, "terrain", a, "Perte", casse, ev, refac ? "Cassé par le client" : "Casse au chargement", refac);
+    });
+  }
+  // Événements en cours
+  const ev = state.evenements;
+  const t0 = maintenant - 3 * jour;
+  add(t0, "terrain", "ART-0001", "Prêt", 120, ev[0]);
+  add(t0, "terrain", "ART-0003", "Prêt", 240, ev[0]);
+  add(t0, "terrain", "ART-0005", "Prêt", 12, ev[0]);
+  add(t0 + jour, "terrain", "ART-0006", "Prêt", 1, ev[1]);
+  add(t0 + jour, "terrain", "ART-0009", "Prêt", 4, ev[1]);
+  add(t0 + 2 * jour, "terrain", "ART-0004", "Prêt", 300, ev[2]);
+  return state;
+}
