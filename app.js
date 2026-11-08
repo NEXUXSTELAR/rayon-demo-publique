@@ -1,6 +1,6 @@
 "use strict";
 
-const CLE = "rayon-demo-v8";
+const CLE = "rayon-demo-v9";
 const CLE_THEME = "rayon-theme";
 const EUR_XOF = 655.957;
 const SEUIL_VALIDATION_EUR = 500;
@@ -59,13 +59,13 @@ let vue = { nom: "profil", arg: null };
 
 /* ---------------- Stockage ---------------- */
 function charger() {
-  try { const b = localStorage.getItem(CLE); if (b) { const s = JSON.parse(b); if (s.version === 8) return s; } } catch (e) { /* stockage bloqué : données de démo */ }
+  try { const b = localStorage.getItem(CLE); if (b) { const s = JSON.parse(b); if (s.version === 9) return s; } } catch (e) { /* stockage bloqué : données de démo */ }
   return seedMouvements(SEED());
 }
 function sauver() { try { localStorage.setItem(CLE, JSON.stringify(S)); } catch (e) { /* mode privé */ } }
 
 /* ---------------- Calculs ---------------- */
-const SIGNE = { "Inventaire initial": 1, "Entrée": 1, "Retour": 1, "Prêt": -1, "Perte": -1, "Ajustement": 1 };
+const SIGNE = { "Inventaire initial": 1, "Entrée": 1, "Retour": 1, "Prêt": -1, "Perte": -1, "Sortie": -1, "Ajustement": 1 };
 const art = id => S.articles.find(a => a.id === id);
 const actif = c => !!S.modules[c];
 const stock = id => S.mouvements.filter(m => m.article === id).reduce((t, m) => t + SIGNE[m.type] * m.qte, 0);
@@ -119,7 +119,7 @@ function verifierSeuil(id) {
   if (a.type === "equip") return;
   const q = stock(id);
   if (q > a.seuil) return;
-  const txt = q <= 0 ? `Plus aucun ${a.unite} : ${a.nom} (${a.id}).` : `${a.nom} : il en reste ${q}, seuil ${a.seuil}.`;
+  const txt = q <= 0 ? `Plus aucun en stock : ${a.nom} (${a.id}).` : `${a.nom} : il en reste ${q}, seuil ${a.seuil}.`;
   S.alertes.unshift({ date: Date.now(), article: id, txt });
   ["AL-SMS", "AL-WA"].forEach(c => { if (actif(c)) S.messages.unshift({ date: Date.now(), canal: c === "AL-SMS" ? "SMS" : "WhatsApp", txt }); });
 }
@@ -155,7 +155,7 @@ function vueProfil() {
     <p class="sous">Touchez votre nom, puis tapez votre code personnel.</p>
     <div class="profils">${S.equipe.map(u => `<button data-profil="${u.role}" data-uid="${u.id}" ${u.actif ? "" : "disabled"}>${avatar(u)}<div><b>${esc(u.nom)}</b><span>${esc(u.poste)}${u.actif ? "" : " · accès retiré"}</span></div><span class="fleche">${I.fleche}</span></button>`).join("")}</div>
     <p class="indice">Codes de démonstration : ${EQUIPE_DEMO.map(u => `${esc(u.nom)} <span class="code">${u.pin}</span>`).join(" · ")}</p>
-    <button class="btn plein" data-act="tour" style="margin-top:18px">Montrer la démo en 7 étapes</button>
+    ${(S.metier || "loueur") === "loueur" ? `<button class="btn plein" data-act="tour" style="margin-top:18px">Montrer la démo en 7 étapes</button>` : `<p class="indice" style="margin-top:14px">Démo réglée pour : <b>${esc(metier().nom)}</b></p>`}
     <p style="margin-top:18px"><button class="lien" data-act="reinit">Remettre la démo à zéro</button></p>
   </div>`;
 }
@@ -229,7 +229,7 @@ function feuilleReglages() {
    PROFIL TERRAIN : une action à la fois, des photos, de gros boutons
    ================================================================= */
 function cadreTerrain() {
-  const corps = ({ terrain: tAccueil, objet: tObjet, kits: tKits, recuperer: tRecuperer, retourEv: tRetourEvenement, chercher: tChercher, jour: tJour, bon: tBon, preparer: tPreparer, preparation: tPreparation, facture: vFacture })[vue.nom] || tAccueil;
+  const corps = ({ terrain: tAccueil, objet: tObjet, kits: tKits, recuperer: tRecuperer, retourEv: tRetourEvenement, chercher: tChercher, jour: tJour, bon: tBon, preparer: tPreparer, preparation: tPreparation, facture: vFacture, reception: tReception, receptionCmd: tReceptionCmd })[vue.nom] || tAccueil;
   const u = S.equipe.find(x => x.id === session.uid) || { nom: session.nom, role: "terrain" };
   return `${DEMO}<header class="t-haut">
       ${vue.nom === "terrain" ? `<div class="qui">${avatar(u)}<span>${esc(session.nom)}</span></div>` : `<button class="btn petit" data-aller="terrain">← Accueil</button>`}
@@ -237,30 +237,37 @@ function cadreTerrain() {
     </header><main class="t-main">${corps(vue.arg)}</main>`;
 }
 function tAccueil() {
-  const n = actif("MO-PRET") ? new Set(dehors().map(d => d.evenement)).size : 0;
+  const n = aDesPrets() ? new Set(dehors().map(d => d.evenement)).size : 0;
+  const attendues = S.commandes.filter(c => ["Envoyée", "Reçue en partie"].includes(c.statut)).length;
   return `
   <button class="t-scan" data-act="camera">${I.scan}<b>Scanner</b><span>Visez l'étiquette de l'objet</span></button>
   <form class="t-ou" data-form="code"><label class="cache" for="code">Code de l'étiquette</label>
     <input id="code" name="code" placeholder="ou tapez le code" autocomplete="off"><button class="btn plein petit" type="submit">OK</button></form>
   ${actif("MO-RES") ? tuilePreparer() : ""}
   <div class="t-tuiles">
-    ${actif("MO-KIT") ? `<button class="t-tuile" data-aller="kits"><span class="pastille">${I.kit}</span><div><b>Sortir un kit</b><small>Tout un ensemble d'un coup</small></div></button>` : ""}
-    ${actif("MO-PRET") ? `<button class="t-tuile" data-aller="recuperer"><span class="pastille">${I.camion}</span><div><b>Retour d'un événement</b><small>${n} en cours</small></div></button>` : ""}
+    ${actif("MO-KIT") && S.kits.length ? `<button class="t-tuile" data-aller="kits"><span class="pastille">${I.kit}</span><div><b>Sortir un kit</b><small>Tout un ensemble d'un coup</small></div></button>` : ""}
+    ${aDesPrets() ? `<button class="t-tuile" data-aller="recuperer"><span class="pastille">${I.retour}</span><div><b>${V("retourTitre")}</b><small>${n} ${V("retourSous")}</small></div></button>` : ""}
+    <button class="t-tuile" data-aller="reception"><span class="pastille">${I.camion}</span><div><b>Réceptionner une livraison</b><small>${attendues} attendue${attendues > 1 ? "s" : ""}</small></div></button>
     <button class="t-tuile" data-aller="chercher"><span class="pastille">${I.loupe}</span><div><b>Chercher un objet</b><small>Sans étiquette sous la main</small></div></button>
     <button class="t-tuile" data-aller="jour"><span class="pastille">${I.jour}</span><div><b>Ma journée</b><small>Ce que j'ai enregistré</small></div></button>
   </div>`;
 }
 function tObjet(id) {
   const a = art(id); if (!a) return `<p>Objet introuvable.</p>`;
-  const q = stock(id), e = etat(a), pret = actif("MO-PRET");
-  const jauge = a.type === "equip" ? `<div class="t-stock">${q >= 1 ? "Ici" : "Sorti"}</div>` : anneau(q, a.cible, couleurEtat(e), q, `au dépôt sur ${a.cible}`);
+  const q = stock(id), e = etat(a), pret = logique(a) === "pret";
+  const jauge = a.type === "equip" ? `<div class="t-stock">${q >= 1 ? "Ici" : "Sorti"}</div>` : anneau(q, a.cible, couleurEtat(e), q, `en stock sur ${a.cible}`);
+  const lots = metier().dlc ? lotsEnStock(id) : [];
+  const actions = pret ? `
+    <button class="t-action sortie" data-mvt="Prêt">${I.sortie}<span>${V("pretSortie")}<small>${V("pretSortieSous")}</small></span></button>
+    <button class="t-action retour" data-mvt="Retour">${I.retour}<span>${V("pretRetour")}<small>${V("pretRetourSous")}</small></span></button>` : `
+    <button class="t-action sortie" data-mvt="Sortie">${I.sortie}<span>${V("prendre")}<small>${V("prendreSous")}</small></span></button>
+    <button class="t-action retour" data-mvt="Surplus">${I.retour}<span>${V("remettre")}<small>${V("remettreSous")}</small></span></button>`;
   return `<div class="t-objet">${img(a)}<span class="code">${a.id}</span><h1>${esc(a.nom)}</h1>
-    ${jauge}<div style="margin-top:8px"><span class="etat ${e.c}"><i></i>${e.t}</span></div></div>
-  <div class="t-actions">
-    <button class="t-action sortie" data-mvt="Prêt">${I.sortie}<span>${pret ? "Part chez un client" : "Sortie"}<small>Je l'emmène</small></span></button>
-    <button class="t-action retour" data-mvt="Retour">${I.retour}<span>${pret ? "Revient" : "Rentre"}<small>Je le range</small></span></button>
+    ${jauge}<div style="margin-top:8px"><span class="etat ${e.c}"><i></i>${e.t}</span></div>
+    ${lots.length ? `<p class="lot-premier">À sortir en premier : ${lots[0].qte} avec date limite au <b>${dateFr(lots[0].dlc)}</b></p>` : ""}</div>
+  <div class="t-actions">${actions}
     <button class="t-action compter" data-mvt="Compter">${I.compter}<span>Compter<small>Je vérifie combien il y en a</small></span></button>
-    <button class="t-action perte" data-mvt="Perte">${I.perte}<span>Cassé ou perdu</span></button>
+    <button class="t-action perte" data-mvt="Perte">${I.perte}<span>${metier().dlc ? "Périmé, cassé ou perdu" : "Cassé ou perdu"}</span></button>
   </div>`;
 }
 function tChercher(filtre) {
@@ -274,7 +281,7 @@ function tJour() {
   const debut = new Date(); debut.setHours(0, 0, 0, 0);
   const l = S.mouvements.filter(m => m.date >= debut.getTime() && m.profil === "terrain").reverse();
   return `<h1>Ma journée</h1><p class="sous">${l.length} enregistrement${l.length > 1 ? "s" : ""} aujourd'hui.</p>
-  <ul class="t-liste">${l.map(m => { const a = art(m.article); return `<li><button data-objet="${a.id}">${img(a)}<span><b>${esc(m.type)} · ${esc(a.nom)}</b><small>${quand(m.date)}${m.evenement ? " · " + esc(m.evenement) : ""}</small></span><span class="n">${m.qte}</span></button></li>`; }).join("") || `<li class="vide">Rien encore aujourd'hui. Scannez un objet pour commencer.</li>`}</ul>`;
+  <ul class="t-liste">${l.map(m => { const a = art(m.article); return `<li><button data-objet="${a.id}">${img(a)}<span><b>${esc(m.type)} · ${esc(a.nom)}</b><small>${quand(m.date)}${(m.evenement || m.imputation) ? " · " + esc(m.evenement || m.imputation) : ""}</small></span><span class="n">${m.qte}</span></button></li>`; }).join("") || `<li class="vide">Rien encore aujourd'hui. Scannez un objet pour commencer.</li>`}</ul>`;
 }
 function tKits() {
   return `<h1>Sortir un kit</h1><p class="sous">Choisissez le kit, puis le nombre et l'événement.</p>
@@ -358,42 +365,47 @@ function bReleve() {
   const bas = S.articles.filter(a => etat(a).c === "bas").length;
   const out = dehors().reduce((t, d) => t + d.qte, 0);
   const pts = pertesN(30).reduce((t, m) => t + m.qte, 0);
-  return `<h1>Relevé du parc</h1><p class="sous">${new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}</p>
+  return `<h1>${V("parc")}</h1><p class="sous">${new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}</p>
   <div class="chiffres">
     <button data-aller="materiel" data-arg="alerte"><b class="${rupt ? "rouge" : ""}">${rupt}</b><span>Plus aucun en stock</span></button>
     <button data-aller="materiel" data-arg="alerte"><b>${bas}</b><span>Bientôt à commander</span></button>
-    <button data-aller="materiel" data-arg="dehors"><b>${out}</b><span>Pièces chez les clients</span></button>
-    <button data-aller="refacturer"><b class="${pts ? "rouge" : ""}">${pts}</b><span>Cassées ou perdues, 30 jours</span></button>
+    ${aDesPrets() ? `<button data-aller="materiel" data-arg="dehors"><b>${out}</b><span>${V("chez")}</span></button>` : `<button data-aller="journal"><b>${S.mouvements.filter(m => m.type === "Sortie" && m.date >= Date.now() - 7 * 86400000).reduce((t, m) => t + m.qte, 0)}</b><span>${V("sortiesMot")} en 7 jours</span></button>`}
+    <button data-aller="refacturer"><b class="${pts ? "rouge" : ""}">${pts}</b><span>${metier().dlc ? "Périmées, cassées ou perdues" : "Cassées ou perdues"}, 30 jours</span></button>
   </div>
   ${actif("MO-CMD") && (rupt || bas) ? `<p style="margin-top:16px"><button class="btn plein" data-aller="commandes">${I.bon}Préparer les commandes</button></p>` : ""}
-  <h2>Le cycle du matériel</h2>
+  ${metier().dlc ? blocPeremption() : ""}
+  <h2>${aDesPrets() ? "Le cycle du matériel" : "Le mouvement du stock"}</h2>
   ${cycle()}
   <h2>En un coup d'œil</h2>
-  <div class="graphes deuxcol">${gMouvements14()}${gDepotClients()}</div>
+  <div class="graphes deuxcol">${gMouvements14()}${aDesPrets() ? gDepotClients() : gTopLoues()}</div>
   <h2>Alertes</h2>
   ${S.alertes.length ? `<ul class="b-liste">${S.alertes.slice(0, 6).map(x => { const a = art(x.article); return `<li><button class="l" data-fiche="${a.id}">${img(a)}<span><b>${esc(x.txt)}</b><small>${quand(x.date)}</small></span><span></span></button></li>`; }).join("")}</ul>` : `<p class="vide">Pas d'alerte depuis le début de la démo.</p>`}
   ${S.messages.length ? `<h2>Messages envoyés</h2>${S.messages.slice(0, 4).map(m => `<div class="msg"><small>${m.canal} · ${quand(m.date)} · simulation</small>${esc(m.txt)}</div>`).join("")}` : ""}`;
 }
 // Où en est le parc : au dépôt, chez les clients, revenu et perdu sur 7 jours
 function cycle() {
-  const sem = Date.now() - 7 * 86400000;
+  const sem = Date.now() - 7 * 86400000, pret = aDesPrets();
   const depot = S.articles.reduce((t, a) => t + Math.max(0, stock(a.id)), 0);
-  const dehorsN = dehors().reduce((t, d) => t + d.qte, 0);
-  const rev = S.mouvements.filter(m => m.type === "Retour" && m.date >= sem).reduce((t, m) => t + m.qte, 0);
+  const deuxieme = pret ? dehors().reduce((t, d) => t + d.qte, 0) : S.mouvements.filter(m => m.type === "Sortie" && m.date >= sem).reduce((t, m) => t + m.qte, 0);
+  const rev = S.mouvements.filter(m => (pret ? m.type === "Retour" : m.type === "Entrée") && m.date >= sem).reduce((t, m) => t + m.qte, 0);
   const perdu = S.mouvements.filter(m => m.type === "Perte" && m.date >= sem).reduce((t, m) => t + m.qte, 0);
   const f = n => n >= 10000 ? Math.round(n / 1000) + " k" : n.toLocaleString("fr-FR");
   return `<div class="cycle">
-    <button data-aller="materiel" data-arg="tous"><span class="rondv" style="--c:var(--depot)">${f(depot)}</span><span>Au dépôt</span></button>
-    <button data-aller="materiel" data-arg="dehors"><span class="rondv" style="--c:var(--sortie)">${f(dehorsN)}</span><span>Chez les clients</span></button>
-    <button data-aller="journal"><span class="rondv" style="--c:var(--retour)">${f(rev)}</span><span>Revenus en 7 jours</span></button>
+    <button data-aller="materiel" data-arg="tous"><span class="rondv" style="--c:var(--depot)">${f(depot)}</span><span>En stock</span></button>
+    <button data-aller="${pret ? "materiel" : "journal"}" data-arg="dehors"><span class="rondv" style="--c:var(--sortie)">${f(deuxieme)}</span><span>${pret ? V("chez") : V("sortiesMot") + " en 7 jours"}</span></button>
+    <button data-aller="journal"><span class="rondv" style="--c:var(--retour)">${f(rev)}</span><span>${pret ? "Revenus" : "Entrés"} en 7 jours</span></button>
     <button data-aller="refacturer"><span class="rondv" style="--c:var(--alerte)">${f(perdu)}</span><span>Perdus en 7 jours</span></button></div>`;
+}
+function blocPeremption() {
+  const l = bientotPerimes(4);
+  return `<h2>À utiliser en premier</h2>${l.length ? `<ul class="b-liste">${l.slice(0, 6).map(x => `<li><button class="l" data-fiche="${x.a.id}">${img(x.a)}<span><b>${esc(x.a.nom)}</b><small>${x.qte} avec date limite au ${dateFr(x.dlc)}</small></span><span class="statut s-partie">${x.dlc <= new Date().toISOString().slice(0, 10) ? "Périmé" : "Bientôt"}</span></button></li>`).join("")}</ul>` : `<p class="vide">Rien ne périme dans les 4 prochains jours.</p>`}`;
 }
 function bMateriel(f) {
   f = f || "tous";
   const ids = new Set(dehors().map(d => d.article));
   const l = S.articles.filter(a => f === "tous" || (f === "alerte" && ["zero", "bas"].includes(etat(a).c)) || (f === "dehors" && ids.has(a.id)));
   return `<h1>Matériel</h1>
-  <div class="filtres">${[["tous", "Tout"], ["alerte", "À commander"], ["dehors", "Chez les clients"]].map(([k, t]) => `<button data-aller="materiel" data-arg="${k}" aria-pressed="${f === k}">${t}</button>`).join("")}</div>
+  <div class="filtres">${[["tous", "Tout"], ["alerte", "À commander"]].concat(aDesPrets() ? [["dehors", V("chez")]] : []).map(([k, t]) => `<button data-aller="materiel" data-arg="${k}" aria-pressed="${f === k}">${t}</button>`).join("")}</div>
   <ul class="b-liste">${l.map(a => { const e = etat(a); return `<li><button class="l" data-fiche="${a.id}">${img(a)}<span><b>${esc(a.nom)}</b><small><span class="code">${a.id}</span> · <span class="etat ${e.c}"><i></i>${e.t}</span></small></span><span class="n">${stock(a.id)}</span></button></li>`; }).join("") || `<li class="vide" style="padding:16px">Rien dans cette liste.</li>`}</ul>`;
 }
 function bFiche(id) {
@@ -403,19 +415,20 @@ function bFiche(id) {
   <div class="fiche">${img(a)}<div>
     <div class="entete"><div><span class="code">${a.id}</span><h1>${esc(a.nom)}</h1><span class="etat ${e.c}"><i></i>${e.t}</span></div>
     ${a.type === "equip" ? "" : anneau(q, a.cible, couleurEtat(e), q, "sur " + a.cible, true)}</div>
-    <dl><div><dt>Au dépôt</dt><dd>${q}</dd></div><div><dt>Chez les clients</dt><dd>${d.reduce((t, x) => t + x.qte, 0)}</dd></div>
+    <dl><div><dt>En stock</dt><dd>${q}</dd></div>${logique(a) === "pret" ? `<div><dt>${V("chez")}</dt><dd>${d.reduce((t, x) => t + x.qte, 0)}</dd></div>` : `<div><dt>${V("sortiesMot")} en 30 jours</dt><dd>${S.mouvements.filter(m => m.article === id && m.type === "Sortie" && m.date >= Date.now() - 30 * 86400000).reduce((t, m) => t + m.qte, 0)}</dd></div>`}
       <div><dt>Seuil d'alerte</dt><dd>${a.seuil}</dd></div><div><dt>Niveau normal</dt><dd>${a.cible}</dd></div>
       <div><dt>Prix unitaire</dt><dd>${argent(a.prix)}</dd></div><div><dt>Valeur au dépôt</dt><dd>${argent(Math.max(0, q) * a.prix)}</dd></div>
       ${a.serie ? `<div><dt>N° de série</dt><dd class="code">${a.serie}</dd></div>` : ""}</dl>
     <div class="boutons"><button class="btn petit" data-mvt="Entrée">Entrée en stock</button><button class="btn petit" data-mvt="Compter">Compter</button><button class="btn petit" data-mvt="Perte">Perte</button></div>
   </div></div>
+  ${metier().dlc && lotsEnStock(id).length ? `<h2>Lots en stock</h2><table class="t"><tbody>${lotsEnStock(id).map(l => `<tr><td>Date limite au ${dateFr(l.dlc)}</td><td class="n">${l.qte}</td></tr>`).join("")}</tbody></table>` : ""}
   ${d.length ? `<h2>Chez qui</h2><table class="t"><tbody>${d.map(x => `<tr><td>${esc(x.evenement)}</td><td class="n">${x.qte}</td></tr>`).join("")}</tbody></table>` : ""}
   <h2>Historique</h2>${tableMouvements(S.mouvements.filter(m => m.article === id).slice(-10).reverse(), false)}`;
 }
 function tableMouvements(l, avecObjet) {
   if (!l.length) return `<p class="vide">Aucun mouvement.</p>`;
   return `<div class="defile"><table class="t"><thead><tr><th>Quand</th><th>Qui</th><th>Quoi</th>${avecObjet ? "<th>Objet</th>" : ""}<th class="n">Qté</th></tr></thead><tbody>
-  ${l.map(m => `<tr><td>${quand(m.date)}</td><td>${esc(m.qui || PROFILS[m.profil].nom)}</td><td>${esc(m.type)}${m.evenement ? "<br><small>" + esc(m.evenement) + "</small>" : ""}${m.motif ? "<br><small>" + esc(m.motif) + "</small>" : ""}</td>${avecObjet ? `<td>${esc(art(m.article).nom)}</td>` : ""}<td class="n">${m.qte}</td></tr>`).join("")}</tbody></table></div>`;
+  ${l.map(m => `<tr><td>${quand(m.date)}</td><td>${esc(m.qui || PROFILS[m.profil].nom)}</td><td>${esc(m.type)}${(m.evenement || m.imputation) ? "<br><small>" + esc(m.evenement || m.imputation) + "</small>" : ""}${m.motif ? "<br><small>" + esc(m.motif) + "</small>" : ""}</td>${avecObjet ? `<td>${esc(art(m.article).nom)}</td>` : ""}<td class="n">${m.qte}</td></tr>`).join("")}</tbody></table></div>`;
 }
 const bJournal = () => `<h1>Journal</h1><p class="sous">Tout est gardé. Une erreur se corrige par un nouveau mouvement, jamais en effaçant.</p>${tableMouvements(S.mouvements.slice().reverse(), true)}`;
 const bScanner = () => `<h1>Scanner</h1><p class="sous">Ouvre la fiche complète de l'objet.</p>
@@ -484,7 +497,8 @@ function dSynthese() {
   const sur = (deb, fin, f) => S.mouvements.filter(m => m.date >= deb && m.date < fin && f(m));
   const somme = l => l.reduce((t, m) => t + valeurM(m), 0);
   const p = sur(maintenant - periode * J, maintenant + 1, m => m.type === "Perte"), pAvant = sur(maintenant - 2 * periode * J, maintenant - periode * J, m => m.type === "Perte");
-  const s = sur(maintenant - periode * J, maintenant + 1, m => m.type === "Prêt"), sAvant = sur(maintenant - 2 * periode * J, maintenant - periode * J, m => m.type === "Prêt");
+  const sorte = m => m.type === "Prêt" || m.type === "Sortie";
+  const s = sur(maintenant - periode * J, maintenant + 1, sorte), sAvant = sur(maintenant - 2 * periode * J, maintenant - periode * J, sorte);
   const vp = somme(p), refac = somme(p.filter(m => m.refac));
   // Évolution par rapport à la période précédente de même durée, seulement si elle a des données
   const delta = (a, b, plusEstMieux) => {
@@ -494,20 +508,20 @@ function dSynthese() {
   };
   const attente = S.commandes.filter(c => c.statut === "À valider");
   const partLoue = Math.round(chez / ((chez + valeur) || 1) * 100), partRefac = vp ? Math.round(refac / vp * 100) : 0;
-  return `<div class="d-tete"><div><p class="sous" style="margin:8px 0 0">Valeur du matériel au dépôt</p><div class="d-grand">${argent(valeur)}</div></div>
+  return `<div class="d-tete"><div><p class="sous" style="margin:8px 0 0">${(S.metier || "loueur") === "loueur" ? "Valeur du matériel au dépôt" : "Valeur du stock"}</p><div class="d-grand">${argent(valeur)}</div></div>
     <div class="segments" role="group" aria-label="Période">${[7, 30, 90].map(n => `<button data-periode="${n}" aria-pressed="${periode === n}">${n} jours</button>`).join("")}</div></div>
   <div class="trio">
-    <div><small>Mis en location</small><b>${argent(somme(s))}</b>${delta(somme(s), somme(sAvant), true)}</div>
+    <div><small>${V("sortiesMot")}</small><b>${argent(somme(s))}</b>${delta(somme(s), somme(sAvant), true)}</div>
     <div><small>Cassé ou perdu</small><b style="color:var(--alerte)">${argent(vp)}</b>${delta(vp, somme(pAvant), false)}</div>
-    <div><small>Refacturable</small><b>${argent(refac)}</b><span class="delta">${partRefac} % des pertes</span></div>
+    ${(S.metier || "loueur") === "loueur" ? `<div><small>Refacturable</small><b>${argent(refac)}</b><span class="delta">${partRefac} % des pertes</span></div>` : `<div><small>Taux de perte</small><b>${somme(s) ? Math.round(vp / (somme(s) + vp) * 1000) / 10 : 0} %</b><span class="delta">de la valeur sortie</span></div>`}
   </div>
   <div class="paire">
-    <div>${anneau(chez, chez + valeur, "var(--compter)", partLoue + " %", "du parc loué", true)}<p>${argent(chez)} chez les clients aujourd'hui</p></div>
-    <div>${anneau(refac, vp, "var(--neutre)", partRefac + " %", "refacturé", true)}<p>des pertes sur ${periode} jours</p></div>
+    ${aDesPrets() ? `<div>${anneau(chez, chez + valeur, "var(--compter)", partLoue + " %", S.metier === "loueur" ? "du parc loué" : "du matériel prêté", true)}<p>${argent(chez)} ${V("chez").toLowerCase()} aujourd'hui</p></div>` : (() => { const ok = S.articles.filter(x => etat(x).c === "").length; return `<div>${anneau(ok, S.articles.length, "var(--retour)", Math.round(ok / S.articles.length * 100) + " %", "au bon niveau", true)}<p>${S.articles.length - ok} référence${S.articles.length - ok > 1 ? "s" : ""} à commander</p></div>`; })()}
+    ${(S.metier || "loueur") === "loueur" ? `<div>${anneau(refac, vp, "var(--neutre)", partRefac + " %", "refacturé", true)}<p>des pertes sur ${periode} jours</p></div>` : `<div>${anneau(vp, somme(s) + vp, "var(--alerte)", (somme(s) ? Math.round(vp / (somme(s) + vp) * 100) : 0) + " %", "perdu", true)}<p>${argent(vp)} perdus sur ${periode} jours</p></div>`}
   </div>
   <h2>À décider</h2>
   ${attente.length ? attente.map(c => `<div class="bon"><header><b>${esc(c.fournisseur)}</b><span>${argent(c.total)} HT</span></header><p class="sous">${c.lignes.map(x => x.qte + " × " + esc(art(x.id).nom)).join(", ")}</p><button class="btn plein" data-valider="${c.id}">Valider la commande</button></div>`).join("") : `<p class="vide">Rien n'attend votre accord.</p>`}
-  ${actif("MO-DASH") ? `<h2>Tendances</h2><div class="graphes">${gUtilisation()}${gPertes8()}${gTopLoues()}</div>` : `<p class="sous">Le module Tableau de direction ajoute les tendances : utilisation du parc, pertes par semaine, objets qui dorment.</p>`}`;
+  ${actif("MO-DASH") ? `<h2>Tendances</h2><div class="graphes">${aDesPrets() ? gUtilisation() : ""}${gPertes8()}${gTopLoues()}</div>` : `<p class="sous">Le module Tableau de direction ajoute les tendances : utilisation du parc, pertes par semaine, objets qui dorment.</p>`}`;
 }
 
 /* Équipe et accès : qui peut entrer, avec quel rôle, et le journal des connexions */
@@ -578,6 +592,7 @@ function dAbonnement() {
   ${Object.entries(CATALOGUE).map(([k, m]) => `<div class="module"><b>${m.nom} · ${prixAbo(m)} / mois</b><label class="inter"><input type="checkbox" data-module="${k}" ${actif(k) ? "checked" : ""} aria-label="${m.nom}"><span></span></label><p>${m.detail}</p></div>`).join("")}
   <div class="total"><span>Total mensuel HT</span><span>${S.monnaie === "XOF" ? tot.toLocaleString("fr-FR") + " FCFA" : tot + " €"}</span></div>
   <h2>Réglages</h2>
+  <div class="module"><label for="metier"><b>Métier de l'entreprise</b></label><select id="metier" data-metier>${Object.entries(METIERS).map(([k, m]) => `<option value="${k}" ${(S.metier || "loueur") === k ? "selected" : ""}>${m.nom}</option>`).join("")}</select><p>Change les mots, les boutons du terrain et les objets de la démo.</p></div>
   <div class="module"><label for="monnaie"><b>Monnaie des montants</b></label><select id="monnaie" data-monnaie><option value="EUR" ${S.monnaie === "EUR" ? "selected" : ""}>Euro</option><option value="XOF" ${S.monnaie === "XOF" ? "selected" : ""}>Franc CFA</option></select><p>Pour les prix, les pertes et les factures.</p></div>`;
 }
 
@@ -597,19 +612,19 @@ const radios = (nom, liste, etiquette) => `<div class="choix" role="radiogroup" 
 function feuille(id, type) {
   const a = art(id), q = stock(id), d = dehors(id);
   if (type === "Retour" && !d.length) return toast("Rien de cet objet n'est chez un client.");
-  if (type === "Prêt" && q <= 0) return toast("Il n'y en a plus au dépôt.");
-  const titre = { "Prêt": "Combien partent ?", "Retour": "Combien reviennent ?", "Compter": "Combien en voyez-vous ?", "Perte": "Combien sont cassés ou perdus ?", "Entrée": "Combien entrent en stock ?" }[type];
+  if (["Prêt", "Sortie"].includes(type) && q <= 0) return toast("Il n'y en a plus en stock.");
+  const titre = { "Sortie": "Combien en sortez-vous ?", "Surplus": "Combien en remettez-vous ?", "Prêt": "Combien partent ?", "Retour": "Combien reviennent ?", "Compter": "Combien en voyez-vous ?", "Perte": "Combien sont cassés ou perdus ?", "Entrée": "Combien entrent en stock ?" }[type];
   const defaut = type === "Compter" ? q : type === "Retour" ? d[0].qte : 1;
-  const evs = type === "Prêt" ? S.evenements : type === "Retour" ? d.map(x => x.evenement) : type === "Perte" ? ["Au dépôt"].concat(d.map(x => x.evenement)) : null;
+  const evs = ["Prêt", "Sortie", "Surplus"].includes(type) ? S.evenements : type === "Retour" ? d.map(x => x.evenement) : type === "Perte" ? ["Au dépôt"].concat(d.map(x => x.evenement)) : null;
   const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="tf">
     <div class="tete">${img(a)}<div><span class="code">${a.id}</span><br><b>${esc(a.nom)}</b></div></div>
     <h1 id="tf" style="font-size:26px">${titre}</h1>
     <div class="compteur"><button data-pas="-1" aria-label="Un de moins">−</button><input type="number" inputmode="numeric" min="0" value="${defaut}" aria-label="Quantité"><button data-pas="1" aria-label="Un de plus">+</button></div>
     ${a.type === "conso" && type !== "Compter" ? `<div class="rapides">${[10, 50, 100].map(n => `<button data-plus="${n}">+${n}</button>`).join("")}</div>` : ""}
-    ${evs ? radios("ev", evs, "Événement") : ""}
+    ${evs ? radios("ev", evs, V("imp")) : ""}
     ${type === "Perte" ? radios("motif", ["Cassé", "Pas rendu", "Abîmé", "Volé"], "Motif") : ""}
     <div class="valider"><button class="btn" data-x>Annuler</button><button class="btn plein" data-ok>Valider</button></div></div>`);
-  const max = type === "Prêt" ? q : null;
+  const max = ["Prêt", "Sortie"].includes(type) ? q : null;
   const champ = compteur(f, 0, max);
   if (type === "Retour") f.querySelectorAll("input[name=ev]").forEach(r => r.onchange = () => { champ.value = d.find(x => x.evenement === r.value).qte; });
   f.querySelector("[data-x]").onclick = () => f.remove();
@@ -625,10 +640,12 @@ function feuille(id, type) {
       const attendu = d.find(x => x.evenement === ev).qte, rendu = Math.min(n, attendu);
       mouvement(id, "Retour", rendu, { evenement: ev });
       if (rendu < attendu) return manquants(ev, [[id, attendu - rendu]], [[id, rendu]]);
-      if (session.profil === "terrain") return aller("bon", creerBon({ type: "retour", evenement: ev, date: Date.now(), lignes: [[id, rendu]] }));
+      if (session.profil === "terrain" && (S.metier || "loueur") === "loueur") return aller("bon", creerBon({ type: "retour", evenement: ev, date: Date.now(), lignes: [[id, rendu]] }));
       toast("Retour enregistré."); return rendre();
     }
-    if (type === "Prêt") { mouvement(id, "Prêt", n, { evenement: ev }); return aller("bon", creerBon({ type: "sortie", evenement: ev, date: Date.now(), lignes: [[id, n]] })); }
+    if (type === "Sortie") { mouvement(id, "Sortie", n, { imputation: ev }); toast(`${n} sorti${n > 1 ? "s" : ""} pour ${ev}.`); return rendre(); }
+    if (type === "Surplus") { mouvement(id, "Entrée", n, { motif: "Surplus remis", imputation: ev }); toast(`${n} remis en stock.`); return rendre(); }
+    if (type === "Prêt") { mouvement(id, "Prêt", n, { evenement: ev }); if (S.metier && S.metier !== "loueur") { toast(`Emprunté pour ${ev}.`); return rendre(); } return aller("bon", creerBon({ type: "sortie", evenement: ev, date: Date.now(), lignes: [[id, n]] })); }
     mouvement(id, type, n, { evenement: ev === "Au dépôt" ? "" : ev, motif, refac: type === "Perte" && ev !== "Au dépôt" && motif !== "Abîmé" });
     toast("Enregistré."); rendre();
   };
@@ -650,7 +667,7 @@ function feuilleKit(kid) {
   const k = S.kits.find(x => x.id === kid);
   const f = ouvrirFeuille(`<div role="dialog" aria-modal="true"><h1 style="font-size:26px">${esc(k.nom)}</h1><p class="sous">Combien de kits ?</p>
     <div class="compteur"><button data-pas="-1" aria-label="Un de moins">−</button><input type="number" inputmode="numeric" min="1" value="1" aria-label="Nombre de kits"><button data-pas="1" aria-label="Un de plus">+</button></div>
-    ${radios("ev", S.evenements, "Événement")}
+    ${radios("ev", S.evenements, V("imp"))}
     <div class="valider"><button class="btn" data-x>Annuler</button><button class="btn plein" data-ok>Valider</button></div></div>`);
   const champ = compteur(f, 1, null);
   f.querySelector("[data-x]").onclick = () => f.remove();
@@ -658,8 +675,9 @@ function feuilleKit(kid) {
     const n = Math.max(1, Math.floor(+champ.value)), ev = f.querySelector("input[name=ev]:checked").value;
     const manque = k.lignes.filter(([id, q]) => stock(id) < q * n);
     if (manque.length) return toast("Pas assez au dépôt : " + manque.map(([id]) => art(id).nom).join(", ") + ".");
-    k.lignes.forEach(([id, q]) => mouvement(id, "Prêt", q * n, { evenement: ev }));
+    k.lignes.forEach(([id, q]) => logique(art(id)) === "pret" ? mouvement(id, "Prêt", q * n, { evenement: ev }) : mouvement(id, "Sortie", q * n, { imputation: ev }));
     f.remove();
+    if (S.metier && S.metier !== "loueur") { toast(`${n} × ${k.nom} : sortie enregistrée pour ${ev}.`); return aller("terrain"); }
     aller("bon", creerBon({ type: "sortie", evenement: ev, date: Date.now(), lignes: k.lignes.map(([id, q]) => [id, q * n]) }));
   };
 }
@@ -748,6 +766,7 @@ function brancher() {
   };
   $$("[data-act]").forEach(b => { if (ACTIONS[b.dataset.act]) b.onclick = ACTIONS[b.dataset.act]; });
   brancherPlus();
+  brancherMetiers();
 }
 const ACTIONS = {
   camera: () => camera(),
@@ -759,7 +778,7 @@ const ACTIONS = {
   verrouiller: () => { verrouille = true; saisiePin = ""; clearTimeout(minuteur); rendre(); },
   reglages: () => feuilleReglages(),
   ajouterPersonne: () => feuilleCode(null),
-  reinit: () => { if (confirm("Effacer ce qui a été fait pendant la démo ?")) { S = seedMouvements(SEED()); sauver(); session = null; verrouille = false; vue = { nom: "profil" }; rendre(); toast("Démo remise à zéro."); } },
+  reinit: () => { if (confirm("Effacer ce qui a été fait pendant la démo ?")) { S = construireDemo(S.metier || "loueur"); sauver(); session = null; verrouille = false; vue = { nom: "profil" }; rendre(); toast("Démo remise à zéro."); } },
   imprimer: () => window.print(),
   csv: () => exporterCsv(),
   partager: async () => {
@@ -772,6 +791,7 @@ function lienProfond() { const id = code(location.hash); if (id && art(id)) vue 
 // Liens directs pour la démo : ?profil=terrain|bureau|direction&vue=…&arg=…
 (function () {
   const q = new URLSearchParams(location.search);
+  if (METIERS[q.get("metier")] && (S.metier || "loueur") !== q.get("metier")) { const garder = { monnaie: S.monnaie }; S = construireDemo(q.get("metier")); Object.assign(S, garder); sauver(); }
   if (q.get("monnaie") === "XOF" || q.get("monnaie") === "EUR") { S.monnaie = q.get("monnaie"); sauver(); }
   // En démo, un lien direct ouvre la session de la première personne active du profil, sans code.
   // En production, ces liens n'existent pas : chacun se connecte avec son code.

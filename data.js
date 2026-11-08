@@ -37,7 +37,8 @@ function empreinte(uid, pin) {
 }
 
 const SEED = () => ({
-  version: 8,
+  version: 9,
+  metier: "loueur",
   equipe: EQUIPE_DEMO.map(u => ({ id: u.id, nom: u.nom, poste: u.poste, role: u.role, admin: !!u.admin, actif: true, empreinte: empreinte(u.id, u.pin) })),
   connexions: [],
   essais: {},
@@ -132,5 +133,7 @@ function seedMouvements(state) {
     { id: "R-003", nom: "Gala de fin d'année", debut: iso(10), fin: iso(11), lignes: [["ART-0001", 300], ["ART-0004", 600], ["ART-0002", 30]], statut: "Confirmée", charge: {} },
   );
   ["Mariage · samedi", "Séminaire d'entreprise", "Gala de fin d'année"].forEach(n => state.evenements.push(n));
+  // Une livraison attendue, à réceptionner depuis le terrain
+  state.commandes.push({ id: "CMD-0001", date: maintenant - 2 * jour, fid: "FOU-02", fournisseur: "Fournisseur de textile (démo)", lignes: [{ id: "ART-0005", qte: 20 }, { id: "ART-0010", qte: 100 }], total: 20 * 22 + 100 * 3.9, statut: "Envoyée" });
   return state;
 }

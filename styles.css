@@ -529,3 +529,9 @@ body:has(.tour) main { padding-bottom: 170px; }
   .prep-ligne .vignette { width: 48px; }
   .prep-boutons { grid-column: 1 / -1; justify-content: flex-end; }
 }
+
+/* ---------- Métiers : lots, réception ---------- */
+.lot-premier { margin: 10px auto 0; max-width: 420px; padding: 10px 14px; border-radius: 12px; background: color-mix(in srgb, var(--attention) 18%, var(--carte)); font-size: 15px; }
+.t-retour.recep { align-items: start; }
+.t-retour .dlc { display: grid; gap: 4px; margin-top: 6px; font-size: 13px; font-weight: 700; color: var(--gris); }
+.t-retour .dlc input { height: 40px; border-radius: 8px; border: 2px solid var(--trait-fort); background: var(--carte); color: var(--encre); padding: 0 8px; font: inherit; max-width: 170px; }

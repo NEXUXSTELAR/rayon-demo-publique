@@ -34,7 +34,7 @@ function gMouvements14() {
   const jours = [...Array(14)].map((_, i) => ({ t: j0 + i * JOUR, s: 0, r: 0 }));
   S.mouvements.forEach(m => {
     const i = Math.floor((m.date - j0) / JOUR); if (i < 0 || i > 13) return;
-    if (m.type === "Prêt") jours[i].s += m.qte; if (m.type === "Retour") jours[i].r += m.qte;
+    if (m.type === "Prêt" || m.type === "Sortie") jours[i].s += m.qte; if (m.type === "Retour" || m.type === "Entrée") jours[i].r += m.qte;
   });
   const max = Math.max(1, ...jours.map(j => Math.max(j.s, j.r)));
   const W = LARGE(), H = 220, mid = 104, haut = 88, g = 34, pas = (W - g) / 14, bw = pas - 4;
@@ -48,8 +48,8 @@ function gMouvements14() {
     svg += `<rect x="${x - 3}" y="${mid - haut}" width="${pas}" height="${haut * 2}" fill="transparent" data-tip="${esc(tip)}"/>`;
     if ((W < 500 ? i % 3 === 1 : i % 2 === 1) || i === 13) svg += `<text x="${x + bw / 2}" y="${H - 4}" text-anchor="middle">${jourCourt(j.t)}</text>`;
   });
-  return cadre("Départs et retours, 14 derniers jours", "Quels jours le dépôt travaille le plus ? Utile pour prévoir les équipes.",
-    legende([[C.sortie, "Pièces parties"], [C.retour, "Pièces revenues"]]) + `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Départs et retours par jour">${svg}</svg>`);
+  return cadre(aDesPrets() ? "Départs et retours, 14 derniers jours" : "Sorties et entrées, 14 derniers jours", "Quels jours le stock bouge le plus ? Utile pour prévoir les équipes et les livraisons.",
+    legende([[C.sortie, "Sorties"], [C.retour, aDesPrets() ? "Retours" : "Entrées"]]) + `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Départs et retours par jour">${svg}</svg>`);
 }
 
 /* Responsable : pour chaque objet, la part au dépôt et la part chez les clients. */
@@ -135,7 +135,7 @@ function gUtilisation() {
 /* Gérant : ce qui se loue le plus, et ce qui dort. */
 function gTopLoues() {
   const depuis = Date.now() - 30 * JOUR, q = {};
-  S.mouvements.filter(m => m.type === "Prêt" && m.date >= depuis).forEach(m => q[m.article] = (q[m.article] || 0) + m.qte);
+  S.mouvements.filter(m => (m.type === "Prêt" || m.type === "Sortie") && m.date >= depuis).forEach(m => q[m.article] = (q[m.article] || 0) + m.qte);
   const l = S.articles.map(a => ({ a, n: q[a.id] || 0 })).sort((x, y) => y.n - x.n);
   const actifs = l.filter(x => x.n > 0).slice(0, 6), dorment = l.filter(x => x.n === 0);
   const max = Math.max(1, ...actifs.map(x => x.n));
@@ -147,7 +147,7 @@ function gTopLoues() {
     svg += `<path d="M${g},${y + 2}H${g + w - 4}Q${g + w},${y + 2} ${g + w},${y + 6}V${y + 16}Q${g + w},${y + 20} ${g + w - 4},${y + 20}H${g}Z" fill="${C.sortie}" data-tip="${esc(x.a.nom + " : " + entier(x.n) + " pièces louées en 30 jours")}"/>`;
     svg += `<text x="${g + w + 6}" y="${y + 15}" class="v">${entier(x.n)}</text>`;
   });
-  return cadre("Ce qui se loue, et ce qui dort", "Pièces louées sur 30 jours. Ce qui ne sort jamais immobilise de l'argent : à vendre ou à mettre en avant.",
+  return cadre(S.metier === "loueur" || !S.metier ? "Ce qui se loue, et ce qui dort" : "Ce qui sort le plus, et ce qui dort", "Pièces louées sur 30 jours. Ce qui ne sort jamais immobilise de l'argent : à vendre ou à mettre en avant.",
     `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Objets les plus loués">${svg}</svg>` +
     (dorment.length ? `<p class="q" style="margin-top:10px"><b style="color:var(--encre)">Pas sorti depuis 30 jours :</b> ${dorment.map(x => esc(x.a.nom)).join(", ")}.</p>` : ""));
 }
