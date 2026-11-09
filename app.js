@@ -187,7 +187,7 @@ function animerChiffres(r) {
 function rendre() {
   if (typeof rafraichirPalette === "function") rafraichirPalette();
   const r = $("#racine");
-  if (!session && installateur) r.innerHTML = vInstallateur();
+  if (!session && installateur) r.innerHTML = coqueEspace();
   else if (!session) r.innerHTML = vConnexion();
   else if (verrouille) r.innerHTML = vVerrou();
   else r.innerHTML = coque();
@@ -227,7 +227,7 @@ function vConnexion() {
     <div class="c-pied">
       <button class="btn plein visite" data-act="tour">${I.fleche}Visite guidée en 2 minutes</button>
       <p>Démo réglée pour : <b>${esc(metier().nom)}</b> · <button class="lien" data-act="metiers">Voir un autre métier</button></p>
-      <p><button class="lien" data-act="installateur">Espace installateur</button> · <button class="lien" data-act="reinit">Remettre la démo à zéro</button></p>
+      <p><button class="lien" data-act="installateur">Mon espace (installateur)</button> · <button class="lien" data-act="reinit">Remettre la démo à zéro</button></p>
     </div>
   </div>`;
 }
@@ -872,6 +872,7 @@ function brancher() {
   brancherConfig();
   brancherBlocs();
   brancherDocuments();
+  brancherEspace();
 }
 const ACTIONS = {
   camera: () => camera(),
@@ -894,7 +895,11 @@ const ACTIONS = {
   ajouterPersonne: () => feuilleCode(null),
   installateur: () => feuilleInstallateur(),
   quitterInstallateur: () => { installateur = false; rendre(); },
-  revenirConfig: () => { session = null; verrouille = false; clearTimeout(minuteur); installateur = true; rendre(); window.scrollTo(0, 0); },
+  revenirConfig: () => { session = null; verrouille = false; clearTimeout(minuteur); installateur = true; vueE = { nom: "reglages", arg: null }; rendre(); window.scrollTo(0, 0); },
+  plusE: () => feuillePlusE(),
+  retourE: () => { vueE = pileE.pop() || { nom: "tableau", arg: null }; rendre(); window.scrollTo(0, 0); },
+  nouveauClientP: () => feuilleClientP(null),
+  voirDemoClient: () => { installateur = false; session = null; rendre(); window.scrollTo(0, 0); },
   configDefaut: () => { if (!confirm("Remettre les blocs, la barre et les droits de tous les rôles comme le prévoit le métier ?")) return; S.config = configParDefaut(S.metier); sauver(); rendre(); toast("Réglages du métier remis."); },
   reinit: () => { if (confirm("Effacer ce qui a été fait pendant la démo ?")) { S = construireDemo(S.metier || "loueur"); sauver(); session = null; verrouille = false; vue = { nom: "accueil" }; rendre(); toast("Démo remise à zéro."); } },
   imprimer: () => window.print(),
@@ -917,7 +922,11 @@ function lienProfond() { const id = code(location.hash); if (id && art(id)) vue 
   // En production, ces liens n'existent pas : chacun se connecte avec son identifiant et son mot de passe.
   const u = PROFILS[q.get("profil")] && S.equipe.find(x => x.role === q.get("profil") && x.actif);
   if (u) { session = { uid: u.id, nom: u.nom, profil: u.role, admin: !!u.admin }; vue = { nom: q.get("vue") || "accueil", arg: q.get("arg") }; lienProfond(); activite(); }
-  else if (q.get("installateur") === "1") { installateur = true; if (["terrain", "bureau", "direction"].includes(q.get("role"))) roleConf = q.get("role"); }
+  else if (q.get("installateur") === "1") {
+    installateur = true;
+    if (["terrain", "chauffeur", "bureau", "direction"].includes(q.get("role"))) { roleConf = q.get("role"); vueE = { nom: "reglages", arg: null }; }
+    else if (VUES_E[q.get("vue")] || ["client", "installation"].includes(q.get("vue"))) vueE = { nom: q.get("vue"), arg: q.get("arg") };
+  }
   if (["clair", "sombre", "nuit"].includes(q.get("theme"))) { try { localStorage.setItem(CLE_THEME, q.get("theme")); } catch (e) { /* stockage bloqué */ } appliquerTheme(); }
 })();
 window.addEventListener("hashchange", () => { if (session) { lienProfond(); rendre(); } });

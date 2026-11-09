@@ -834,3 +834,42 @@ body.impression-feuille .app, body.impression-feuille .connexion, body.impressio
 .resa-infos > div { background: var(--carte); border-radius: 14px; padding: 10px 12px; font-weight: 600; }
 .resa-infos small { display: block; color: var(--gris); font-size: 13px; font-weight: 700; }
 .doc-carte .pastille.excel { background: color-mix(in srgb, var(--retour) 16%, var(--carte2)); color: var(--retour); }
+
+/* =========================================================
+   MON ESPACE (installateur) : même langage que l'appli client
+   ========================================================= */
+.client-p { align-items: start; }
+.client-p .statut { margin-top: 6px; }
+.client .barre, .client-p .barre { display: block; height: 6px; border-radius: 3px; background: var(--trait); margin-top: 8px; overflow: hidden; max-width: 260px; }
+.client .barre i { display: block; height: 100%; background: var(--sortie); }
+.w .client { background: var(--carte2); margin-bottom: 8px; width: 100%; }
+.anneau.mini { width: 56px !important; }
+.anneau.mini .centre b { font-size: 14px !important; }
+.anneau.mini .centre small { display: none; }
+.lignes-p { display: grid; }
+.lignes-p > div { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--trait); }
+.lignes-p > div:last-child { border-bottom: 0; }
+.lignes-p > div.fort { font-weight: 800; font-size: 18px; }
+.lignes-p span { color: var(--gris); } .lignes-p .fort span { color: var(--encre); }
+.lignes-p b.vert, .vert { color: var(--retour); }
+.ligne-interv { display: grid !important; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 12px 14px; }
+.ligne-interv b { display: block; } .ligne-interv small { color: var(--gris); }
+.inst-tete { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: center; margin-bottom: 8px; }
+.inst-tete .anneau { width: 120px; height: 120px; margin: 0; }
+.inst-tete .anneau .centre b { font-size: 28px; }
+.inst-tete h1 { margin: 0; } .inst-tete .sous { margin: 4px 0 10px; }
+@media (max-width: 420px) { .inst-tete { grid-template-columns: 1fr; justify-items: start; } }
+.compte-ph { font-size: 14px; color: var(--gris); font-weight: 700; }
+.etapes { display: grid; gap: 8px; }
+.etape { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; align-items: center; border: 0; background: var(--carte); color: var(--encre); border-radius: 16px; padding: 12px 14px; text-align: left; min-height: 60px; }
+.etape .case { width: 32px; height: 32px; border-radius: 10px; box-shadow: inset 0 0 0 2px var(--trait-fort); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 18px; }
+.etape.faite .case { background: var(--retour); color: #fff; box-shadow: none; }
+.etape.faite b { color: var(--gris); text-decoration: line-through; text-decoration-thickness: 1px; }
+.etape small { display: block; color: var(--gris); font-size: 13px; }
+.modules-p { border: 0; padding: 0; margin: 10px 0; display: grid; gap: 2px; }
+.modules-p legend { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+.inst.dans-espace { padding: 0; max-width: 820px; margin: 0; }
+.espace .cote .avatar.direction, .plus-moi .avatar.direction { background: var(--marque); }
+@media (prefers-reduced-motion: no-preference) {
+  #racine.entree .etape, #racine.entree .client { animation: monte .5s cubic-bezier(.2, .8, .2, 1) both; }
+}

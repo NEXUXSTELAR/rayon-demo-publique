@@ -41,7 +41,7 @@ function etapesMetier() {
     { t: `${bureau.nom}, ${m.v.bureau.toLowerCase()}, ouvre sa journée : ce qu'il y a à faire, le dépôt en 3D zone par zone${m.dlc ? ", les dates limites" : ""}, ce qui sort par ${m.v.imp.toLowerCase()}.`, f: () => { connecterRole("bureau"); aller("accueil", null, true); } },
     { t: `${dir.nom}, ${m.v.direction.toLowerCase()}, pilote : valeur du stock et sa tendance, ce qui est à commander, ce qui attend sa décision.`, f: () => { connecterRole("direction"); aller("accueil", null, true); } },
     { t: `Les analyses montrent où part l'argent, ${m.v.imp.toLowerCase()} par ${m.v.imp.toLowerCase()}, et ce qui dort sur les étagères.`, f: () => aller("analyses", null, true) },
-    { t: "Tout se règle pour votre entreprise : taille de l'équipe, écrans, blocs, droits de chacun. C'est nous qui le faisons, d'après votre devis.", f: () => { session = null; installateur = true; entree = true; rendre(); window.scrollTo(0, 0); } },
+    { t: "Tout se règle pour votre entreprise : taille de l'équipe, écrans, blocs, droits de chacun. C'est nous qui le faisons, d'après votre devis.", f: () => { session = null; installateur = true; vueE = { nom: "reglages", arg: null }; entree = true; rendre(); window.scrollTo(0, 0); } },
   ];
   return etapes;
 }

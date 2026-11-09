@@ -1,6 +1,6 @@
 // Garde l'appli utilisable sans réseau, dans un dépôt ou un hangar.
-const VERSION = "rayon-v12";
-const FICHIERS = ["./", "index.html", "styles.css", "data.js", "metiers.js", "graphes.js", "plus.js", "outils.js", "config.js", "blocs.js", "visites.js", "xlsx.js", "documents.js", "app.js", "icone.svg", "manifest.webmanifest", "img/chaise.webp", "img/table.webp", "img/assiette.webp", "img/verre.webp", "img/nappe.webp", "img/enceinte.webp", "img/groupe.webp", "img/rallonge.webp", "img/housse.webp"];
+const VERSION = "rayon-v13";
+const FICHIERS = ["./", "index.html", "styles.css", "data.js", "metiers.js", "graphes.js", "plus.js", "outils.js", "config.js", "blocs.js", "visites.js", "xlsx.js", "documents.js", "espace.js", "app.js", "icone.svg", "manifest.webmanifest", "img/chaise.webp", "img/table.webp", "img/assiette.webp", "img/verre.webp", "img/nappe.webp", "img/enceinte.webp", "img/groupe.webp", "img/rallonge.webp", "img/housse.webp"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(FICHIERS)).then(() => self.skipWaiting()));

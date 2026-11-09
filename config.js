@@ -306,15 +306,15 @@ function editeurBlocs(role, cle) {
       <span class="fl"><button data-w-bouger="${cle}|${i}|-1" aria-label="Monter" ${i === 0 ? "disabled" : ""}>↑</button><button data-w-bouger="${cle}|${i}|1" aria-label="Descendre" ${i === l.length - 1 ? "disabled" : ""}>↓</button><button data-w-retirer="${cle}|${i}" aria-label="Retirer">✕</button></span></div>`).join("") || `<p class="vide">Aucun bloc.</p>`}
     ${reste.length ? `<div class="w-edit ajout"><select data-w-ajouter="${cle}" aria-label="Ajouter un bloc"><option value="">Ajouter un bloc…</option>${reste.map(k => `<option value="${k}">${esc(WIDGETS[k].t)}</option>`).join("")}</select></div>` : ""}</div>`;
 }
-function vInstallateur() {
+function vInstallateur(dansEspace) {
   if (!rolesUtiles().includes(roleConf)) roleConf = rolesUtiles()[0];
   const c = config()[roleConf], noms = NOMS_ROLES();
   const choix = Object.keys(SECTIONS).filter(k => permis(k, roleConf));
   const u = S.equipe.find(x => x.role === roleConf && x.actif);
   const bouton = k => `<button disabled ${k === "accueil" ? 'aria-current="page"' : ""}>${I[SECTIONS[k].i]}<span>${esc(titreSection(k))}</span></button>`;
-  return `${DEMO}<div class="inst">
-  <div class="barre"><button class="btn petit" data-act="quitterInstallateur">← Quitter</button>${boutonReglages}</div>
-  <h1>Réglage de l'installation</h1>
+  return `${dansEspace ? "" : DEMO}<div class="inst${dansEspace ? " dans-espace" : ""}">
+  ${dansEspace ? "" : `<div class="barre"><button class="btn petit" data-act="quitterInstallateur">← Quitter</button>${boutonReglages}</div>`}
+  <h1>Réglage de l'appli${S.entreprise && S.entreprise.nom ? " · " + esc(S.entreprise.nom) : ""}</h1>
   <p class="sous">Ce que nous réglons chez chaque client, à partir du devis signé. Le client ne voit pas cet écran : s'il veut plus, on fait un nouveau devis et on l'ajoute ici.</p>
   <h2>Taille de l'équipe</h2>
   <p class="sous">Un modèle règle d'un coup les rôles, les blocs et les droits. On ajuste ensuite les détails plus bas.</p>
@@ -350,12 +350,12 @@ function vInstallateur() {
   </div></div>`;
 }
 function feuilleInstallateur() {
-  const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="tin"><h1 id="tin" style="font-size:26px">Espace installateur</h1>
+  const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="tin"><h1 id="tin" style="font-size:26px">Mon espace</h1>
     <p class="sous">Réservé à l'équipe qui installe l'appli. Code de démonstration : <span class="code">${CODE_INSTALLATEUR}</span></p>
     <label class="champ">Code<input name="code" type="password" inputmode="numeric" autocomplete="off"></label>
     <div class="valider"><button class="btn" data-x>Annuler</button><button class="btn plein" data-ok>Entrer</button></div></div>`);
   const champ = f.querySelector("[name=code]"); champ.focus();
-  const ok = () => { if (champ.value !== CODE_INSTALLATEUR) return toast("Code incorrect."); f.remove(); installateur = true; rendre(); window.scrollTo(0, 0); };
+  const ok = () => { if (champ.value !== CODE_INSTALLATEUR) return toast("Code incorrect."); f.remove(); installateur = true; vueE = { nom: "tableau", arg: null }; pileE = []; entree = true; rendre(); window.scrollTo(0, 0); };
   champ.onkeydown = e => { if (e.key === "Enter") ok(); };
   f.querySelector("[data-x]").onclick = () => f.remove();
   f.querySelector("[data-ok]").onclick = ok;
