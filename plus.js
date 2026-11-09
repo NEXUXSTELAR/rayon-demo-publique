@@ -51,6 +51,8 @@ function bReservation(id) {
   const r = S.reservations.find(x => x.id === id); if (!r) return "<p>Réservation introuvable.</p>";
   return `<p class="pas-imprimer"><button class="lien" data-aller="reservations">← Réservations</button></p>
   <h1>${esc(r.nom)}</h1><p class="sous">${dateLongue(r.debut)}${r.fin !== r.debut ? " au " + dateLongue(r.fin) : ""} · <span class="statut s-${r.statut.toLowerCase().replace(/[^a-z]/g, "")}">${r.statut}</span></p>
+  <div class="resa-infos"><div><small>Client</small>${clientDe(r.nom) ? `<button class="lien" data-client="${clientDe(r.nom).id}">${esc(clientDe(r.nom).nom)}</button>` : "à indiquer"}</div>${complet() ? `<div><small>Lieu</small>${esc(r.adresse || "à indiquer")}</div><div><small>Contact sur place</small>${esc(r.contact || "à indiquer")}</div>` : ""}</div>
+  <div class="boutons" style="margin-bottom:14px">${aDesPrixLocation() ? `<button class="btn petit plein" data-aller="devisLoc" data-arg="${r.id}">${I.bon}Devis de location</button>` : ""}<button class="btn petit" data-infos-ev="${esc(r.nom)}">Client, dates, lieu</button></div>
   <div class="defile"><table class="t"><thead><tr><th>Objet</th><th class="n">Réservé</th><th class="n">Libre ces jours-là</th></tr></thead><tbody>
   ${r.lignes.map(([aid, q]) => { const libre = dispoSur(aid, r.debut, r.fin, r.id); return `<tr><td>${esc(art(aid).nom)}</td><td class="n">${q}</td><td class="n"><b class="${libre < q ? "rouge" : ""}">${libre}</b>${libre < q ? `<br><small class="rouge">il en manque ${q - libre}</small>` : ""}</td></tr>`; }).join("")}
   </tbody></table></div>
@@ -60,6 +62,7 @@ function feuilleReservation(d1, d2) {
   const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="trz"><h1 id="trz" style="font-size:26px">Nouvelle réservation</h1>
     <label class="champ">Client<select name="client"><option value="">Sans fiche client</option>${(S.clientsLoc || []).map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join("")}</select></label>
     <label class="champ">Événement<input name="nom" maxlength="60" placeholder="Mariage · samedi, Séminaire…" autocomplete="off"></label>
+    ${complet() ? `<label class="champ">Lieu ou adresse<input name="adresse" maxlength="120" autocomplete="off"></label><label class="champ">Contact sur place<input name="contact" maxlength="80" placeholder="Nom et téléphone" autocomplete="off"></label>` : ""}
     <div class="dispo-dates"><label class="champ">Du<input type="date" name="d1" value="${d1}" min="${aujourdHui()}"></label><label class="champ">Au<input type="date" name="d2" value="${d2}" min="${aujourdHui()}"></label></div>
     <div class="resa-lignes">${S.articles.map(a => `<label class="resa-ligne">${img(a)}<span><b>${esc(a.nom)}</b><small data-libre="${a.id}"></small></span><input type="number" inputmode="numeric" min="0" value="0" name="${a.id}" aria-label="Quantité : ${esc(a.nom)}"></label>`).join("")}</div>
     <p class="message" data-bilan role="status"></p>
@@ -86,7 +89,8 @@ function feuilleReservation(d1, d2) {
     if (!lignes.length) return toast("Indiquez au moins une quantité.");
     if (maj() && !confirm("Certaines quantités ne sont pas disponibles. Réserver quand même ?")) return;
     const id = "R-" + String(S.reservations.length + 1).padStart(3, "0");
-    S.reservations.push({ id, nom, debut: a1, fin: a2, lignes, statut: "Confirmée", charge: {}, client: f.querySelector("[name=client]").value });
+    const extra = n => { const e = f.querySelector(`[name=${n}]`); return e ? e.value.trim() : ""; };
+    S.reservations.push({ id, nom, debut: a1, fin: a2, lignes, statut: "Confirmée", charge: {}, client: f.querySelector("[name=client]").value, adresse: extra("adresse"), contact: extra("contact") });
     if (!S.evenements.includes(nom)) S.evenements.unshift(nom);
     sauver(); f.remove(); aller("reservation", id); toast("Réservation enregistrée.");
   };
@@ -136,8 +140,12 @@ function camionPart() {
 }
 
 /* ---------------- Bons enregistrés, signature, photos ---------------- */
+// Un seul bon par événement et par jour : tant que le client n'a pas signé, ce qui part ou revient s'y ajoute.
+const fusionner = (l, ajout) => (ajout || []).forEach(([id, q]) => { const x = l.find(y => y[0] === id); if (x) x[1] += q; else l.push([id, q]); });
 function creerBon(b) {
-  const id = "B-" + String(S.bons.length + 1).padStart(4, "0");
+  const ouvert = S.bons.find(x => x.type === b.type && x.evenement === b.evenement && !x.signature && isoJour(x.date) === isoJour(b.date || Date.now()));
+  if (ouvert) { fusionner(ouvert.lignes, b.lignes); if (b.manquants && b.manquants.length) { ouvert.manquants = ouvert.manquants || []; fusionner(ouvert.manquants, b.manquants); } sauver(); return ouvert.id; }
+  const id = "B-" + String(S.bons.reduce((m, x) => Math.max(m, +x.id.slice(2) || 0), 0) + 1).padStart(4, "0");
   S.bons.push(Object.assign({ id, signature: "", signataire: "", photos: [] }, b));
   sauver(); return id;
 }
@@ -189,32 +197,11 @@ function ajouterPhotos(bid, fichiers) {
   });
 }
 
-/* ---------------- Facture de casse ---------------- */
-function vFacture(ev) {
-  const l = S.mouvements.filter(m => m.type === "Perte" && m.refac && m.evenement === ev);
-  const tot = l.reduce((t, m) => t + valeurM(m), 0);
-  const n = "FC-" + new Date().getFullYear() + "-" + String(Math.max(1, S.evenements.indexOf(ev) + 1)).padStart(3, "0");
-  const bon = S.bons.slice().reverse().find(b => b.evenement === ev && b.type === "retour");
-  return `<p class="pas-imprimer"><button class="lien" data-aller="${session.profil === "terrain" ? "terrain" : "docs"}">← Retour</button> · <button class="lien" data-act="imprimer">Imprimer ou enregistrer en PDF</button></p>
-  <div class="feuille-doc">${enTeteDoc()}<h1>Facture de casse n° ${n}</h1>
-  <p>${clientDe(ev) ? `Client : <b>${esc(clientDe(ev).nom)}</b>${clientDe(ev).tel ? " · " + esc(clientDe(ev).tel) : ""}<br>Événement : ${esc(ev)}` : `Client : <b>${esc(ev)}</b>`}<br>Établie le ${new Date().toLocaleDateString("fr-FR")}${bon && bon.signataire ? `<br>Retour signé par ${esc(bon.signataire)} le ${quand(bon.signeLe)}` : ""}</p>
-  <table><thead><tr><th>Objet</th><th>Qté</th><th>Valeur de remplacement</th><th>Montant</th></tr></thead><tbody>
-  ${l.map(m => `<tr><td>${esc(art(m.article).nom)}<br><small>${esc(m.motif)}</small></td><td>${m.qte}</td><td>${argent(art(m.article).prix)}</td><td>${argent(valeurM(m))}</td></tr>`).join("") || `<tr><td colspan="4">Aucune casse refacturable pour cet événement.</td></tr>`}</tbody></table>
-  <p style="text-align:right;font-size:18px"><b>Total : ${argent(tot)}</b></p>
-  ${clientDe(ev) && clientDe(ev).caution ? `<p>Caution versée : <b>${argent(clientDe(ev).caution)}</b>. Montant retenu sur la caution : <b>${argent(Math.min(tot, clientDe(ev).caution))}</b>${tot > clientDe(ev).caution ? `. Reste à payer : <b>${argent(tot - clientDe(ev).caution)}</b>` : `. Caution à rendre : <b>${argent(clientDe(ev).caution - tot)}</b>`}.</p>` : ""}
-  <p class="petit">À régler à réception, ou à retenir sur la caution versée. Les photos et la signature du bon de retour font foi.</p></div>
-  ${tot ? `<div class="t-actions pas-imprimer"><button class="btn plein" data-partager-facture="${esc(ev)}">${I.partager}Envoyer au client</button></div>` : ""}`;
-}
-function texteFacture(ev) {
-  const l = S.mouvements.filter(m => m.type === "Perte" && m.refac && m.evenement === ev);
-  return `Facture de casse · ${ev}\n${l.map(m => `- ${art(m.article).nom} : ${m.qte} × ${argent(art(m.article).prix)}`).join("\n")}\nTotal : ${argent(l.reduce((t, m) => t + valeurM(m), 0))}`;
-}
-
 /* ---------------- Démo guidée ---------------- */
 let tour = null;
 function connecterRole(role) {
   const u = S.equipe.find(x => x.role === role && x.actif);
-  session = { uid: u.id, nom: u.nom, profil: u.role, admin: !!u.admin }; verrouille = false;
+  session = { uid: u.id, nom: u.nom, profil: u.role, admin: !!u.admin }; verrouille = false; installateur = false; pile = [];
 }
 const ETAPES = [
   { t: "Ousmane, magasinier, prépare le mariage de samedi. La réservation est devenue sa liste de préparation.", f: () => { connecterRole("terrain"); aller("preparation", "R-001"); } },
@@ -222,6 +209,7 @@ const ETAPES = [
       const r = S.reservations.find(x => x.id === "R-001"); r.lignes.forEach(([aid, q]) => { r.charge[aid] = q; }); r.charge["ART-0004"] -= art("ART-0004").lot || 1; r.statut = "Préparée"; sauver(); rendre(); } },
   { t: "Le casier est chargé, le camion part. Le bon de sortie est prêt : le client le signe sur le téléphone, puis le reçoit par WhatsApp.", f: () => {
       const r = S.reservations.find(x => x.id === "R-001"); r.charge["ART-0004"] = r.lignes.find(l => l[0] === "ART-0004")[1]; sauver(); camionPart(); } },
+  { t: "Moussa, le chauffeur, a sa tournée : adresse, appel, itinéraire. Chez le client, il fait signer le bon sur le téléphone.", f: () => { connecterRole("chauffeur"); aller("tournee", null, true); } },
   { t: "Lundi, le matériel revient. Six chaises manquent : elles sont notées à refacturer, et le bon de retour le montre.", f: () => {
       const r = S.reservations.find(x => x.id === "R-001"), rendus = [];
       dehors().filter(d => d.evenement === r.nom).forEach(d => { const n = d.article === "ART-0001" ? d.qte - 6 : d.qte; mouvement(d.article, "Retour", n, { evenement: r.nom }); rendus.push([d.article, n]); });
@@ -229,24 +217,27 @@ const ETAPES = [
       aller("bon", creerBon({ type: "retour", evenement: r.nom, date: Date.now(), lignes: rendus, manquants: [["ART-0001", 6]] })); } },
   { t: "La facture de casse est prête à envoyer : plus de dispute sur la caution.", f: () => aller("facture", S.reservations.find(x => x.id === "R-001").nom) },
   { t: "Karim, au bureau, reçoit un appel : « Vous avez 350 chaises dans quinze jours ? » Il choisit la date et voit tout de suite combien sont libres, en tenant compte des autres réservations.", f: () => { connecterRole("bureau"); const d = isoJour(Date.now() + 15 * JOUR_MS); rechercheDispo = { d1: d, d2: d }; aller("reservations"); } },
-  { t: "Awa, la gérante, voit l'argent : valeur du parc, part louée, pertes et ce qu'elle récupère.", f: () => { connecterRole("direction"); aller("direction"); } },
+  { t: "Awa, la gérante, pilote : valeur du parc et sa tendance, part louée, pertes et ce qu'elle récupère.", f: () => { connecterRole("direction"); aller("accueil", null, true); } },
+  { t: "Tout se règle pour votre entreprise : taille de l'équipe, écrans, blocs, droits de chacun. C'est nous qui le faisons, d'après votre devis.", f: () => { session = null; installateur = true; entree = true; rendre(); window.scrollTo(0, 0); } },
 ];
 function demarrerTour() {
-  if (!confirm("La démo guidée repart des données de départ. Continuer ?")) return;
-  S = seedMouvements(SEED()); sauver(); tour = { i: 0 }; ETAPES[0].f();
+  if (!confirm("La visite guidée repart des données de départ. Continuer ?")) return;
+  const garder = { monnaie: S.monnaie, reglages: S.reglages };
+  S = construireDemo(S.metier || "loueur"); Object.assign(S, garder); sauver();
+  tour = { i: 0, etapes: (S.metier || "loueur") === "loueur" ? ETAPES : etapesMetier() }; tour.etapes[0].f();
 }
 function dessinerTour() {
   $$(".tour").forEach(x => x.remove());
   if (!tour) return;
-  const e = ETAPES[tour.i], d = document.createElement("div");
+  const e = tour.etapes[tour.i], d = document.createElement("div");
   d.className = "tour"; d.setAttribute("role", "dialog"); d.setAttribute("aria-label", "Démo guidée");
-  d.innerHTML = `<div><small>Étape ${tour.i + 1} sur ${ETAPES.length}</small><p>${esc(e.t)}</p></div>
-    <div class="tour-boutons"><button class="btn petit" data-tour="quitter">Quitter</button><button class="btn petit plein" data-tour="suivant">${tour.i === ETAPES.length - 1 ? "Terminer" : "Suivant"}</button></div>`;
+  d.innerHTML = `<div><small>Étape ${tour.i + 1} sur ${tour.etapes.length}</small><p>${esc(e.t)}</p></div>
+    <div class="tour-boutons"><button class="btn petit" data-tour="quitter">Quitter</button><button class="btn petit plein" data-tour="suivant">${tour.i === tour.etapes.length - 1 ? "Terminer" : "Suivant"}</button></div>`;
   document.body.appendChild(d);
   d.querySelector('[data-tour="quitter"]').onclick = () => { tour = null; d.remove(); };
   d.querySelector('[data-tour="suivant"]').onclick = () => {
-    if (tour.i === ETAPES.length - 1) { tour = null; d.remove(); toast("Fin de la démo. Tout reste modifiable."); return; }
-    tour.i += 1; ETAPES[tour.i].f(); dessinerTour();
+    if (tour.i === tour.etapes.length - 1) { tour = null; d.remove(); toast("Fin de la visite. Tout reste à essayer."); return; }
+    tour.i += 1; tour.etapes[tour.i].f(); dessinerTour();
   };
 }
 

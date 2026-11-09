@@ -11,7 +11,11 @@ function rafraichirPalette() {
 }
 const JOUR = 86400000;
 // Sur téléphone on dessine plus étroit pour que le texte reste lisible (12 px réels).
-const LARGE = () => Math.max(320, Math.min(600, (document.querySelector("main") || document.body).clientWidth - 34));
+// Dans un bloc d'une demi-largeur (ordinateur), on dessine pour la moitié de la page.
+const LARGE = () => {
+  const m = document.querySelector("main"), w = (m ? m.clientWidth : Math.min(window.innerWidth, 1160)) - 34;
+  return Math.max(300, Math.min(600, window.largeurDemi ? w / 2 - 8 : w));
+};
 const court = (t, n) => t.length > n ? t.slice(0, n - 1) + "…" : t;
 const debutJour = t => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
 const jourCourt = t => new Date(t).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" });
@@ -150,6 +154,56 @@ function gTopLoues() {
   return cadre(S.metier === "loueur" || !S.metier ? "Ce qui se loue, et ce qui dort" : "Ce qui sort le plus, et ce qui dort", "Pièces louées sur 30 jours. Ce qui ne sort jamais immobilise de l'argent : à vendre ou à mettre en avant.",
     `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Objets les plus loués">${svg}</svg>` +
     (dorment.length ? `<p class="q" style="margin-top:10px"><b style="color:var(--encre)">Pas sorti depuis 30 jours :</b> ${dorment.map(x => esc(x.a.nom)).join(", ")}.</p>` : ""));
+}
+
+/* Pour les métiers qui consomment : où part la valeur du stock (chantier, service, lieu de distribution). */
+function gImputations() {
+  const depuis = Date.now() - 30 * JOUR, v = {};
+  S.mouvements.filter(m => (m.type === "Sortie" || m.type === "Prêt") && m.date >= depuis).forEach(m => { const k = m.imputation || m.evenement || "Sans affectation"; v[k] = (v[k] || 0) + valeurM(m); });
+  const l = Object.entries(v).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  if (!l.length) return "";
+  const max = Math.max(1, ...l.map(x => x[1]));
+  const W = LARGE(), lh = 30, g = W < 500 ? 128 : 190, L = W - g - 74, H = l.length * lh + 4;
+  let svg = "";
+  l.forEach(([k, val], i) => {
+    const y = i * lh + 4, w = Math.max(3, (val / max) * L);
+    svg += `<text x="${g - 8}" y="${y + 15}" text-anchor="end">${esc(court(k, W < 500 ? 18 : 28))}</text>`;
+    svg += `<path d="M${g},${y + 2}H${g + w - 4}Q${g + w},${y + 2} ${g + w},${y + 6}V${y + 16}Q${g + w},${y + 20} ${g + w - 4},${y + 20}H${g}Z" fill="${C.sortie}" data-tip="${esc(k + " : " + argent(val) + " sur 30 jours")}"/>`;
+    svg += `<text x="${g + w + 6}" y="${y + 15}" class="v">${argent(val)}</text>`;
+  });
+  const mot = (V("imp") || "affectation").toLowerCase();
+  return cadre(`Ce qui sort, par ${mot}`, `Valeur sortie du stock sur 30 jours. Où part l'argent, ${mot} par ${mot} ?`,
+    `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Valeur sortie par ${esc(mot)}">${svg}</svg>`);
+}
+
+/* Valeur du stock au dépôt, jour par jour, sur n jours (le dernier point est aujourd'hui) */
+function serieValeurStock(n, avecDates) {
+  const j0 = debutJour(Date.now()) - (n - 1) * JOUR, tri = S.mouvements.slice().sort((a, b) => a.date - b.date), q = {};
+  let k = 0;
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const fin = j0 + (i + 1) * JOUR;
+    while (k < tri.length && tri[k].date < fin) { const m = tri[k++]; q[m.article] = (q[m.article] || 0) + SIGNE[m.type] * m.qte; }
+    const v = S.articles.reduce((t, a) => t + Math.max(0, q[a.id] || 0) * a.prix, 0);
+    pts.push(avecDates ? { t: fin - JOUR, v } : v);
+  }
+  return pts;
+}
+/* Valeur du stock au dépôt, jour par jour : l'argent immobilisé monte-t-il ? */
+function gValeurStock() {
+  const pts = serieValeurStock(60, true);
+  const W = LARGE(), H = 200, g = 64, base = 170, haut = 150, max = Math.max(1, ...pts.map(p => p.v)) * 1.08;
+  const x = i => g + (i / (pts.length - 1)) * (W - g - 10), y = v => base - (v / max) * haut;
+  let svg = `<line x1="${g}" x2="${W}" y1="${base}" y2="${base}" stroke="${C.encre}"/>`;
+  [.5, 1].forEach(f => { const v = max * f; svg += `<line x1="${g}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="${C.trait}"/><text x="${g - 6}" y="${y(v) + 4}" text-anchor="end">${argent(v)}</text>`; });
+  svg += `<polyline points="${pts.map((p, i) => `${x(i)},${y(p.v)}`).join(" ")}" fill="none" stroke="${C.bleu}" stroke-width="2" stroke-linejoin="round"/>`;
+  const der = pts[pts.length - 1], prem = pts[0];
+  svg += `<circle cx="${x(pts.length - 1)}" cy="${y(der.v)}" r="4" fill="${C.bleu}" stroke="${C.carte}" stroke-width="2"/>`;
+  pts.forEach((p, i) => { svg += `<rect x="${x(i) - 5}" y="${base - haut}" width="10" height="${haut}" fill="transparent" data-tip="${esc(jourCourt(p.t) + " : " + argent(p.v) + " au dépôt")}"/>`; });
+  [0, 30, pts.length - 1].forEach(i => { svg += `<text x="${x(i)}" y="${H - 6}" text-anchor="${i === 0 ? "start" : i === pts.length - 1 ? "end" : "middle"}">${new Date(pts[i].t).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</text>`; });
+  const d = prem.v ? Math.round((der.v - prem.v) / prem.v * 100) : 0;
+  return cadre("Valeur du stock, 60 jours", `Combien d'argent dort au dépôt. ${d === 0 ? "Stable" : (d > 0 ? "+" : "") + d + " %"} depuis le ${new Date(prem.t).toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}.`,
+    `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Valeur du stock sur 60 jours">${svg}</svg>`);
 }
 
 /* Bulle d'information, à la souris comme au doigt */

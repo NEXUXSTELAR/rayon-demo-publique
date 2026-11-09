@@ -4,14 +4,14 @@
 
 const METIERS = {
   loueur: {
-    nom: "Loueur de matériel", logique: "pret", dlc: false,
+    entreprise: "Location Fêtes (démo)", nom: "Loueur de matériel", logique: "pret", dlc: false,
     v: { imp: "Événement", imps: "événements", retourTitre: "Retour d'un événement", retourSous: "en cours", chez: "Chez les clients",
          pretSortie: "Part chez un client", pretSortieSous: "Je l'emmène", pretRetour: "Revient", pretRetourSous: "Je le range",
          prendre: "Je sors", prendreSous: "Sortie définitive", remettre: "Je remets", remettreSous: "Retour en stock",
          terrain: "Magasinier", bureau: "Responsable du parc", direction: "Gérante", parc: "Relevé du parc", sortiesMot: "Mis en location" },
   },
   artisan: {
-    nom: "Artisan et maintenance", logique: "conso", dlc: false,
+    entreprise: "Atelier Élec (démo)", nom: "Artisan et maintenance", logique: "conso", dlc: false,
     v: { imp: "Chantier", imps: "chantiers", retourTitre: "Rendre l'outillage", retourSous: "outils dehors", chez: "Sur les chantiers",
          pretSortie: "Je l'emprunte", pretSortieSous: "Pour un chantier", pretRetour: "Je le rends", pretRetourSous: "Il revient au dépôt",
          prendre: "J'en prends", prendreSous: "Pour un chantier", remettre: "Je remets le surplus", remettreSous: "Pas utilisé sur le chantier",
@@ -32,7 +32,7 @@ const METIERS = {
     kits: [{ id: "KIT-01", nom: "Kit tableau électrique", lignes: [["ART-0001", 10], ["ART-0003", 1], ["ART-0005", 1]] }],
   },
   restaurant: {
-    nom: "Restaurant et traiteur", logique: "conso", dlc: true,
+    entreprise: "Le Comptoir (démo)", nom: "Restaurant et traiteur", logique: "conso", dlc: true,
     v: { imp: "Service", imps: "services", retourTitre: "", retourSous: "", chez: "",
          pretSortie: "", pretSortieSous: "", pretRetour: "", pretRetourSous: "",
          prendre: "J'en sors", prendreSous: "Pour le service", remettre: "Je remets en réserve", remettreSous: "Pas utilisé",
@@ -51,7 +51,7 @@ const METIERS = {
     kits: [],
   },
   labo: {
-    nom: "Laboratoire", logique: "conso", dlc: true,
+    entreprise: "Labo Analyses (démo)", nom: "Laboratoire", logique: "conso", dlc: true,
     v: { imp: "Projet", imps: "projets", retourTitre: "Retour d'un emprunt", retourSous: "appareils prêtés", chez: "Prêtés",
          pretSortie: "Je l'emprunte", pretSortieSous: "Pour un projet ou un TP", pretRetour: "Je le rends", pretRetourSous: "Il revient au labo",
          prendre: "J'en prends", prendreSous: "Pour un projet ou un TP", remettre: "Je remets le surplus", remettreSous: "Pas utilisé",
@@ -70,7 +70,7 @@ const METIERS = {
     kits: [],
   },
   distribution: {
-    nom: "Quincaillerie et distribution", logique: "conso", dlc: false,
+    entreprise: "Quincaillerie du Centre (démo)", nom: "Quincaillerie et distribution", logique: "conso", dlc: false,
     v: { imp: "Client", imps: "clients", retourTitre: "", retourSous: "", chez: "",
          pretSortie: "", pretSortieSous: "", pretRetour: "", pretRetourSous: "",
          prendre: "Je sors pour une vente", prendreSous: "Comptoir ou client pro", remettre: "Retour d'un client", remettreSous: "Remis en rayon",
@@ -88,7 +88,7 @@ const METIERS = {
     kits: [],
   },
   ong: {
-    nom: "ONG et projets", logique: "conso", dlc: false,
+    entreprise: "Projet Santé Solidaire (démo)", nom: "ONG et projets", logique: "conso", dlc: false,
     v: { imp: "Distribution", imps: "distributions", retourTitre: "", retourSous: "", chez: "",
          pretSortie: "", pretSortieSous: "", pretRetour: "", pretRetourSous: "",
          prendre: "Je distribue", prendreSous: "Lieu de distribution", remettre: "Je rapporte le reste", remettreSous: "Non distribué",
@@ -117,6 +117,7 @@ function construireDemo(m) {
   if (!METIERS[m] || m === "loueur") { const s = seedMouvements(SEED()); s.metier = "loueur"; return s; }
   const d = METIERS[m], st = SEED();
   st.metier = m;
+  st.entreprise = Object.assign({}, st.entreprise, { nom: d.entreprise, adresse: "Adresse de l'entreprise" });
   st.installation = { livreLe: Date.now() - 20 * 86400000, heuresUtilisees: 1.5 };
   st.interventions = [];
   st.clientsLoc = [];
@@ -125,6 +126,7 @@ function construireDemo(m) {
   st.fournisseurs = d.fournisseurs; st.emplacements = d.emplacements; st.kits = d.kits; st.evenements = d.imputations.slice();
   st.articles = d.articles.map(([id, nom, im, lg, seuil, cible, prix, lot, emp, fou, jour, serie, dlcJours]) =>
     Object.assign({ id, nom, img: im, logique: lg, type: lg === "pret" && serie ? "equip" : "conso", unite: "", emp, seuil, cible, prix, lot, fou, jour }, serie ? { serie } : {}, dlcJours ? { dlcJours } : {}));
+  st.equipe = st.equipe.filter(u => u.role !== "chauffeur"); // la tournée du chauffeur sert aux loueurs
   const postes = { terrain: d.v.terrain, bureau: d.v.bureau, direction: d.v.direction };
   st.equipe.forEach(u => { u.poste = postes[u.role]; });
   seedAutre(st, d);

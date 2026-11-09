@@ -1,6 +1,6 @@
 "use strict";
 
-const CLE = "rayon-demo-v11";
+const CLE = "rayon-demo-v12";
 const CLE_THEME = "rayon-theme";
 const EUR_XOF = 655.957;
 const SEUIL_VALIDATION_EUR = 500;
@@ -37,6 +37,11 @@ const I = {
   equipe: P('<circle cx="17" cy="15" r="6"/><circle cx="33" cy="17" r="5"/><path d="M5 40v-4a10 10 0 0 1 20 0v4M28 40v-3a8 8 0 0 1 15-4"/>'),
   effacer: P('<path d="M17 10h23a2 2 0 0 1 2 2v24a2 2 0 0 1-2 2H17L5 24z"/><path d="m22 18 12 12M34 18 22 30"/>'),
   fleche: P('<path d="M10 24h28M28 14l10 10-10 10"/>'),
+  precedent: P('<path d="M38 24H10M20 14 10 24l10 10"/>'),
+  maison: P('<path d="M6 22 24 7l18 15"/><path d="M11 18v22h26V18M20 40V28h8v12"/>'),
+  grille: P('<rect x="7" y="7" width="14" height="14" rx="3"/><rect x="27" y="7" width="14" height="14" rx="3"/><rect x="7" y="27" width="14" height="14" rx="3"/><rect x="27" y="27" width="14" height="14" rx="3"/>'),
+  oeil: P('<path d="M4 24s7-12 20-12 20 12 20 12-7 12-20 12S4 24 4 24z"/><circle cx="24" cy="24" r="5"/>'),
+  sortir: P('<path d="M20 8H9a2 2 0 0 0-2 2v28a2 2 0 0 0 2 2h11M30 15l9 9-9 9M39 24H18"/>'),
 };
 
 /* ---------------- Thème : clair par défaut, réglé par appareil ---------------- */
@@ -54,12 +59,13 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if
 
 let S = charger();
 let session = null;      // { uid, nom, profil, admin }
-let verrouille = false;   // écran verrouillé : la personne retape son code
-let vue = { nom: "profil", arg: null };
+let verrouille = false;   // écran verrouillé : la personne retape son mot de passe
+let vue = { nom: "accueil", arg: null };
+let pile = [];            // écrans précédents, pour le bouton retour
 
 /* ---------------- Stockage ---------------- */
 function charger() {
-  try { const b = localStorage.getItem(CLE); if (b) { const s = JSON.parse(b); if (s.version === 11) return s; } } catch (e) { /* stockage bloqué : données de démo */ }
+  try { const b = localStorage.getItem(CLE); if (b) { const s = JSON.parse(b); if (s.version === 12) return s; } } catch (e) { /* stockage bloqué : données de démo */ }
   return seedMouvements(SEED());
 }
 function sauver() { try { localStorage.setItem(CLE, JSON.stringify(S)); } catch (e) { /* mode privé */ } }
@@ -109,9 +115,36 @@ const $$ = s => document.querySelectorAll(s);
 
 /* ---------------- Mouvements ---------------- */
 function mouvement(article, type, qte, extra) {
-  S.mouvements.push(Object.assign({ id: "MV-" + String(S.mouvements.length + 1).padStart(5, "0"), date: Date.now(), profil: session.profil, qui: session.nom, article, type, qte, evenement: "", motif: "" }, extra || {}));
+  const id = "MV-" + String(S.mouvements.length + 1).padStart(5, "0");
+  S.mouvements.push(Object.assign({ id, date: Date.now(), profil: session.profil, qui: session.nom, article, type, qte, evenement: "", motif: "" }, extra || {}));
   verifierSeuil(article);
   sauver();
+  return id;
+}
+/* « Annuler » pendant 10 secondes. Le journal ne s'efface pas : l'annulation ajoute la même ligne en négatif,
+   signée par la personne. Si un bon a été rempli, ses lignes sont retirées. */
+function annulable(ids, texte, bonId, lignes) {
+  $$(".toast").forEach(x => x.remove());
+  const d = document.createElement("div"); d.className = "toast avec-bouton"; d.setAttribute("role", "status");
+  d.innerHTML = `<span>${esc(texte)}</span><button>Annuler</button>`;
+  document.body.appendChild(d);
+  const t = setTimeout(() => d.remove(), 10000);
+  d.querySelector("button").onclick = () => { clearTimeout(t); d.remove(); annuler(ids, bonId, lignes); };
+}
+function annuler(ids, bonId, lignes) {
+  ids.filter(Boolean).forEach(id => {
+    const m = S.mouvements.find(x => x.id === id);
+    if (!m || S.mouvements.some(x => x.annule === id)) return;
+    const c = Object.assign({}, m, { id: "MV-" + String(S.mouvements.length + 1).padStart(5, "0"), date: Date.now(), profil: session.profil, qui: session.nom, qte: -m.qte, motif: "Annulation de " + m.id, annule: m.id });
+    delete c.photo; S.mouvements.push(c);
+  });
+  const b = bonId && S.bons.find(x => x.id === bonId);
+  if (b && !b.signature && lignes) {
+    lignes.forEach(([id, q]) => { const l = b.lignes.find(x => x[0] === id); if (l) l[1] -= q; });
+    b.lignes = b.lignes.filter(l => l[1] > 0);
+    if (!b.lignes.length && !(b.manquants || []).length) { S.bons = S.bons.filter(x => x !== b); if (vue.nom === "bon") vue = pile.pop() || { nom: "accueil" }; }
+  }
+  sauver(); rendre(); toast("Annulé. Le journal garde les deux lignes.");
 }
 function verifierSeuil(id) {
   const a = art(id);
@@ -124,80 +157,131 @@ function verifierSeuil(id) {
 }
 
 /* ---------------- Navigation ---------------- */
-function aller(nom, arg) { vue = { nom, arg }; rendre(); window.scrollTo(0, 0); }
+// Les anciens noms d'écran restent valables (liens directs, démo guidée).
+const ALIAS = { terrain: "accueil", releve: "accueil", direction: "accueil", abonnement: "installation", scanner: "depot", profil: "accueil" };
+let entree = true, toutVoir = false;
+function aller(nom, arg, racine) {
+  entree = true; toutVoir = false;
+  if (racine) pile = [];
+  else if (vue.nom !== nom || vue.arg !== arg) pile = pile.concat([vue]).slice(-20);
+  vue = { nom, arg }; rendre(); window.scrollTo(0, 0);
+}
 function toast(t) {
   $$(".toast").forEach(x => x.remove());
   const d = document.createElement("div"); d.className = "toast"; d.setAttribute("role", "status"); d.textContent = t;
   document.body.appendChild(d); setTimeout(() => d.remove(), 3000);
 }
 const DEMO = `<div class="demo">Démonstration · données fictives</div>`;
+const mouvementReduit = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+function animerChiffres(r) {
+  if (mouvementReduit()) return;
+  r.querySelectorAll("[data-compte]").forEach(el => {
+    const fin = +el.dataset.compte, fmt = el.dataset.format === "argent" ? argent : n => Math.round(n).toLocaleString("fr-FR");
+    if (!fin) return;
+    const t0 = performance.now(), d = 800;
+    const pas = t => { const k = Math.min(1, (t - t0) / d), v = fin * (1 - Math.pow(1 - k, 3)); el.textContent = fmt(k < 1 ? (Math.abs(fin) >= 100 ? Math.round(v) : v) : fin); if (k < 1) requestAnimationFrame(pas); };
+    el.textContent = fmt(0); requestAnimationFrame(pas);
+  });
+}
 
 function rendre() {
   if (typeof rafraichirPalette === "function") rafraichirPalette();
   const r = $("#racine");
-  if (!session && vue.nom === "pin") r.innerHTML = vuePin(vue.arg);
-  else if (!session) r.innerHTML = vueProfil();
-  else if (verrouille) r.innerHTML = vuePin(session.uid);
-  else if (session.profil === "terrain") r.innerHTML = cadreTerrain();
-  else r.innerHTML = cadreBureau(session.profil);
+  if (!session && installateur) r.innerHTML = vInstallateur();
+  else if (!session) r.innerHTML = vConnexion();
+  else if (verrouille) r.innerHTML = vVerrou();
+  else r.innerHTML = coque();
+  if (entree) {
+    // Les blocs arrivent l'un après l'autre et les chiffres montent, seulement à l'ouverture d'un écran.
+    entree = false; r.classList.add("entree"); animerChiffres(r);
+    clearTimeout(rendre.t); rendre.t = setTimeout(() => r.classList.remove("entree"), 1400);
+  }
   brancher();
   if (vue.nom === "etiquettes") dessinerQr();
   dessinerTour();
 }
 
-/* ---------------- Connexion : qui êtes-vous, puis votre code ---------------- */
+/* ---------------- Connexion : identifiant et mot de passe ----------------
+   Personne n'est affiché à l'avance : chacun entre ce que son responsable lui a donné. */
 const boutonReglages = `<button class="rond" data-act="reglages" aria-label="Réglages de l'appareil">${I.reglages}</button>`;
-function vueProfil() {
-  return `${DEMO}<div class="accueil">
-    <div class="barre"><div class="marque">${I.logo}<span>Stock démo</span></div>${boutonReglages}</div>
-    <h1>Qui êtes-vous ?</h1>
-    <p class="sous">Touchez votre nom, puis tapez votre code personnel.</p>
-    <div class="profils">${S.equipe.map(u => `<button data-profil="${u.role}" data-uid="${u.id}" ${u.actif ? "" : "disabled"}>${avatar(u)}<div><b>${esc(u.nom)}</b><span>${esc(u.poste)}${u.actif ? "" : " · accès retiré"}</span></div><span class="fleche">${I.fleche}</span></button>`).join("")}</div>
-    <p class="indice">Codes de démonstration : ${EQUIPE_DEMO.map(u => `${esc(u.nom)} <span class="code">${u.pin}</span>`).join(" · ")}</p>
-    ${(S.metier || "loueur") === "loueur" ? `<button class="btn plein" data-act="tour" style="margin-top:18px">Montrer la démo en 7 étapes</button>` : `<p class="indice" style="margin-top:14px">Démo réglée pour : <b>${esc(metier().nom)}</b></p>`}
-    <p style="margin-top:18px"><button class="lien" data-act="reinit">Remettre la démo à zéro</button></p>
+const CLE_IDENT = "rayon-identifiant";
+const identMemorise = () => { try { return localStorage.getItem(CLE_IDENT) || ""; } catch (e) { return ""; } };
+let msgConnexion = "", identSaisi = null;
+const champMdp = (auto) => `<span class="mdp"><input name="mdp" type="password" autocomplete="${auto}" required><button type="button" class="voir" data-voir aria-label="Afficher le mot de passe">${I.oeil}</button></span>`;
+function vConnexion() {
+  const e = S.entreprise || {}, memo = identMemorise(), ident = identSaisi !== null ? identSaisi : memo;
+  return `${DEMO}<div class="connexion">
+    <div class="barre"><div class="marque">${e.logo ? `<img src="${e.logo}" alt="" class="logo-client">` : I.logo}<span>${esc(e.nom || "Stock démo")}</span></div>${boutonReglages}</div>
+    <div class="c-tete"><h1>Bonjour</h1><p class="sous">Entrez l'identifiant et le mot de passe que votre responsable vous a donnés.</p></div>
+    <form class="c-form verre" data-form="connexion">
+      <label class="champ">Identifiant<input name="ident" value="${esc(ident)}" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required></label>
+      <label class="champ">Mot de passe${champMdp("current-password")}</label>
+      <label class="case"><input type="checkbox" name="memo" ${memo ? "checked" : ""}>Garder mon identifiant sur ce téléphone</label>
+      <p class="message" role="alert">${esc(msgConnexion)}</p>
+      <button class="btn plein">Se connecter</button>
+    </form>
+    <details class="c-demo"><summary>Comptes de démonstration</summary>
+      <p class="sous">Touchez un compte pour entrer. Dans l'appli livrée, cette liste n'existe pas : chacun reçoit son identifiant.</p>
+      <div class="c-comptes">${EQUIPE_DEMO.filter(d => S.equipe.some(x => x.id === d.id)).map(d => { const u = S.equipe.find(x => x.id === d.id) || d; return `<button type="button" data-remplir="${d.identifiant}|${d.mdp}"><b>${esc(u.poste)}</b><span class="code">${d.identifiant} · ${d.mdp}</span></button>`; }).join("")}</div>
+    </details>
+    <div class="c-pied">
+      <button class="btn plein visite" data-act="tour">${I.fleche}Visite guidée en 2 minutes</button>
+      <p>Démo réglée pour : <b>${esc(metier().nom)}</b> · <button class="lien" data-act="metiers">Voir un autre métier</button></p>
+      <p><button class="lien" data-act="installateur">Espace installateur</button> · <button class="lien" data-act="reinit">Remettre la démo à zéro</button></p>
+    </div>
   </div>`;
 }
-let saisiePin = "";
-function vuePin(uid) {
-  const u = S.equipe.find(x => x.id === uid); if (!u) return vueProfil();
-  const e = S.essais[uid] || {}, bloque = e.jusqua && e.jusqua > Date.now();
-  const reste = bloque ? Math.ceil((e.jusqua - Date.now()) / 1000) : 0;
-  return `${DEMO}<div class="accueil"><div class="barre">${verrouille ? `<div class="marque">${I.cadenas}<span>Écran verrouillé</span></div>` : `<button class="btn petit" data-act="retourListe">← Changer de personne</button>`}${boutonReglages}</div>
-    <div class="pin"><div class="qui-pin">${avatar(u, true)}<h1>${esc(u.nom)}</h1><span class="sous" style="margin:0">${esc(u.poste)}</span></div>
-    <div class="points" aria-hidden="true">${[0, 1, 2, 3].map(i => `<i class="${i < saisiePin.length ? "plein" : ""}"></i>`).join("")}</div>
-    <p class="message" role="alert">${bloque ? `Trop d'essais. Réessayez dans ${reste} s.` : e.n ? `Code incorrect. Encore ${5 - e.n} essai${5 - e.n > 1 ? "s" : ""} avant le blocage.` : ""}</p>
-    <div class="clavier">${["1", "2", "3", "4", "5", "6", "7", "8", "9"].map(n => `<button class="touche" data-touche="${n}" ${bloque ? "disabled" : ""}>${n}</button>`).join("")}
-      <button class="touche discret" data-act="${verrouille ? "sortir" : "retourListe"}">${verrouille ? "Changer" : "Retour"}</button>
-      <button class="touche" data-touche="0" ${bloque ? "disabled" : ""}>0</button>
-      <button class="touche discret" data-touche="x" aria-label="Effacer">${I.effacer}</button></div>
-    </div></div>`;
-}
-function taper(ch) {
-  const uid = verrouille ? session.uid : vue.arg;
-  if (ch === "x") { saisiePin = saisiePin.slice(0, -1); return rendre(); }
-  if (saisiePin.length >= 4) return;
-  saisiePin += ch; rendre();
-  if (saisiePin.length < 4) return;
-  const u = S.equipe.find(x => x.id === uid), ok = !!(u && u.actif && u.empreinte === empreinte(uid, saisiePin));
-  saisiePin = "";
-  S.connexions.unshift({ date: Date.now(), uid, nom: u ? u.nom : "?", ok, motif: verrouille ? "Déverrouillage" : "Connexion" });
+function seConnecter(f) {
+  const ident = f.ident.value.trim().toLowerCase(), mdp = f.mdp.value;
+  identSaisi = f.ident.value.trim();
+  const e = S.essais[ident] || {};
+  if (e.jusqua && e.jusqua > Date.now()) { msgConnexion = `Trop d'essais. Réessayez dans ${Math.ceil((e.jusqua - Date.now()) / 1000)} secondes.`; return rendre(); }
+  const u = S.equipe.find(x => x.identifiant === ident);
+  const ok = !!(u && u.actif && u.empreinte === empreinte(u.id, mdp));
+  S.connexions.unshift({ date: Date.now(), uid: u ? u.id : "", nom: u ? u.nom : ident || "?", ok, motif: "Connexion" });
   S.connexions = S.connexions.slice(0, 200);
   if (ok) {
-    delete S.essais[uid]; sauver();
-    if (verrouille) { verrouille = false; activite(); return rendre(); }
+    delete S.essais[ident]; sauver();
+    try { if (f.memo.checked) localStorage.setItem(CLE_IDENT, identSaisi); else localStorage.removeItem(CLE_IDENT); } catch (x) { /* stockage bloqué */ }
+    msgConnexion = ""; identSaisi = null;
     return ouvrirSession(u);
   }
-  const e = S.essais[uid] = S.essais[uid] || { n: 0 };
-  e.n += 1;
-  if (e.n >= 5) { e.jusqua = Date.now() + 30000; e.n = 0; setTimeout(rendre, 30500); }
+  const n = S.essais[ident] = S.essais[ident] || { n: 0 };
+  n.n += 1;
+  if (n.n >= 5) { n.jusqua = Date.now() + 30000; n.n = 0; msgConnexion = "Trop d'essais. Réessayez dans 30 secondes."; }
+  else msgConnexion = u && !u.actif ? "Cet accès a été retiré. Voyez votre responsable." : `Identifiant ou mot de passe incorrect. Encore ${5 - n.n} essai${5 - n.n > 1 ? "s" : ""}.`;
   sauver(); rendre();
-  const pts = $(".points"); if (pts) pts.classList.add("erreur");
   if (navigator.vibrate) navigator.vibrate([40, 40, 40]);
 }
+function vVerrou() {
+  const u = moi();
+  return `${DEMO}<div class="connexion">
+    <div class="barre"><div class="marque">${I.cadenas}<span>Écran verrouillé</span></div>${boutonReglages}</div>
+    <div class="c-tete centre">${avatar(u, true)}<h1>${esc(u.nom)}</h1><p class="sous">${esc(u.poste || "")}</p></div>
+    <form class="c-form verre" data-form="deverrouiller">
+      <label class="champ">Mot de passe${champMdp("current-password")}</label>
+      <p class="message" role="alert">${esc(msgConnexion)}</p>
+      <button class="btn plein">Déverrouiller</button>
+    </form>
+    <p class="c-pied"><button class="lien" data-act="sortir">Ce n'est pas moi : changer de personne</button></p>
+  </div>`;
+}
+function deverrouiller(f) {
+  const u = moi(), ok = u.actif !== false && u.empreinte === empreinte(u.id, f.mdp.value);
+  S.connexions.unshift({ date: Date.now(), uid: u.id, nom: u.nom, ok, motif: "Déverrouillage" });
+  const e = S.essais[u.identifiant] = S.essais[u.identifiant] || { n: 0 };
+  if (ok) { delete S.essais[u.identifiant]; verrouille = false; msgConnexion = ""; sauver(); activite(); return rendre(); }
+  e.n += 1;
+  // Cinq erreurs à l'écran verrouillé : la session se ferme, il faut se reconnecter.
+  if (e.n >= 5) { e.n = 0; sauver(); msgConnexion = "Trop d'essais : reconnectez-vous."; return ACTIONS.sortir(true); }
+  msgConnexion = `Mot de passe incorrect. Encore ${5 - e.n} essai${5 - e.n > 1 ? "s" : ""}.`;
+  sauver(); rendre();
+}
+const moi = () => (session && S.equipe.find(x => x.id === session.uid)) || { id: "", nom: session ? session.nom : "", role: session ? session.profil : "terrain", poste: "" };
 function ouvrirSession(u) {
   session = { uid: u.id, nom: u.nom, profil: u.role, admin: !!u.admin };
-  vue = { nom: PROFILS[u.role].accueil }; lienProfond(); activite(); rendre();
+  verrouille = false; pile = []; entree = true; toutVoir = false;
+  vue = { nom: "accueil" }; lienProfond(); activite(); rendre(); window.scrollTo(0, 0);
 }
 /* Verrouillage automatique après un temps sans toucher l'écran (réglé par le gérant) */
 let minuteur = null;
@@ -205,7 +289,7 @@ function activite() {
   clearTimeout(minuteur);
   const min = S.reglages.verrou;
   if (session && !verrouille && min > 0) minuteur = setTimeout(() => {
-    if (session && !document.querySelector(".camera")) { verrouille = true; saisiePin = ""; $$(".feuille").forEach(f => f.remove()); rendre(); }
+    if (session && !document.querySelector(".camera")) { verrouille = true; msgConnexion = ""; $$(".feuille").forEach(f => f.remove()); rendre(); }
   }, min * 60000);
 }
 ["pointerdown", "keydown"].forEach(ev => document.addEventListener(ev, activite, { passive: true }));
@@ -217,7 +301,7 @@ function feuilleReglages() {
   const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="tr"><h1 id="tr" style="font-size:26px">Réglages de l'appareil</h1>
     <p class="sous">Le thème ne change que l'affichage de ce téléphone. Les couleurs des actions gardent leur sens : orange, ça part ; vert, ça revient.</p>
     <div class="themes" role="radiogroup" aria-label="Thème">${Object.entries(THEMES).map(([k, n]) => `<label><input type="radio" name="theme" value="${k}" ${k === c ? "checked" : ""}><span class="apercu" style="background:${ap[k][0]}"><i style="background:${ap[k][1]}"></i><i style="background:${ap[k][2]}"></i></span>${n}</label>`).join("")}</div>
-    ${session ? `<div class="valider" style="grid-template-columns:1fr 1fr"><button class="btn" data-a="verrouiller">${I.cadenas}Verrouiller</button><button class="btn" data-a="sortir">Changer de personne</button></div>` : ""}
+    ${session ? `<div class="valider" style="grid-template-columns:1fr 1fr"><button class="btn" data-a="verrouiller">${I.cadenas}Verrouiller</button><button class="btn" data-a="sortir">${I.sortir}Se déconnecter</button></div>` : ""}
     <div class="valider" style="grid-template-columns:1fr"><button class="btn plein" data-x>Fermer</button></div></div>`);
   f.querySelectorAll("input[name=theme]").forEach(i => i.onchange = () => { try { localStorage.setItem(CLE_THEME, i.value); } catch (e) { /* stockage bloqué */ } appliquerTheme(); rendre(); });
   f.querySelector("[data-x]").onclick = () => f.remove();
@@ -225,51 +309,108 @@ function feuilleReglages() {
 }
 
 /* =================================================================
-   PROFIL TERRAIN : une action à la fois, des photos, de gros boutons
+   LA COQUE : une même appli pour tous, réglée par rôle et par entreprise.
+   Téléphone : barre flottante en bas, Scanner au milieu, « Plus » pour le reste.
+   Ordinateur : menu à gauche.
    ================================================================= */
-function cadreTerrain() {
-  const corps = ({ terrain: tAccueil, objet: tObjet, kits: tKits, recuperer: tRecuperer, retourEv: tRetourEvenement, chercher: tChercher, jour: tJour, bon: tBon, preparer: tPreparer, preparation: tPreparation, facture: vFacture, reception: tReception, receptionCmd: tReceptionCmd, zones: tZones, zone: tZone })[vue.nom] || tAccueil;
-  const u = S.equipe.find(x => x.id === session.uid) || { nom: session.nom, role: "terrain" };
-  return `${DEMO}<header class="t-haut">
-      ${vue.nom === "terrain" ? `<div class="qui">${avatar(u)}<span>${esc(session.nom)}</span></div>` : `<button class="btn petit" data-aller="terrain">← Accueil</button>`}
-      <div class="outils"><button class="rond" data-act="verrouiller" aria-label="Verrouiller l'écran">${I.cadenas}</button>${boutonReglages}</div>
-    </header><main class="t-main">${corps(vue.arg)}</main>`;
-}
-function tAccueil() {
-  const n = aDesPrets() ? new Set(dehors().map(d => d.evenement)).size : 0;
-  const attendues = S.commandes.filter(c => ["Envoyée", "Reçue en partie"].includes(c.statut)).length;
-  return `
-  <button class="t-scan" data-act="camera">${I.scan}<b>Scanner</b><span>Visez l'étiquette de l'objet</span></button>
-  <form class="t-ou" data-form="code"><label class="cache" for="code">Code de l'étiquette</label>
-    <input id="code" name="code" placeholder="ou tapez le code" autocomplete="off"><button class="btn plein petit" type="submit">OK</button></form>
-  ${actif("MO-RES") ? tuilePreparer() : ""}
-  <div class="t-tuiles">
-    ${actif("MO-KIT") && S.kits.length ? `<button class="t-tuile" data-aller="kits"><span class="pastille">${I.kit}</span><div><b>Sortir un kit</b><small>Tout un ensemble d'un coup</small></div></button>` : ""}
-    ${aDesPrets() ? `<button class="t-tuile" data-aller="recuperer"><span class="pastille">${I.retour}</span><div><b>${V("retourTitre")}</b><small>${n} ${V("retourSous")}</small></div></button>` : ""}
-    <button class="t-tuile" data-aller="reception"><span class="pastille">${I.camion}</span><div><b>Réceptionner une livraison</b><small>${attendues} attendue${attendues > 1 ? "s" : ""}</small></div></button>
-    <button class="t-tuile" data-aller="zones"><span class="pastille">${I.compter}</span><div><b>Compter une zone</b><small>Allée par allée</small></div></button>
-    <button class="t-tuile" data-aller="chercher"><span class="pastille">${I.loupe}</span><div><b>Chercher un objet</b><small>Sans étiquette sous la main</small></div></button>
-    <button class="t-tuile" data-aller="jour"><span class="pastille">${I.jour}</span><div><b>Ma journée</b><small>Ce que j'ai enregistré</small></div></button>
+const VUES = () => ({
+  accueil: () => vAccueil(), depot: () => vDepot(), analyses: () => vAnalyses(), tournee: () => vTournee(),
+  objet: tObjet, kits: tKits, recuperer: tRecuperer, retourEv: tRetourEvenement, chercher: tChercher, jour: tJour, bon: tBon,
+  preparer: tPreparer, preparation: tPreparation, facture: vFacture, reception: tReception, receptionCmd: tReceptionCmd, zones: tZones, zone: tZone,
+  materiel: bMateriel, fiche: bFiche, commandes: bCommandes, journal: bJournal, docs: bDocs, etiquettes: bEtiquettes,
+  inventairePapier: bInventairePapier, refacturer: bRefacturer, rapport: dRapport, installation: dInstallation, equipe: dEquipe,
+  reservations: bReservations, reservation: bReservation, clients: bClients, client: vClient, devisLoc: vDevisLocation,
+});
+// Les écrans du dépôt restent sur une colonne étroite, même sur ordinateur.
+const ETROITS = new Set(["tournee", "depot", "objet", "kits", "recuperer", "retourEv", "chercher", "jour", "bon", "preparer", "preparation", "reception", "receptionCmd", "zones", "zone"]);
+const PARENT = { client: "clients", devisLoc: "reservations", fiche: "materiel", reservation: "reservations", etiquettes: "docs", inventairePapier: "docs", refacturer: "docs", rapport: "docs", retourEv: "recuperer", preparation: "preparer", receptionCmd: "reception", zone: "zones" };
+const TITRES = { client: "Client", devisLoc: "Devis de location", objet: "Objet", fiche: "Fiche de l'objet", bon: "Bon", facture: "Facture de casse", reservation: "Réservation", retourEv: "Retour", preparation: "Préparation", receptionCmd: "Réception", zone: "Comptage", etiquettes: "Étiquettes", inventairePapier: "Inventaire", refacturer: "À refacturer", rapport: "Rapport" };
+const sectionsPermises = () => Object.keys(SECTIONS).filter(k => k !== "accueil" && permis(k));
+
+function coque() {
+  const nom = ALIAS[vue.nom] || vue.nom, sec = PARENT[nom] || nom;
+  const vues = VUES(), ok = permis(sec) && vues[nom];
+  const corps = ok ? vues[nom](vue.arg) : `<h1>Pas d'accès</h1><p class="sous">Cet écran n'est pas prévu pour votre rôle. Demandez à votre responsable.</p>`;
+  const u = moi(), e = S.entreprise || {};
+  const barre = cfg().barre.filter(k => permis(k)).slice(0, 3);
+  while (barre.length < 3) barre.push("");
+  const courant = k => (k === sec ? 'aria-current="page"' : "");
+  const bouton = k => k ? `<button data-racine="${k}" ${courant(k)}>${I[SECTIONS[k].i]}<span>${esc(titreSection(k))}</span></button>` : `<span></span>`;
+  const dansBarre = barre.includes(sec);
+  // Menu de gauche : les gestes du dépôt tiennent en une entrée (plus les raccourcis du rôle), pour garder la gestion visible.
+  const groupes = Object.entries(GROUPES).map(([g, t]) => { const l = sectionsPermises().filter(k => SECTIONS[k].g === g && (g !== "depot" || k === "depot" || barre.includes(k))); return l.length ? `<h4>${t}</h4>${l.map(k => `<button data-racine="${k}" ${courant(k)}>${I[SECTIONS[k].i]}<span>${esc(titreSection(k))}</span></button>`).join("")}` : ""; }).join("");
+  const titre = nom === "accueil" ? esc(e.nom || "Stock démo") : esc(TITRES[nom] || titreSection(nom) || "");
+  return `<div class="app">${DEMO}
+    <aside class="cote" aria-label="Menu">
+      <div class="marque">${e.logo ? `<img src="${e.logo}" alt="" class="logo-client">` : I.logo}<span>${esc(e.nom || "Stock démo")}</span></div>
+      <button class="btn plein" data-act="camera">${I.scan}Scanner</button>
+      <nav><button data-racine="accueil" ${courant("accueil")}>${I.maison}<span>Accueil</span></button>${groupes}</nav>
+      <div class="cote-pied"><div class="moi">${avatar(u)}<span><b>${esc(u.nom)}</b><small>${esc(u.poste || "")}</small></span></div>
+        <div class="cote-outils"><button class="rond" data-act="verrouiller" aria-label="Verrouiller l'écran">${I.cadenas}</button>${boutonReglages}<button class="rond" data-act="sortir" aria-label="Se déconnecter">${I.sortir}</button></div></div>
+    </aside>
+    <header class="haut verre">
+      ${nom === "accueil" ? `<div class="marque">${e.logo ? `<img src="${e.logo}" alt="" class="logo-client">` : I.logo}</div>` : `<button class="rond" data-act="retour" aria-label="Retour">${I.precedent}</button>`}
+      <b class="haut-titre">${titre}</b>${navigator.onLine === false ? `<span class="hors-ligne" title="Vos gestes sont gardés sur le téléphone et partiront au retour du réseau">Hors ligne</span>` : ""}
+      <div class="outils"><button class="rond" data-act="verrouiller" aria-label="Verrouiller l'écran">${I.cadenas}</button><button class="avatar-btn" data-act="plus" aria-label="Mon compte et tous les écrans">${avatar(u)}</button></div>
+    </header>
+    <main class="${ETROITS.has(nom) ? "t-main" : "b-main"}">${corps}</main>
+    <nav class="barre-bas verre" aria-label="Navigation">${bouton(barre[0])}${bouton(barre[1])}
+      <button class="bb-scan" data-act="camera" aria-label="Scanner une étiquette">${I.scan}</button>
+      ${bouton(barre[2])}<button data-act="plus" ${dansBarre || sec === "accueil" ? "" : 'aria-current="page"'}>${I.grille}<span>Plus</span></button></nav>
   </div>`;
 }
+
+/* « Plus » : tout ce que la personne a le droit d'ouvrir, en tuiles. Pas de menu qui défile de côté. */
+function feuillePlus() {
+  const u = moi(), sec = PARENT[ALIAS[vue.nom] || vue.nom] || ALIAS[vue.nom] || vue.nom;
+  const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-label="Tous les écrans">
+    <div class="plus-moi">${avatar(u, true)}<div><b>${esc(u.nom)}</b><small>${esc(u.poste || "")}${session.admin ? " · administratrice du compte" : ""}</small></div></div>
+    ${Object.entries(GROUPES).map(([g, t]) => { const l = sectionsPermises().filter(k => SECTIONS[k].g === g); return l.length ? `<h2>${t}</h2><div class="plus-grille">${l.map(k => `<button data-k="${k}" ${k === sec ? 'aria-current="page"' : ""}><span class="pastille">${I[SECTIONS[k].i]}</span>${esc(titreSection(k))}</button>`).join("")}</div>` : ""; }).join("")}
+    <div class="valider trois"><button class="btn" data-a="reglages">${I.reglages}Thème</button><button class="btn" data-a="verrouiller">${I.cadenas}Verrouiller</button><button class="btn" data-a="sortir">${I.sortir}Sortir</button></div>
+    ${installateur ? `<div class="valider" style="grid-template-columns:1fr"><button class="btn plein" data-a="revenirConfig">Revenir au réglage de l'installation</button></div>` : ""}
+  </div>`);
+  f.querySelectorAll("[data-k]").forEach(b => b.onclick = () => { f.remove(); aller(b.dataset.k, null, true); });
+  f.querySelectorAll("[data-a]").forEach(b => b.onclick = () => { f.remove(); ACTIONS[b.dataset.a](); });
+}
+
+/* Accueil : une salutation, puis les blocs choisis pour ce rôle dans cette entreprise. */
+function vAccueil() {
+  const u = moi(), h = new Date().getHours();
+  return `<div class="salut"><p class="date">${dateLongue(aujourdHui())}</p><h1>${h >= 18 || h < 5 ? "Bonsoir" : "Bonjour"} ${esc(u.nom)}</h1></div>${bento(cfg().accueil, window.innerWidth < 720 && !toutVoir ? 6 : 0)}`;
+}
+// Les gestes du magasinier, ouverts à toute l'équipe.
+const vDepot = () => `<h1>Au dépôt</h1><p class="sous">Scanner, sortir, rentrer, compter : ce que fait le magasinier, chacun peut le faire.</p>${wScan()}${wActions()}`;
 function tObjet(id) {
   const a = art(id); if (!a) return `<p>Objet introuvable.</p>`;
   const q = stock(id), e = etat(a), pret = logique(a) === "pret";
   const jauge = a.type === "equip" ? `<div class="t-stock">${q >= 1 ? "Ici" : "Sorti"}</div>` : anneau(q, a.cible, couleurEtat(e), q, `en stock sur ${a.cible}`);
   const lots = metier().dlc ? lotsEnStock(id) : [];
-  const actions = pret ? `
-    <button class="t-action sortie" data-mvt="Prêt">${I.sortie}<span>${V("pretSortie")}<small>${V("pretSortieSous")}</small></span></button>
-    <button class="t-action retour" data-mvt="Retour">${I.retour}<span>${V("pretRetour")}<small>${V("pretRetourSous")}</small></span></button>` : `
-    <button class="t-action sortie" data-mvt="Sortie">${I.sortie}<span>${V("prendre")}<small>${V("prendreSous")}</small></span></button>
-    <button class="t-action retour" data-mvt="Surplus">${I.retour}<span>${V("remettre")}<small>${V("remettreSous")}</small></span></button>`;
+  const c = conseil(a);
+  const b1 = pret ? ["Prêt", "sortie", I.sortie, V("pretSortie"), V("pretSortieSous")] : ["Sortie", "sortie", I.sortie, V("prendre"), V("prendreSous")];
+  const b2 = pret ? ["Retour", "retour", I.retour, V("pretRetour"), V("pretRetourSous")] : ["Surplus", "retour", I.retour, V("remettre"), V("remettreSous")];
+  const bouton = ([mvt, cl, ic, t, st]) => `<button class="t-action ${cl} ${c.mvt === mvt ? "conseil" : ""}" data-mvt="${mvt}">${ic}<span>${t}<small>${st}</small></span></button>`;
+  // Le geste le plus probable passe en premier et un peu plus grand
+  const actions = (c.html || "") + (c.mvt === b2[0] ? bouton(b2) + bouton(b1) : bouton(b1) + bouton(b2));
   return `<div class="t-objet">${img(a)}<span class="code">${a.id}</span><h1>${esc(a.nom)}</h1>
     ${jauge}<div style="margin-top:8px"><span class="etat ${e.c}"><i></i>${e.t}</span></div>
+
     ${lots.length ? `<p class="lot-premier">À sortir en premier : ${lots[0].qte} avec date limite au <b>${dateFr(lots[0].dlc)}</b></p>` : ""}</div>
   <div class="t-actions">${actions}
     <button class="t-action compter" data-mvt="Compter">${I.compter}<span>Compter<small>Je vérifie combien il y en a</small></span></button>
     ${pret ? `<button class="btn" data-atelier="${a.id}">À réparer ou à nettoyer${totalAtelier(id) ? ` (${totalAtelier(id)} déjà à l'atelier)` : ""}</button>` : ""}
     <button class="t-action perte" data-mvt="Perte">${I.perte}<span>${metier().dlc ? "Périmé, cassé ou perdu" : "Cassé ou perdu"}</span></button>
+    ${permis("materiel") ? `<button class="btn" data-fiche="${a.id}">${I.materiel}Fiche complète : ${droit("prix") ? "prix, " : ""}historique, entrée en stock</button>` : ""}
   </div>`;
+}
+/* Le geste le plus probable, d'après ce qui se passe autour de l'objet */
+function conseil(a) {
+  const id = a.id, auj = aujourdHui(), demain = isoJour(Date.now() + JOUR_MS);
+  const prep = actif("MO-RES") && S.reservations.find(r => ["Confirmée", "Préparée"].includes(r.statut) && r.debut <= demain && r.lignes.some(l => l[0] === id) && (r.charge[id] || 0) < r.lignes.find(l => l[0] === id)[1]);
+  if (prep) return { html: `<button class="t-action sortie conseil" data-prep="${prep.id}">${I.camion}<span>Charger pour ${esc(prep.nom)}<small>Départ ${prep.debut <= auj ? "aujourd'hui" : "demain"} · ${prep.charge[id] || 0} / ${prep.lignes.find(l => l[0] === id)[1]} chargés</small></span></button>` };
+  const cmd = S.commandes.find(k => ["Envoyée", "Reçue en partie"].includes(k.statut) && k.lignes.some(l => l.id === id && (l.recu || 0) < l.qte));
+  if (cmd) return { html: `<button class="t-action compter conseil" data-recep="${cmd.id}">${I.camion}<span>Réceptionner la livraison<small>${esc(cmd.fournisseur)} · ${cmd.id}</small></span></button>` };
+  if (logique(a) === "pret" && dehors(id).length) return { mvt: "Retour" };
+  return { mvt: logique(a) === "pret" ? "Prêt" : "Sortie" };
 }
 function tChercher(filtre) {
   const f = (filtre || "").toLowerCase();
@@ -280,7 +421,7 @@ function tChercher(filtre) {
 }
 function tJour() {
   const debut = new Date(); debut.setHours(0, 0, 0, 0);
-  const l = S.mouvements.filter(m => m.date >= debut.getTime() && m.profil === "terrain").reverse();
+  const l = S.mouvements.filter(m => m.date >= debut.getTime() && m.qui === session.nom).reverse();
   return `<h1>Ma journée</h1><p class="sous">${l.length} enregistrement${l.length > 1 ? "s" : ""} aujourd'hui.</p>
   <ul class="t-liste">${l.map(m => { const a = art(m.article); return `<li><button data-objet="${a.id}">${img(a)}<span><b>${esc(m.type)} · ${esc(a.nom)}</b><small>${quand(m.date)}${(m.evenement || m.imputation) ? " · " + esc(m.evenement || m.imputation) : ""}</small></span><span class="n">${m.qte}</span></button></li>`; }).join("") || `<li class="vide">Rien encore aujourd'hui. Scannez un objet pour commencer.</li>`}</ul>`;
 }
@@ -310,80 +451,9 @@ function tuilePreparer() {
   const p = S.reservations.filter(r => ["Confirmée", "Préparée"].includes(r.statut) && r.debut <= isoJour(Date.now() + 10 * JOUR_MS)).length;
   return `<button class="t-tuile large" data-aller="preparer"><span class="pastille">${I.camion}</span><div><b>Préparer un départ</b><small>${p} départ${p > 1 ? "s" : ""} prévu${p > 1 ? "s" : ""} dans les 10 jours</small></div></button>`;
 }
-function tBon(arg) {
-  const b = bonDe(arg);
-  if (!b) return tAccueil();
-  const lignes = b.lignes.map(([id, q]) => `<tr><td>${esc(art(id).nom)}</td><td>${art(id).id}</td><td style="text-align:right">${q}</td></tr>`).join("");
-  const manq = (b.manquants || []).map(([id, q]) => `<tr><td>${esc(art(id).nom)}</td><td style="text-align:right">${q}</td></tr>`).join("");
-  const loueur = (S.equipe.find(x => x.id === session.uid) || {}).nom || "";
-  return `<div class="feuille-doc">${enTeteDoc()}<h1>${b.type === "sortie" ? "Bon de sortie" : "Bon de retour"}</h1>
-    <p>${esc(b.evenement)}<br>${quand(b.date)} · n° ${b.id}</p>
-    <table><thead><tr><th>Objet</th><th>Code</th><th style="text-align:right">${b.type === "sortie" ? "Remis" : "Rendu"}</th></tr></thead><tbody>${lignes || `<tr><td colspan="3">Rien n'est revenu.</td></tr>`}</tbody></table>
-    ${manq ? `<p><b>Manquants ou cassés, à refacturer :</b></p><table><tbody>${manq}</tbody></table>` : ""}
-    ${b.photos.length ? `<div class="photos">${b.photos.map(p => `<img src="${p}" alt="Photo jointe au bon">`).join("")}</div>` : ""}
-    <div class="sign"><div>Pour le loueur<br><b>${esc(loueur)}</b></div><div>Pour le client${b.signature ? `<img class="sig" src="${b.signature}" alt="Signature du client"><b>${esc(b.signataire)}</b> · ${quand(b.signeLe)}` : ""}</div></div></div>
-  <div class="t-actions pas-imprimer">
-    ${b.signature ? "" : `<button class="btn plein" data-signer="${b.id}">Faire signer le client</button>`}
-    ${b.photos.length < 4 ? `<label class="btn">Ajouter des photos<input type="file" accept="image/*" capture="environment" multiple data-photos="${b.id}" class="cache"></label>` : ""}
-    ${manq ? `<button class="btn" data-facture="${esc(b.evenement)}">Voir la facture de casse</button>` : ""}
-    <button class="btn ${b.signature ? "plein" : ""}" data-act="partager">${I.partager}Envoyer au client</button>
-    <button class="btn" data-act="imprimer">${I.imprimer}Imprimer</button>
-    <button class="btn" data-aller="terrain">Terminé</button></div>`;
-}
-function texteBon(arg) {
-  const b = bonDe(arg);
-  const l = b.lignes.map(([id, q]) => `- ${art(id).nom} : ${q}`).join("\n");
-  const m = (b.manquants || []).map(([id, q]) => `- ${art(id).nom} : ${q}`).join("\n");
-  return `${b.type === "sortie" ? "Bon de sortie" : "Bon de retour"} · ${b.evenement} · ${quand(b.date)}\n${l}${m ? "\nManquants à refacturer :\n" + m : ""}${b.signature ? "\nSigné par " + b.signataire + " le " + quand(b.signeLe) : ""}`;
-}
-
 /* =================================================================
    PROFILS BUREAU ET DIRECTION
    ================================================================= */
-function navBureau(p) {
-  if (p === "direction") return [["direction", "Synthèse", I.argent]].concat(actif("MO-RES") ? [["reservations", "Réservations", I.jour]] : []).concat([["docs", "Documents", I.docs]]).concat(session.admin ? [["equipe", "Équipe et accès", I.equipe]] : []).concat([["installation", "Installation", I.abo]]);
-  const l = [["releve", "Relevé", I.releve]].concat(actif("MO-RES") ? [["reservations", "Réservations", I.jour], ["clients", "Clients", I.equipe]] : []).concat([["materiel", "Matériel", I.materiel], ["scanner", "Scanner", I.scan]]);
-  if (actif("MO-CMD")) l.push(["commandes", "Commandes", I.bon]);
-  l.push(["journal", "Journal", I.journal], ["docs", "Documents", I.docs]);
-  return l;
-}
-function cadreBureau(p) {
-  const nav = navBureau(p);
-  const vues = { releve: bReleve, materiel: bMateriel, fiche: bFiche, commandes: bCommandes, journal: bJournal, docs: bDocs, etiquettes: bEtiquettes,
-    inventairePapier: bInventairePapier, refacturer: bRefacturer, rapport: dRapport, direction: dSynthese, abonnement: dInstallation, installation: dInstallation, scanner: bScanner, equipe: dEquipe, reservations: bReservations, reservation: bReservation, facture: vFacture, clients: bClients };
-  const corps = vues[vue.nom] || (p === "direction" ? dSynthese : bReleve);
-  const parent = { fiche: "materiel", etiquettes: "docs", inventairePapier: "docs", refacturer: "docs", rapport: "docs", reservation: "reservations", facture: "docs", clients: "clients" };
-  const courant = nav.some(([k]) => k === vue.nom) ? vue.nom : parent[vue.nom];
-  return `<div class="${p === "direction" ? "d" : "b"}">${DEMO}
-    <header class="b-haut"><div class="marque">${I.logo}<span>Stock démo</span></div>
-      <div class="qui"><span class="nom"><b>${esc(session.nom)}</b>${esc((S.equipe.find(x => x.id === session.uid) || {}).poste || PROFILS[p].nom)}</span>${avatar(S.equipe.find(x => x.id === session.uid) || { nom: session.nom, role: p })}
-      <button class="rond" data-act="verrouiller" aria-label="Verrouiller l'écran">${I.cadenas}</button>${boutonReglages}</div></header>
-    <nav class="b-nav" aria-label="Navigation">${nav.map(([k, t, ic]) => `<button data-aller="${k}" ${k === courant ? 'aria-current="page"' : ""}>${ic}<span>${t}</span></button>`).join("")}</nav>
-    <main class="${p === "direction" ? "d-main" : "b-main"}">${corps(vue.arg)}</main></div>`;
-}
-function bReleve() {
-  const rupt = S.articles.filter(a => etat(a).c === "zero").length;
-  const bas = S.articles.filter(a => etat(a).c === "bas").length;
-  const out = dehors().reduce((t, d) => t + d.qte, 0);
-  const pts = pertesN(30).reduce((t, m) => t + m.qte, 0);
-  return `<h1>${V("parc")}</h1><p class="sous">${new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}</p>
-  <div class="chiffres">
-    <button data-aller="materiel" data-arg="alerte"><b class="${rupt ? "rouge" : ""}">${rupt}</b><span>Plus aucun en stock</span></button>
-    <button data-aller="materiel" data-arg="alerte"><b>${bas}</b><span>Bientôt à commander</span></button>
-    ${aDesPrets() ? `<button data-aller="materiel" data-arg="dehors"><b>${out}</b><span>${V("chez")}</span></button>` : `<button data-aller="journal"><b>${S.mouvements.filter(m => m.type === "Sortie" && m.date >= Date.now() - 7 * 86400000).reduce((t, m) => t + m.qte, 0)}</b><span>${V("sortiesMot")} en 7 jours</span></button>`}
-    <button data-aller="refacturer"><b class="${pts ? "rouge" : ""}">${pts}</b><span>${metier().dlc ? "Périmées, cassées ou perdues" : "Cassées ou perdues"}, 30 jours</span></button>
-  </div>
-  ${actif("MO-CMD") && (rupt || bas) ? `<p style="margin-top:16px"><button class="btn plein" data-aller="commandes">${I.bon}Préparer les commandes</button></p>` : ""}
-  ${metier().dlc ? blocPeremption() : ""}
-  ${blocAtelier()}
-  <h2>${aDesPrets() ? "Le cycle du matériel" : "Le mouvement du stock"}</h2>
-  ${cycle()}
-  <h2>En un coup d'œil</h2>
-  <div class="graphes deuxcol">${gMouvements14()}${aDesPrets() ? gDepotClients() : gTopLoues()}</div>
-  <h2>Alertes</h2>
-  ${S.alertes.length ? `<ul class="b-liste">${S.alertes.slice(0, 6).map(x => { const a = art(x.article); return `<li><button class="l" data-fiche="${a.id}">${img(a)}<span><b>${esc(x.txt)}</b><small>${quand(x.date)}</small></span><span></span></button></li>`; }).join("")}</ul>` : `<p class="vide">Pas d'alerte depuis le début de la démo.</p>`}
-  ${S.messages.length ? `<h2>Messages envoyés</h2>${S.messages.slice(0, 4).map(m => `<div class="msg"><small>${m.canal} · ${quand(m.date)} · simulation</small>${esc(m.txt)}</div>`).join("")}` : ""}`;
-}
 // Où en est le parc : au dépôt, chez les clients, revenu et perdu sur 7 jours
 function cycle() {
   const sem = Date.now() - 7 * 86400000, pret = aDesPrets();
@@ -400,7 +470,7 @@ function cycle() {
 }
 function blocPeremption() {
   const l = bientotPerimes(4);
-  return `<h2>À utiliser en premier</h2>${l.length ? `<ul class="b-liste">${l.slice(0, 6).map(x => `<li><button class="l" data-fiche="${x.a.id}">${img(x.a)}<span><b>${esc(x.a.nom)}</b><small>${x.qte} avec date limite au ${dateFr(x.dlc)}</small></span><span class="statut s-partie">${x.dlc <= new Date().toISOString().slice(0, 10) ? "Périmé" : "Bientôt"}</span></button></li>`).join("")}</ul>` : `<p class="vide">Rien ne périme dans les 4 prochains jours.</p>`}`;
+  return `<h2>À utiliser en premier</h2>${l.length ? `<ul class="b-liste">${l.slice(0, 6).map(x => `<li><button class="l" data-objet="${x.a.id}">${img(x.a)}<span><b>${esc(x.a.nom)}</b><small>${x.qte} avec date limite au ${dateFr(x.dlc)}</small></span><span class="statut s-partie">${x.dlc <= new Date().toISOString().slice(0, 10) ? "Périmé" : "Bientôt"}</span></button></li>`).join("")}</ul>` : `<p class="vide">Rien ne périme dans les 4 prochains jours.</p>`}`;
 }
 function bMateriel(f) {
   f = f || "tous";
@@ -413,13 +483,12 @@ function bMateriel(f) {
 function bFiche(id) {
   const a = art(id); if (!a) return "<p>Introuvable.</p>";
   const q = stock(id), e = etat(a), d = dehors(id);
-  return `<p class="pas-imprimer"><button class="lien" data-aller="materiel">← Matériel</button></p>
-  <div class="fiche">${img(a)}<div>
+  return `<div class="fiche">${img(a)}<div>
     <div class="entete"><div><span class="code">${a.id}</span><h1>${esc(a.nom)}</h1><span class="etat ${e.c}"><i></i>${e.t}</span></div>
     ${a.type === "equip" ? "" : anneau(q, a.cible, couleurEtat(e), q, "sur " + a.cible, true)}</div>
     <dl><div><dt>En stock</dt><dd>${q}</dd></div>${logique(a) === "pret" ? `<div><dt>${V("chez")}</dt><dd>${d.reduce((t, x) => t + x.qte, 0)}</dd></div>` : `<div><dt>${V("sortiesMot")} en 30 jours</dt><dd>${S.mouvements.filter(m => m.article === id && m.type === "Sortie" && m.date >= Date.now() - 30 * 86400000).reduce((t, m) => t + m.qte, 0)}</dd></div>`}
       <div><dt>Seuil d'alerte</dt><dd>${a.seuil}</dd></div><div><dt>Niveau normal</dt><dd>${a.cible}</dd></div>
-      <div><dt>Prix unitaire</dt><dd>${argent(a.prix)}</dd></div><div><dt>Valeur au dépôt</dt><dd>${argent(Math.max(0, q) * a.prix)}</dd></div>
+      ${droit("prix") ? `<div><dt>Prix unitaire</dt><dd>${argent(a.prix)}</dd></div><div><dt>Valeur au dépôt</dt><dd>${argent(Math.max(0, q) * a.prix)}</dd></div>` : ""}
       ${a.serie ? `<div><dt>N° de série</dt><dd class="code">${a.serie}</dd></div>` : ""}</dl>
     <div class="boutons">${totalAtelier(id) ? `<p class="sous" style="width:100%;margin:0 0 6px">À l'atelier : ${aLAtelier(id).map(x => x.qte + " " + (x.motif === "Au nettoyage" ? "au nettoyage" : "en réparation")).join(", ")}</p>` : ""}<button class="btn petit" data-atelier="${a.id}">Envoyer à l'atelier</button><button class="btn petit" data-mvt="Entrée">Entrée en stock</button><button class="btn petit" data-mvt="Compter">Compter</button><button class="btn petit" data-mvt="Perte">Perte</button></div>
   </div></div>
@@ -433,10 +502,6 @@ function tableMouvements(l, avecObjet) {
   ${l.map(m => `<tr><td>${quand(m.date)}</td><td>${esc(m.qui || PROFILS[m.profil].nom)}</td><td>${esc(m.type)}${(m.evenement || m.imputation) ? "<br><small>" + esc(m.evenement || m.imputation) + "</small>" : ""}${m.motif ? "<br><small>" + esc(m.motif) + "</small>" : ""}</td>${avecObjet ? `<td>${esc(art(m.article).nom)}</td>` : ""}<td class="n">${m.qte}</td></tr>`).join("")}</tbody></table></div>`;
 }
 const bJournal = () => `<h1>Journal</h1><p class="sous">Tout est gardé. Une erreur se corrige par un nouveau mouvement, jamais en effaçant.</p>${tableMouvements(S.mouvements.slice().reverse(), true)}`;
-const bScanner = () => `<h1>Scanner</h1><p class="sous">Ouvre la fiche complète de l'objet.</p>
-  <button class="t-scan" data-act="camera" style="max-width:420px">${I.scan}<b>Scanner</b></button>
-  <form class="t-ou" data-form="code" style="max-width:420px"><label class="cache" for="code">Code</label><input id="code" name="code" placeholder="ou tapez le code"><button class="btn plein petit">OK</button></form>`;
-
 function brouillons() {
   const f = {};
   S.articles.filter(a => a.type === "conso" && stock(a.id) <= a.seuil).forEach(a => {
@@ -468,12 +533,15 @@ function creerCommande(fid, statut) {
 
 /* Les sorties (documents) changent selon le profil. */
 function bDocs() {
-  const d = session.profil === "direction"
-    ? [["rapport", I.argent, "Rapport du mois", "Valeur, pertes, refacturable, à imprimer ou garder en PDF"], ["csv", I.excel, "Export pour le comptable", "Tous les mouvements avec leur valeur"], ["finAnnee", I.excel, "Inventaire de fin d'année", "Stock valorisé par objet et pertes de l'année"], ["refacturer", I.perte, "Manquants à refacturer", "Par événement, avec les montants"]]
-    : [["etiquettes", I.etiquette, "Planche d'étiquettes", "QR à imprimer et coller"], ["inventairePapier", I.compter, "Fiche d'inventaire papier", "Pour compter sans téléphone, allée par allée"],
-       ["refacturer", I.perte, "Manquants à refacturer", "Par événement, avec les montants"], ["csv", I.excel, "Export Excel", "Tous les mouvements"], ["finAnnee", I.excel, "Inventaire de fin d'année", "Stock valorisé par objet et pertes de l'année"]];
-  return `<h1>Documents</h1><p class="sous">Ce que vous pouvez imprimer, envoyer ou transmettre.</p>
-  <div class="docs">${d.map(([k, ic, t, s]) => `<button class="doc-carte" ${["csv", "finAnnee"].includes(k) ? `data-act="${k}"` : `data-aller="${k}"`}><span class="pastille">${ic}</span><span><b>${t}</b><small>${s}</small></span></button>`).join("")}</div>`;
+  const loueur = (S.metier || "loueur") === "loueur", cp = complet();
+  const papier = [["etiquettes", I.etiquette, "Planche d'étiquettes", "QR à imprimer et coller"], ["inventairePapier", I.compter, "Fiche d'inventaire papier", "Pour compter sans téléphone, zone par zone"]];
+  const argent_ = [["rapport", I.argent, "Rapport du mois", "Valeur, pertes, refacturable, à imprimer ou garder en PDF"], ["refacturer", I.perte, "Manquants à refacturer", "Par événement, avec les montants et les factures"]];
+  const excel = [["csv", I.excel, "Journal des mouvements", cp ? "Excel : qui, quoi, quand, pour qui, avec la valeur" : "Excel : tous les gestes enregistrés"], ["finAnnee", I.excel, "Inventaire de fin d'année", cp ? "Excel en trois onglets : résumé, stock valorisé, pertes" : "Excel : stock valorisé et pertes de l'année"]]
+    .concat(cp && (loueur || (S.clientsLoc || []).length) ? [["exportClients", I.excel, motClients() + " et événements", "Excel : coordonnées, cautions, casse par événement"]] : []);
+  const d = session.profil === "direction" ? argent_.concat(excel) : papier.concat(argent_.slice(1), excel);
+  const acte = k => ["csv", "finAnnee", "exportClients"].includes(k);
+  return `<h1>Documents</h1><p class="sous">Ce que vous pouvez imprimer, envoyer ou transmettre. Les fichiers Excel s'ouvrent aussi dans Google Sheets et LibreOffice.</p>
+  <div class="docs">${d.map(([k, ic, t, s_]) => `<button class="doc-carte" ${acte(k) ? `data-act="${k}"` : `data-aller="${k}"`}><span class="pastille ${acte(k) ? "excel" : ""}">${ic}</span><span><b>${t}</b><small>${s_}</small></span></button>`).join("")}</div>`;
 }
 const retourDocs = `<p class="pas-imprimer"><button class="lien" data-aller="docs">← Documents</button> · <button class="lien" data-act="imprimer">Imprimer ou enregistrer en PDF</button></p>`;
 const bEtiquettes = () => `${retourDocs}<div class="pas-imprimer"><h1>Planche d'étiquettes</h1><p class="sous">Scanné avec l'appareil photo, le QR ouvre directement la fiche de l'objet.</p></div>
@@ -490,87 +558,64 @@ function bRefacturer() {
   ${l.length ? `<h2 class="pas-imprimer">Factures de casse par événement</h2><div class="boutons pas-imprimer">${[...new Set(l.map(m => m.evenement))].slice(-8).reverse().map(ev => `<button class="btn petit" data-facture="${esc(ev)}">${esc(ev)}</button>`).join("")}</div>` : ""}`;
 }
 
-/* Direction : peu d'éléments, des montants, une tendance, ce qui attend une décision. */
+/* Période des chiffres de la direction (7, 30 ou 90 jours) */
 let periode = 30;
-function dSynthese() {
-  const valeur = S.articles.reduce((t, a) => t + Math.max(0, stock(a.id)) * a.prix, 0);
-  const chez = dehors().reduce((t, d) => t + d.qte * art(d.article).prix, 0);
-  const J = 86400000, maintenant = Date.now();
-  const sur = (deb, fin, f) => S.mouvements.filter(m => m.date >= deb && m.date < fin && f(m));
-  const somme = l => l.reduce((t, m) => t + valeurM(m), 0);
-  const p = sur(maintenant - periode * J, maintenant + 1, m => m.type === "Perte"), pAvant = sur(maintenant - 2 * periode * J, maintenant - periode * J, m => m.type === "Perte");
-  const sorte = m => m.type === "Prêt" || m.type === "Sortie";
-  const s = sur(maintenant - periode * J, maintenant + 1, sorte), sAvant = sur(maintenant - 2 * periode * J, maintenant - periode * J, sorte);
-  const vp = somme(p), refac = somme(p.filter(m => m.refac));
-  // Évolution par rapport à la période précédente de même durée, seulement si elle a des données
-  const delta = (a, b, plusEstMieux) => {
-    if (!b) return `<span class="delta">pas de période avant</span>`;
-    const d = Math.round((a - b) / b * 100), mieux = plusEstMieux ? d >= 0 : d <= 0;
-    return `<span class="delta ${d === 0 ? "" : mieux ? "mieux" : "pire"}">${d > 0 ? "+" : ""}${d} % vs avant</span>`;
-  };
-  const attente = S.commandes.filter(c => c.statut === "À valider");
-  const partLoue = Math.round(chez / ((chez + valeur) || 1) * 100), partRefac = vp ? Math.round(refac / vp * 100) : 0;
-  return `<div class="d-tete"><div><p class="sous" style="margin:8px 0 0">${(S.metier || "loueur") === "loueur" ? "Valeur du matériel au dépôt" : "Valeur du stock"}</p><div class="d-grand">${argent(valeur)}</div></div>
-    <div class="segments" role="group" aria-label="Période">${[7, 30, 90].map(n => `<button data-periode="${n}" aria-pressed="${periode === n}">${n} jours</button>`).join("")}</div></div>
-  <div class="trio">
-    <div><small>${V("sortiesMot")}</small><b>${argent(somme(s))}</b>${delta(somme(s), somme(sAvant), true)}</div>
-    <div><small>Cassé ou perdu</small><b style="color:var(--alerte)">${argent(vp)}</b>${delta(vp, somme(pAvant), false)}</div>
-    ${(S.metier || "loueur") === "loueur" ? `<div><small>Refacturable</small><b>${argent(refac)}</b><span class="delta">${partRefac} % des pertes</span></div>` : `<div><small>Taux de perte</small><b>${somme(s) ? Math.round(vp / (somme(s) + vp) * 1000) / 10 : 0} %</b><span class="delta">de la valeur sortie</span></div>`}
-  </div>
-  <div class="paire">
-    ${aDesPrets() ? `<div>${anneau(chez, chez + valeur, "var(--compter)", partLoue + " %", S.metier === "loueur" ? "du parc loué" : "du matériel prêté", true)}<p>${argent(chez)} ${V("chez").toLowerCase()} aujourd'hui</p></div>` : (() => { const ok = S.articles.filter(x => etat(x).c === "").length; return `<div>${anneau(ok, S.articles.length, "var(--retour)", Math.round(ok / S.articles.length * 100) + " %", "au bon niveau", true)}<p>${S.articles.length - ok} référence${S.articles.length - ok > 1 ? "s" : ""} à commander</p></div>`; })()}
-    ${(S.metier || "loueur") === "loueur" ? `<div>${anneau(refac, vp, "var(--neutre)", partRefac + " %", "refacturé", true)}<p>des pertes sur ${periode} jours</p></div>` : `<div>${anneau(vp, somme(s) + vp, "var(--alerte)", (somme(s) ? Math.round(vp / (somme(s) + vp) * 100) : 0) + " %", "perdu", true)}<p>${argent(vp)} perdus sur ${periode} jours</p></div>`}
-  </div>
-  <h2>À décider</h2>
-  ${attente.length ? attente.map(c => `<div class="bon"><header><b>${esc(c.fournisseur)}</b><span>${argent(c.total)} HT</span></header><p class="sous">${c.lignes.map(x => x.qte + " × " + esc(art(x.id).nom)).join(", ")}</p><button class="btn plein" data-valider="${c.id}">Valider la commande</button></div>`).join("") : `<p class="vide">Rien n'attend votre accord.</p>`}
-  ${actif("MO-DASH") ? `<h2>Tendances</h2><div class="graphes">${aDesPrets() ? gUtilisation() : ""}${gPertes8()}${gTopLoues()}</div>` : `<p class="sous">Le module Tableau de direction ajoute les tendances : utilisation du parc, pertes par semaine, objets qui dorment.</p>`}`;
-}
 
 /* Équipe et accès : qui peut entrer, avec quel rôle, et le journal des connexions */
-const ROLES = { terrain: "Terrain : dépôt et camion", bureau: "Bureau : stock et commandes", direction: "Direction : argent et décisions" };
+const ROLES = { terrain: "Terrain : dépôt et camion", chauffeur: "Chauffeur : livraisons et reprises", bureau: "Bureau : stock et commandes", direction: "Direction : argent et décisions" };
 function dEquipe() {
   if (!session.admin) return `<h1>Équipe et accès</h1><p class="vide">Seul l'administrateur du compte gère les accès.</p>`;
-  return `<h1>Équipe et accès</h1><p class="sous">Chaque personne a son code. Chaque mouvement porte son nom. Retirer un accès prend une seconde.</p>
-  <div class="bloc">${S.equipe.map(u => `<div class="personne ${u.actif ? "" : "inactif"}">${avatar(u)}<div><b>${esc(u.nom)}${u.admin ? " · administratrice du compte" : ""}</b><small>${esc(u.poste)} · ${ROLES[u.role]}${u.actif ? "" : " · accès retiré"}</small></div>
-    <div class="actions"><button class="btn petit" data-nouveau-code="${u.id}">Nouveau code</button>${u.id === session.uid ? "" : `<label class="inter"><input type="checkbox" data-acces="${u.id}" ${u.actif ? "checked" : ""} aria-label="Accès de ${esc(u.nom)}"><span></span></label>`}</div></div>`).join("")}</div>
+  return `<h1>Équipe et accès</h1><p class="sous">Chacun entre avec son identifiant et son mot de passe. Chaque mouvement porte son nom. Retirer un accès prend une seconde.</p>
+  <div class="bloc">${S.equipe.map(u => `<div class="personne ${u.actif ? "" : "inactif"}">${avatar(u)}<div><b>${esc(u.nom)}${u.admin ? " · administratrice du compte" : ""}</b><small><span class="code">${esc(u.identifiant || "")}</span> · ${esc(u.poste)} · ${ROLES[u.role]}${u.actif ? "" : " · accès retiré"}</small></div>
+    <div class="actions"><button class="btn petit" data-nouveau-code="${u.id}">Nouveau mot de passe</button>${u.id === session.uid ? "" : `<label class="inter"><input type="checkbox" data-acces="${u.id}" ${u.actif ? "checked" : ""} aria-label="Accès de ${esc(u.nom)}"><span></span></label>`}</div></div>`).join("")}</div>
   <p style="margin-top:12px"><button class="btn plein petit" data-act="ajouterPersonne">Ajouter une personne</button></p>
   <h2>Sécurité</h2>
-  <div class="bloc"><div class="module"><label for="verrou"><b>Verrouillage automatique</b></label><select id="verrou" data-verrou>${[[1, "Après 1 minute"], [5, "Après 5 minutes"], [15, "Après 15 minutes"], [0, "Jamais"]].map(([v, n]) => `<option value="${v}" ${S.reglages.verrou === v ? "selected" : ""}>${n}</option>`).join("")}</select><p>Sans toucher l'écran, le téléphone redemande le code.</p></div>
-  <div class="module"><b>Codes faux</b><span></span><p>Après 5 codes faux, il faut attendre 30 secondes. Chaque essai est noté ci-dessous.</p></div></div>
+  <div class="bloc"><div class="module"><label for="verrou"><b>Verrouillage automatique</b></label><select id="verrou" data-verrou>${[[1, "Après 1 minute"], [5, "Après 5 minutes"], [15, "Après 15 minutes"], [0, "Jamais"]].map(([v, n]) => `<option value="${v}" ${S.reglages.verrou === v ? "selected" : ""}>${n}</option>`).join("")}</select><p>Sans toucher l'écran, le téléphone redemande le mot de passe de la même personne.</p></div>
+  <div class="module"><b>Mots de passe faux</b><span></span><p>Après 5 erreurs, il faut attendre 30 secondes. Chaque essai est noté ci-dessous.</p></div></div>
   <h2>Journal des connexions</h2>
-  ${S.connexions.length ? `<div class="defile"><table class="t"><thead><tr><th>Quand</th><th>Qui</th><th>Quoi</th><th class="n">Résultat</th></tr></thead><tbody>${S.connexions.slice(0, 20).map(c => `<tr><td>${quand(c.date)}</td><td>${esc(c.nom)}</td><td>${esc(c.motif)}</td><td class="n"><span class="resultat ${c.ok ? "ok" : "ko"}">${c.ok ? "Réussie" : "Code faux"}</span></td></tr>`).join("")}</tbody></table></div>` : `<p class="vide">Aucune connexion enregistrée pour l'instant.</p>`}
+  ${S.connexions.length ? `<div class="defile"><table class="t"><thead><tr><th>Quand</th><th>Qui</th><th>Quoi</th><th class="n">Résultat</th></tr></thead><tbody>${S.connexions.slice(0, 20).map(c => `<tr><td>${quand(c.date)}</td><td>${esc(c.nom)}</td><td>${esc(c.motif)}</td><td class="n"><span class="resultat ${c.ok ? "ok" : "ko"}">${c.ok ? "Réussie" : "Refusée"}</span></td></tr>`).join("")}</tbody></table></div>` : `<p class="vide">Aucune connexion enregistrée pour l'instant.</p>`}
   <h2>Ce qui protège les données en vrai</h2>
   <ul class="puces">
-    <li>Bureau et direction se connectent avec leur compte Google ou Microsoft, avec la validation en deux étapes.</li>
-    <li>Sur les téléphones partagés du dépôt, chacun a un code personnel, vérifié par le serveur et jamais gardé sur le téléphone.</li>
-    <li>Les droits sont appliqués par le serveur : un magasinier ne reçoit même pas les prix.</li>
+    <li>La liste de l'équipe n'est jamais affichée à l'entrée : il faut connaître son identifiant.</li>
+    <li>Le mot de passe est vérifié par le serveur et n'est jamais gardé sur le téléphone. Bureau et direction peuvent aussi entrer avec leur compte Google ou Microsoft, avec la validation en deux étapes.</li>
+    <li>Les droits sont appliqués par le serveur : une personne sans le droit « prix » ne reçoit même pas les prix.</li>
     <li>Le journal des mouvements ne s'efface pas. Une erreur se corrige par un nouveau mouvement.</li>
     <li>Un téléphone perdu se coupe à distance. Les données restent dans le compte de l'entreprise.</li>
   </ul>`;
 }
+const MDP_FAIBLES = ["123456", "1234567", "12345678", "azerty", "azertyuiop", "motdepasse", "password", "000000", "111111"];
 function feuilleCode(uid) {
   const u = uid ? S.equipe.find(x => x.id === uid) : null;
-  const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="tc"><h1 id="tc" style="font-size:26px">${u ? "Nouveau code pour " + esc(u.nom) : "Ajouter une personne"}</h1>
-    ${u ? `<p class="sous">L'ancien code ne marchera plus. Donnez le nouveau en main propre, jamais par message.</p>` : `
+  const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="tc"><h1 id="tc" style="font-size:26px">${u ? "Nouveau mot de passe pour " + esc(u.nom) : "Ajouter une personne"}</h1>
+    ${u ? `<p class="sous">L'ancien ne marchera plus. Donnez le nouveau en main propre, jamais par message.</p>` : `
     <label class="champ">Prénom<input name="nom" autocomplete="off" maxlength="30"></label>
+    <label class="champ">Identifiant<input name="ident" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="30" placeholder="prenom ou prenom.nom"></label>
     <label class="champ">Poste<input name="poste" autocomplete="off" maxlength="40" placeholder="Magasinier, chauffeur…"></label>
     <label class="champ">Rôle<select name="role">${Object.entries(ROLES).map(([k, n]) => `<option value="${k}">${n}</option>`).join("")}</select></label>`}
-    <label class="champ">Code à 4 chiffres<input name="pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="new-password"></label>
-    <label class="champ">Le même code, une seconde fois<input name="pin2" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="new-password"></label>
+    <label class="champ">Mot de passe, 6 caractères au moins<input name="pin" type="password" autocomplete="new-password" maxlength="64"></label>
+    <label class="champ">Le même, une seconde fois<input name="pin2" type="password" autocomplete="new-password" maxlength="64"></label>
     <div class="valider"><button class="btn" data-x>Annuler</button><button class="btn plein" data-ok>Enregistrer</button></div></div>`);
   const champ = n => f.querySelector(`[name=${n}]`);
+  if (!u) {
+    // L'identifiant se propose à partir du prénom, tant qu'on ne l'a pas tapé soi-même.
+    champ("nom").oninput = () => { if (!champ("ident").dataset.touche) champ("ident").value = champ("nom").value.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9.-]/g, ""); };
+    champ("ident").oninput = () => { champ("ident").dataset.touche = "1"; };
+  }
   f.querySelector("[data-x]").onclick = () => f.remove();
   f.querySelector("[data-ok]").onclick = () => {
-    const pin = champ("pin").value, pin2 = champ("pin2").value;
-    if (!/^\d{4}$/.test(pin)) return toast("Le code fait 4 chiffres.");
-    if (pin !== pin2) return toast("Les deux codes ne sont pas pareils.");
-    if (/^(\d)\1{3}$/.test(pin) || "0123456789".includes(pin) || "9876543210".includes(pin)) return toast("Code trop facile à deviner : évitez 1234 ou 0000.");
-    if (u) { u.empreinte = empreinte(u.id, pin); toast(`Nouveau code enregistré pour ${u.nom}.`); }
+    const mdp = champ("pin").value, mdp2 = champ("pin2").value;
+    const ident = u ? u.identifiant : champ("ident").value.trim().toLowerCase();
+    if (!u && !champ("nom").value.trim()) return toast("Indiquez le prénom.");
+    if (!u && !/^[a-z0-9.-]{3,30}$/.test(ident)) return toast("Identifiant : 3 caractères au moins, lettres, chiffres, point ou tiret.");
+    if (!u && S.equipe.some(x => x.identifiant === ident)) return toast("Cet identifiant est déjà pris.");
+    if (mdp.length < 6) return toast("Le mot de passe fait 6 caractères au moins.");
+    if (mdp !== mdp2) return toast("Les deux mots de passe ne sont pas pareils.");
+    if (MDP_FAIBLES.includes(mdp.toLowerCase()) || mdp.toLowerCase().includes(ident)) return toast("Mot de passe trop facile à deviner.");
+    if (u) { u.empreinte = empreinte(u.id, mdp); toast(`Nouveau mot de passe enregistré pour ${u.nom}.`); }
     else {
-      const nom = champ("nom").value.trim(); if (!nom) return toast("Indiquez le prénom.");
-      const id = "U-" + String(S.equipe.length + 1).padStart(2, "0"), role = champ("role").value;
-      S.equipe.push({ id, nom, poste: champ("poste").value.trim() || PROFILS[role].nom, role, admin: false, actif: true, empreinte: empreinte(id, pin) });
-      toast(`${nom} peut se connecter avec son code.`);
+      const nom = champ("nom").value.trim(), id = "U-" + String(S.equipe.length + 1).padStart(2, "0"), role = champ("role").value;
+      S.equipe.push({ id, nom, identifiant: ident, poste: champ("poste").value.trim() || PROFILS[role].nom, role, admin: false, actif: true, empreinte: empreinte(id, mdp) });
+      toast(`${nom} peut se connecter avec l'identifiant « ${ident} ».`);
     }
     sauver(); f.remove(); rendre();
   };
@@ -602,20 +647,20 @@ function dInstallation() {
   <div class="module"><b>Payé chaque mois à Google, pas à RAYON</b><span>${fmt(Math.round(google * 100) / 100)}</span><p>Licences Google des ${S.equipe.filter(u => u.actif).length} personnes de l'équipe (environ 6,80 € HT par personne).</p></div></div>
   <p style="margin-top:12px"><button class="btn plein" data-act="demanderIntervention">Demander une intervention</button></p>
   ${(S.interventions || []).length ? `<h2>Vos demandes</h2><table class="t"><tbody>${S.interventions.slice().reverse().map(i => `<tr><td>${quand(i.date)}<br><small>${esc(i.texte)}</small></td><td class="n">${i.incluse ? "dans l'assistance" : "devis envoyé"}</td></tr>`).join("")}</tbody></table>` : ""}
-  <h2>Modules de votre appli</h2>
-  <p class="sous">Un module installé reste à vous. En ajouter un se paie une fois, après devis.</p>
-  ${Object.entries(CATALOGUE).map(([k, m]) => `<div class="module"><b>${m.nom}</b><label class="inter"><input type="checkbox" data-module="${k}" ${actif(k) ? "checked" : ""} aria-label="${m.nom}"><span></span></label><p>${actif(k) ? "Installé." : `Ajout possible : ${fmt(m[unite])} HT, une fois.`} ${m.detail}</p></div>`).join("")}
+  <h2>Ce qui est installé</h2>
+  <p class="sous">Réglé à l'installation, d'après votre devis. Pour ajouter un module, demandez un devis : il se paie une fois et reste à vous.</p>
+  <div class="bloc">${Object.entries(CATALOGUE).map(([k, m]) => `<div class="module"><b>${m.nom}</b>${actif(k) ? `<span class="statut s-revenue">installé</span>` : `<button class="btn petit" data-devis="${k}">Demander un devis</button>`}<p>${m.detail}.${actif(k) ? "" : ` Environ ${fmt(m[unite])} HT, une fois.`}</p></div>`).join("")}</div>
   <h2>Réglages</h2>
   <div class="module"><b>Vos coordonnées sur les documents</b><button class="btn petit" data-act="coordonnees">Modifier</button><p>${S.entreprise && S.entreprise.nom ? esc(S.entreprise.nom) : "Nom, adresse, téléphone et logo en haut des bons et des factures."}</p></div>
-  <div class="module"><label for="metier"><b>Métier de l'entreprise</b></label><select id="metier" data-metier>${Object.entries(METIERS).map(([k, m]) => `<option value="${k}" ${(S.metier || "loueur") === k ? "selected" : ""}>${m.nom}</option>`).join("")}</select><p>Change les mots, les boutons du terrain et les objets de la démo.</p></div>
   <div class="module"><label for="monnaie"><b>Monnaie des montants</b></label><select id="monnaie" data-monnaie><option value="EUR" ${S.monnaie === "EUR" ? "selected" : ""}>Euro</option><option value="XOF" ${S.monnaie === "XOF" ? "selected" : ""}>Franc CFA</option></select><p>Pour les prix, les pertes et les factures.</p></div>`;
 }
-function feuilleIntervention() {
+// Un ajout de module est une nouvelle fonction : toujours sur devis, jamais dans l'assistance incluse.
+function feuilleIntervention(module) {
   const inst = S.installation || { livreLe: Date.now(), heuresUtilisees: 0 };
-  const incluse = Date.now() < inst.livreLe + OFFRE.jours * 86400000 && inst.heuresUtilisees < OFFRE.heures;
-  const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="ti"><h1 id="ti" style="font-size:26px">Demander une intervention</h1>
-    <p class="sous">${incluse ? "Votre assistance incluse est en cours : si la demande entre dedans, elle ne vous coûte rien." : "Votre assistance incluse est terminée : vous recevrez un devis avant tout travail."}</p>
-    <label class="champ">Votre demande<textarea name="texte" rows="4" maxlength="400" style="border-radius:10px;border:2px solid var(--trait-fort);padding:10px;font:inherit;background:var(--carte);color:var(--encre)"></textarea></label>
+  const incluse = !module && Date.now() < inst.livreLe + OFFRE.jours * 86400000 && inst.heuresUtilisees < OFFRE.heures;
+  const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="ti"><h1 id="ti" style="font-size:26px">${module ? "Demander un devis" : "Demander une intervention"}</h1>
+    <p class="sous">${module ? "Nous vous envoyons un devis. Rien n'est ajouté ni facturé avant votre accord." : incluse ? "Votre assistance incluse est en cours : si la demande entre dedans, elle ne vous coûte rien." : "Votre assistance incluse est terminée : vous recevrez un devis avant tout travail."}</p>
+    <label class="champ">Votre demande<textarea name="texte" rows="4" maxlength="400" style="border-radius:10px;border:2px solid var(--trait-fort);padding:10px;font:inherit;background:var(--carte);color:var(--encre)">${module ? esc("Ajout du module « " + CATALOGUE[module].nom + " ».") : ""}</textarea></label>
     <div class="valider"><button class="btn" data-x>Annuler</button><button class="btn plein" data-ok>Envoyer</button></div></div>`);
   f.querySelector("[data-x]").onclick = () => f.remove();
   f.querySelector("[data-ok]").onclick = () => {
@@ -637,6 +682,23 @@ function compteur(f, min, max) {
   f.querySelectorAll("[data-plus]").forEach(b => b.onclick = () => c.value = borne((+c.value || 0) + +b.dataset.plus));
   return c;
 }
+function choixEvenement(liste) {
+  const usage = {};
+  S.mouvements.forEach(m => { const k = m.evenement || m.imputation; if (k) usage[k] = Math.max(usage[k] || 0, m.date); });
+  S.reservations.forEach(r => { if (["Préparée", "Partie", "Confirmée"].includes(r.statut)) usage[r.nom] = Math.max(usage[r.nom] || 0, Date.now() - Math.abs(new Date(r.debut) - Date.now()) / 10); });
+  const tri = liste.slice().sort((a, b) => (usage[b] || 0) - (usage[a] || 0)), vus = tri.slice(0, 4);
+  return `<div class="choix" role="radiogroup" aria-label="${V("imp")}">${vus.map((e, i) => `<label><input type="radio" name="ev" value="${esc(e)}" ${i === 0 ? "checked" : ""}>${esc(e)}</label>`).join("")}
+    <label class="autre"><input type="radio" name="ev" value="__autre" aria-label="Autre"><input type="text" name="evAutre" list="liste-ev" placeholder="Autre : chercher ou créer" autocomplete="off" maxlength="60"></label>
+    <datalist id="liste-ev">${liste.map(e => `<option value="${esc(e)}">`).join("")}</datalist></div>`;
+}
+function evChoisi(f) {
+  const r = (f.querySelector("input[name=ev]:checked") || {}).value || "";
+  if (r !== "__autre") return r;
+  const t = f.querySelector("[name=evAutre]").value.trim();
+  if (t && !S.evenements.includes(t)) S.evenements.unshift(t);
+  return t;
+}
+function brancherAutre(f) { const t = f.querySelector("[name=evAutre]"); if (t) t.oninput = t.onfocus = () => { f.querySelector('input[name=ev][value="__autre"]').checked = true; }; }
 const radios = (nom, liste, etiquette) => `<div class="choix" role="radiogroup" aria-label="${etiquette}">${liste.map((e, i) => `<label><input type="radio" name="${nom}" value="${esc(e)}" ${i === 0 ? "checked" : ""}>${esc(e)}</label>`).join("")}</div>`;
 
 function feuille(id, type) {
@@ -651,33 +713,41 @@ function feuille(id, type) {
     <h1 id="tf" style="font-size:26px">${titre}</h1>
     <div class="compteur"><button data-pas="-1" aria-label="Un de moins">−</button><input type="number" inputmode="numeric" min="0" value="${defaut}" aria-label="Quantité"><button data-pas="1" aria-label="Un de plus">+</button></div>
     ${a.type === "conso" && type !== "Compter" ? `<div class="rapides">${[10, 50, 100].map(n => `<button data-plus="${n}">+${n}</button>`).join("")}</div>` : ""}
-    ${evs ? radios("ev", evs, V("imp")) : ""}
+    ${evs ? (["Prêt", "Sortie", "Surplus"].includes(type) ? choixEvenement(evs) : radios("ev", evs, V("imp"))) : ""}
     ${type === "Perte" ? radios("motif", ["Cassé", "Pas rendu", "Abîmé", "Volé"], "Motif") : ""}
     <div class="valider"><button class="btn" data-x>Annuler</button><button class="btn plein" data-ok>Valider</button></div></div>`);
   const max = ["Prêt", "Sortie"].includes(type) ? q : null;
   const champ = compteur(f, 0, max);
+  brancherAutre(f);
   if (type === "Retour") f.querySelectorAll("input[name=ev]").forEach(r => r.onchange = () => { champ.value = d.find(x => x.evenement === r.value).qte; });
   f.querySelector("[data-x]").onclick = () => f.remove();
   f.querySelector("[data-ok]").onclick = () => {
     const n = Math.floor(+champ.value);
     if (!(n >= 0) || (n === 0 && type !== "Compter")) return toast("Indiquez une quantité.");
     if (max !== null && n > max) return toast(`Il n'y en a que ${max} au dépôt.`);
-    const ev = (f.querySelector("input[name=ev]:checked") || {}).value || "";
+    const ev = evChoisi(f);
+    if (evs && !ev) return toast(`Indiquez : ${V("imp").toLowerCase()}.`);
     const motif = (f.querySelector("input[name=motif]:checked") || {}).value || "";
     f.remove();
-    if (type === "Compter") { const e = n - q; if (e) mouvement(id, "Ajustement", e, { motif: "Comptage" }); toast(e ? `Écart de ${e > 0 ? "+" : ""}${e} enregistré.` : "Le compte est bon."); return rendre(); }
+    if (type === "Compter") { const e = n - q; if (!e) { toast("Le compte est bon."); return rendre(); } const m = mouvement(id, "Ajustement", e, { motif: "Comptage" }); rendre(); return annulable([m], `Écart de ${e > 0 ? "+" : ""}${e} enregistré.`); }
     if (type === "Retour") {
       const attendu = d.find(x => x.evenement === ev).qte, rendu = Math.min(n, attendu);
-      mouvement(id, "Retour", rendu, { evenement: ev });
+      const m = mouvement(id, "Retour", rendu, { evenement: ev });
       if (rendu < attendu) return manquants(ev, [[id, attendu - rendu]], [[id, rendu]]);
-      if (session.profil === "terrain" && (S.metier || "loueur") === "loueur") return aller("bon", creerBon({ type: "retour", evenement: ev, date: Date.now(), lignes: [[id, rendu]] }));
-      toast("Retour enregistré."); return rendre();
+      if ((S.metier || "loueur") === "loueur") { const b = creerBon({ type: "retour", evenement: ev, date: Date.now(), lignes: [[id, rendu]] }); aller("bon", b); return annulable([m], `${rendu} revenu${rendu > 1 ? "s" : ""}, ajouté${rendu > 1 ? "s" : ""} au bon de retour.`, b, [[id, rendu]]); }
+      rendre(); return annulable([m], "Retour enregistré.");
     }
-    if (type === "Sortie") { mouvement(id, "Sortie", n, { imputation: ev }); toast(`${n} sorti${n > 1 ? "s" : ""} pour ${ev}.`); return rendre(); }
-    if (type === "Surplus") { mouvement(id, "Entrée", n, { motif: "Surplus remis", imputation: ev }); toast(`${n} remis en stock.`); return rendre(); }
-    if (type === "Prêt") { mouvement(id, "Prêt", n, { evenement: ev }); if (S.metier && S.metier !== "loueur") { toast(`Emprunté pour ${ev}.`); return rendre(); } return aller("bon", creerBon({ type: "sortie", evenement: ev, date: Date.now(), lignes: [[id, n]] })); }
-    mouvement(id, type, n, { evenement: ev === "Au dépôt" ? "" : ev, motif, refac: type === "Perte" && ev !== "Au dépôt" && motif !== "Abîmé" });
-    toast("Enregistré."); rendre();
+    if (type === "Sortie") { const m = mouvement(id, "Sortie", n, { imputation: ev }); rendre(); return annulable([m], `${n} sorti${n > 1 ? "s" : ""} pour ${ev}.`); }
+    if (type === "Surplus") { const m = mouvement(id, "Entrée", n, { motif: "Surplus remis", imputation: ev }); rendre(); return annulable([m], `${n} remis en stock.`); }
+    if (type === "Prêt") {
+      const m = mouvement(id, "Prêt", n, { evenement: ev });
+      if (S.metier && S.metier !== "loueur") { rendre(); return annulable([m], `Emprunté pour ${ev}.`); }
+      // Un seul bon par événement et par jour : les sorties suivantes s'y ajoutent jusqu'à la signature.
+      const b = creerBon({ type: "sortie", evenement: ev, date: Date.now(), lignes: [[id, n]] }); aller("bon", b);
+      return annulable([m], `${n} ajouté${n > 1 ? "s" : ""} au bon de sortie.`, b, [[id, n]]);
+    }
+    const m = mouvement(id, type, n, { evenement: ev === "Au dépôt" ? "" : ev, motif, refac: type === "Perte" && ev !== "Au dépôt" && motif !== "Abîmé" });
+    rendre(); annulable([m], "Enregistré.");
   };
 }
 function manquants(ev, liste, rendus) {
@@ -697,25 +767,28 @@ function feuilleKit(kid) {
   const k = S.kits.find(x => x.id === kid);
   const f = ouvrirFeuille(`<div role="dialog" aria-modal="true"><h1 style="font-size:26px">${esc(k.nom)}</h1><p class="sous">Combien de kits ?</p>
     <div class="compteur"><button data-pas="-1" aria-label="Un de moins">−</button><input type="number" inputmode="numeric" min="1" value="1" aria-label="Nombre de kits"><button data-pas="1" aria-label="Un de plus">+</button></div>
-    ${radios("ev", S.evenements, V("imp"))}
+    ${choixEvenement(S.evenements)}
     <div class="valider"><button class="btn" data-x>Annuler</button><button class="btn plein" data-ok>Valider</button></div></div>`);
   const champ = compteur(f, 1, null);
+  brancherAutre(f);
   f.querySelector("[data-x]").onclick = () => f.remove();
   f.querySelector("[data-ok]").onclick = () => {
-    const n = Math.max(1, Math.floor(+champ.value)), ev = f.querySelector("input[name=ev]:checked").value;
+    const n = Math.max(1, Math.floor(+champ.value)), ev = evChoisi(f);
+    if (!ev) return toast(`Indiquez : ${V("imp").toLowerCase()}.`);
     const manque = k.lignes.filter(([id, q]) => stock(id) < q * n);
     if (manque.length) return toast("Pas assez au dépôt : " + manque.map(([id]) => art(id).nom).join(", ") + ".");
-    k.lignes.forEach(([id, q]) => logique(art(id)) === "pret" ? mouvement(id, "Prêt", q * n, { evenement: ev }) : mouvement(id, "Sortie", q * n, { imputation: ev }));
+    const ids = k.lignes.map(([id, q]) => logique(art(id)) === "pret" ? mouvement(id, "Prêt", q * n, { evenement: ev }) : mouvement(id, "Sortie", q * n, { imputation: ev }));
     f.remove();
-    if (S.metier && S.metier !== "loueur") { toast(`${n} × ${k.nom} : sortie enregistrée pour ${ev}.`); return aller("terrain"); }
-    aller("bon", creerBon({ type: "sortie", evenement: ev, date: Date.now(), lignes: k.lignes.map(([id, q]) => [id, q * n]) }));
+    if (S.metier && S.metier !== "loueur") { aller("accueil"); return annulable(ids, `${n} × ${k.nom} : sortie enregistrée pour ${ev}.`); }
+    const lignes = k.lignes.map(([id, q]) => [id, q * n]), b = creerBon({ type: "sortie", evenement: ev, date: Date.now(), lignes });
+    aller("bon", b); annulable(ids, `${n} × ${k.nom} ajouté${n > 1 ? "s" : ""} au bon de sortie.`, b, lignes);
   };
 }
 
 /* ---------------- Caméra ---------------- */
 const script = src => new Promise((ok, ko) => { if (document.querySelector(`script[src="${src}"]`)) return ok(); const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = ko; document.head.appendChild(s); });
 const code = t => { const m = String(t).toUpperCase().match(/ART-\d{4}/); return m ? m[0] : null; };
-function ouvrir(id) { if (!art(id)) return toast(`Aucun objet ${id} ici.`); if (vue.nom === "preparation") return scanPreparation(id); aller(session.profil === "terrain" ? "objet" : "fiche", id); }
+function ouvrir(id) { if (!art(id)) return toast(`Aucun objet ${id} ici.`); if (vue.nom === "preparation") return scanPreparation(id); aller("objet", id); }
 let dernierScan = { id: "", t: 0 };
 async function camera(rafale) {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return toast("Caméra indisponible : tapez le code de l'étiquette.");
@@ -756,18 +829,14 @@ async function dessinerQr() {
   const base = location.href.split("#")[0].split("?")[0];
   cases.forEach(c => { const q = window.qrcode(0, "M"); q.addData(base + "#/a/" + c.dataset.qr); q.make(); c.innerHTML = q.createSvgTag({ cellSize: 3, margin: 0, scalable: true }); });
 }
-function exporterCsv() {
-  const l = [["Date", "Profil", "Type", "Code", "Objet", "Quantité", "Événement", "Motif", "Valeur"]];
-  S.mouvements.forEach(m => l.push([new Date(m.date).toLocaleString("fr-FR"), PROFILS[m.profil].nom, m.type, m.article, art(m.article).nom, m.qte, m.evenement, m.motif, valeurM(m).toFixed(2).replace(".", ",")]));
-  const csv = "﻿" + l.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\r\n");
-  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); a.download = "mouvements.csv"; a.click();
-}
-
 /* ---------------- Branchements ---------------- */
 function brancher() {
-  // Connexion : le nom ouvre le clavier du code
-  $$("[data-uid]").forEach(b => b.onclick = () => { saisiePin = ""; vue = { nom: "pin", arg: b.dataset.uid }; rendre(); });
-  $$("[data-touche]").forEach(b => b.onclick = () => taper(b.dataset.touche));
+  // Connexion et déverrouillage
+  const fco = $('[data-form="connexion"]'); if (fco) fco.onsubmit = e => { e.preventDefault(); seConnecter(fco); };
+  const fdv = $('[data-form="deverrouiller"]'); if (fdv) { fdv.onsubmit = e => { e.preventDefault(); deverrouiller(fdv); }; if (window.innerWidth >= 960) fdv.mdp.focus(); }
+  $$("[data-voir]").forEach(b => b.onclick = () => { const i = b.parentNode.querySelector("input"); const v = i.type === "password"; i.type = v ? "text" : "password"; b.setAttribute("aria-label", v ? "Cacher le mot de passe" : "Afficher le mot de passe"); b.classList.toggle("actif", v); });
+  $$("[data-remplir]").forEach(b => b.onclick = () => { const [i, m] = b.dataset.remplir.split("|"), f = $('[data-form="connexion"]'); f.ident.value = i; f.mdp.value = m; seConnecter(f); });
+  $$("[data-racine]").forEach(b => b.onclick = () => aller(b.dataset.racine, null, true));
   $$("[data-periode]").forEach(b => b.onclick = () => { periode = +b.dataset.periode; rendre(); });
   $$("[data-acces]").forEach(c => c.onchange = () => { const u = S.equipe.find(x => x.id === c.dataset.acces); u.actif = c.checked; sauver(); rendre(); toast(c.checked ? `${u.nom} peut de nouveau se connecter.` : `Accès retiré à ${u.nom}. Ses mouvements restent dans le journal.`); });
   $$("[data-nouveau-code]").forEach(b => b.onclick = () => feuilleCode(b.dataset.nouveauCode));
@@ -778,7 +847,9 @@ function brancher() {
   $$("[data-mvt]").forEach(b => b.onclick = () => feuille(vue.arg, b.dataset.mvt));
   $$("[data-kit]").forEach(b => b.onclick = () => feuilleKit(b.dataset.kit));
   $$("[data-ev]").forEach(b => b.onclick = () => aller("retourEv", b.dataset.ev));
-  $$("[data-module]").forEach(c => c.onchange = () => { S.modules[c.dataset.module] = c.checked; sauver(); rendre(); toast(c.checked ? `${CATALOGUE[c.dataset.module].nom} ajouté (démo). En vrai : devis, puis paiement unique.` : `${CATALOGUE[c.dataset.module].nom} retiré de la démo.`); });
+  $$("[data-devis]").forEach(b => b.onclick = () => feuilleIntervention(b.dataset.devis));
+  // Modules : seulement dans l'espace installateur, d'après le devis
+  $$("[data-module]").forEach(c => c.onchange = () => { S.modules[c.dataset.module] = c.checked; sauver(); rendre(); toast(`${CATALOGUE[c.dataset.module].nom} ${c.checked ? "installé" : "retiré"} pour ce client.`); });
   $$("[data-monnaie]").forEach(s => s.onchange = () => { S.monnaie = s.value; sauver(); rendre(); });
   $$("[data-cmd]").forEach(b => b.onclick = () => { creerCommande(b.dataset.cmd, b.dataset.statut); toast(b.dataset.statut === "Envoyée" ? "Bon de commande envoyé (simulation)." : "Demande envoyée au gérant."); rendre(); });
   $$("[data-valider]").forEach(b => b.onclick = () => { S.commandes.find(c => c.id === b.dataset.valider).statut = "Envoyée"; sauver(); toast("Commande validée et envoyée (simulation)."); rendre(); });
@@ -794,10 +865,13 @@ function brancher() {
     });
     if (manque.length) manquants(ev, manque, rendus); else aller("bon", creerBon({ type: "retour", evenement: ev, date: Date.now(), lignes: rendus }));
   };
-  $$("[data-act]").forEach(b => { if (ACTIONS[b.dataset.act]) b.onclick = ACTIONS[b.dataset.act]; });
+  $$("[data-act]").forEach(b => { if (ACTIONS[b.dataset.act]) b.onclick = () => ACTIONS[b.dataset.act](); });
   brancherPlus();
   brancherMetiers();
   brancherOutils();
+  brancherConfig();
+  brancherBlocs();
+  brancherDocuments();
 }
 const ACTIONS = {
   camera: () => camera(),
@@ -808,35 +882,56 @@ const ACTIONS = {
   coordonnees: () => feuilleCoordonnees(),
   nouveauClient: () => feuilleClient(),
   finAnnee: () => exporterFinAnnee(),
-  sortir: () => { session = null; verrouille = false; saisiePin = ""; clearTimeout(minuteur); vue = { nom: "profil" }; rendre(); },
-  retourListe: () => { saisiePin = ""; vue = { nom: "profil" }; rendre(); },
-  verrouiller: () => { verrouille = true; saisiePin = ""; clearTimeout(minuteur); rendre(); },
+  plus: () => feuillePlus(),
+  resume: () => feuilleResume(),
+  voirDevis: () => feuilleDevis(),
+  metiers: () => feuilleMetiers(),
+  voirPlus: () => { toutVoir = true; rendre(); },
+  retour: () => { const p = pile.pop(); vue = p || { nom: "accueil" }; rendre(); window.scrollTo(0, 0); },
+  sortir: garderMessage => { session = null; verrouille = false; clearTimeout(minuteur); if (garderMessage !== true) msgConnexion = ""; vue = { nom: "accueil" }; pile = []; $$(".feuille").forEach(f => f.remove()); rendre(); window.scrollTo(0, 0); },
+  verrouiller: () => { verrouille = true; msgConnexion = ""; clearTimeout(minuteur); rendre(); },
   reglages: () => feuilleReglages(),
   ajouterPersonne: () => feuilleCode(null),
-  reinit: () => { if (confirm("Effacer ce qui a été fait pendant la démo ?")) { S = construireDemo(S.metier || "loueur"); sauver(); session = null; verrouille = false; vue = { nom: "profil" }; rendre(); toast("Démo remise à zéro."); } },
+  installateur: () => feuilleInstallateur(),
+  quitterInstallateur: () => { installateur = false; rendre(); },
+  revenirConfig: () => { session = null; verrouille = false; clearTimeout(minuteur); installateur = true; rendre(); window.scrollTo(0, 0); },
+  configDefaut: () => { if (!confirm("Remettre les blocs, la barre et les droits de tous les rôles comme le prévoit le métier ?")) return; S.config = configParDefaut(S.metier); sauver(); rendre(); toast("Réglages du métier remis."); },
+  reinit: () => { if (confirm("Effacer ce qui a été fait pendant la démo ?")) { S = construireDemo(S.metier || "loueur"); sauver(); session = null; verrouille = false; vue = { nom: "accueil" }; rendre(); toast("Démo remise à zéro."); } },
   imprimer: () => window.print(),
-  csv: () => exporterCsv(),
+  csv: () => exporterJournal(),
+  exportClients: () => exporterClients(),
+  partagerDevisLoc: () => partagerTexte(texteDevisLocation(vue.arg)),
   partager: async () => {
     const t = texteBon(vue.arg);
     partagerTexte(t);
   },
 };
-function lienProfond() { const id = code(location.hash); if (id && art(id)) vue = { nom: session.profil === "terrain" ? "objet" : "fiche", arg: id }; }
+function lienProfond() { const id = code(location.hash); if (id && art(id)) vue = { nom: "objet", arg: id }; }
 
-// Liens directs pour la démo : ?profil=terrain|bureau|direction&vue=…&arg=…
+// Liens directs pour la démo : ?profil=terrain|bureau|direction&vue=…&arg=…, ?installateur=1
 (function () {
   const q = new URLSearchParams(location.search);
   if (METIERS[q.get("metier")] && (S.metier || "loueur") !== q.get("metier")) { const garder = { monnaie: S.monnaie }; S = construireDemo(q.get("metier")); Object.assign(S, garder); sauver(); }
   if (q.get("monnaie") === "XOF" || q.get("monnaie") === "EUR") { S.monnaie = q.get("monnaie"); sauver(); }
-  // En démo, un lien direct ouvre la session de la première personne active du profil, sans code.
-  // En production, ces liens n'existent pas : chacun se connecte avec son code.
+  // En démo, un lien direct ouvre la session de la première personne active du profil, sans mot de passe.
+  // En production, ces liens n'existent pas : chacun se connecte avec son identifiant et son mot de passe.
   const u = PROFILS[q.get("profil")] && S.equipe.find(x => x.role === q.get("profil") && x.actif);
-  if (u) { session = { uid: u.id, nom: u.nom, profil: u.role, admin: !!u.admin }; vue = { nom: q.get("vue") || PROFILS[u.role].accueil, arg: q.get("arg") }; lienProfond(); activite(); }
+  if (u) { session = { uid: u.id, nom: u.nom, profil: u.role, admin: !!u.admin }; vue = { nom: q.get("vue") || "accueil", arg: q.get("arg") }; lienProfond(); activite(); }
+  else if (q.get("installateur") === "1") { installateur = true; if (["terrain", "bureau", "direction"].includes(q.get("role"))) roleConf = q.get("role"); }
   if (["clair", "sombre", "nuit"].includes(q.get("theme"))) { try { localStorage.setItem(CLE_THEME, q.get("theme")); } catch (e) { /* stockage bloqué */ } appliquerTheme(); }
 })();
 window.addEventListener("hashchange", () => { if (session) { lienProfond(); rendre(); } });
+["online", "offline"].forEach(ev => window.addEventListener(ev, () => { if (session && !verrouille) { rendre(); toast(ev === "online" ? "Réseau revenu : tout est envoyé." : "Hors ligne : vos gestes sont gardés et partiront au retour du réseau."); } }));
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
 rendre();
 // Les graphiques se redessinent à la largeur de l'écran (rotation du téléphone, fenêtre redimensionnée).
-let attenteTaille;
-window.addEventListener("resize", () => { clearTimeout(attenteTaille); attenteTaille = setTimeout(() => { if (session && session.profil !== "terrain" && !document.querySelector(".feuille, .camera")) rendre(); }, 300); });
+let attenteTaille, largeurAvant = window.innerWidth;
+window.addEventListener("resize", () => {
+  clearTimeout(attenteTaille);
+  attenteTaille = setTimeout(() => {
+    // Sur téléphone, le clavier qui s'ouvre change la hauteur, pas la largeur : on ne redessine pas.
+    if (window.innerWidth === largeurAvant) return;
+    largeurAvant = window.innerWidth;
+    if (session && !verrouille && !document.querySelector(".feuille, .camera") && !(document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))) rendre();
+  }, 300);
+});

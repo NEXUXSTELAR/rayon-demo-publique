@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Prototype stock · sans AppSheet</title>
+<!-- Une seule page, deux façons de l'ouvrir :
+     1. servie par Google (adresse du script) : elle parle au script par google.script.run ;
+     2. hébergée comme la démo (page web) : elle parle au script par son adresse /exec.
+     Les deux servent à comparer la caméra, la vitesse et le hors ligne (docs/19). -->
+<style>
+:root { --fond: #f2f3f5; --carte: #fff; --carte2: #f7f8f9; --trait: #e1e4e8; --encre: #14171b; --gris: #5a626b; --marque: #f4b223; --sortie: #e4570f; --retour: #0a8a47; --compter: #1f5fd1; --alerte: #d42020; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--fond); color: var(--encre); font: 17px/1.45 "Segoe UI", Roboto, Arial, sans-serif; }
+main { max-width: 560px; margin: 0 auto; padding: 14px 16px 60px; }
+h1 { font-size: 26px; margin: 6px 0; } h2 { font-size: 18px; margin: 22px 0 8px; }
+.sous { color: var(--gris); margin: 0 0 12px; }
+.bloc { background: var(--carte); border-radius: 18px; padding: 14px; margin: 10px 0; }
+label { display: grid; gap: 4px; font-weight: 700; font-size: 15px; margin: 8px 0; }
+input, select { height: 50px; border-radius: 12px; border: 2px solid var(--trait); padding: 0 12px; font: inherit; background: var(--carte2); color: inherit; width: 100%; }
+button, .btn { min-height: 50px; border-radius: 12px; border: 2px solid #c9ced4; background: var(--carte); color: var(--encre); font: inherit; font-weight: 700; padding: 0 14px; cursor: pointer; }
+.plein { background: var(--marque); border-color: var(--marque); }
+.ligne { display: flex; gap: 8px; flex-wrap: wrap; } .ligne > * { flex: 1 1 140px; }
+.etat { display: inline-flex; gap: 6px; align-items: center; font-weight: 800; font-size: 14px; padding: 4px 10px; border-radius: 999px; background: #e6f4ec; color: var(--retour); }
+.etat.hors { background: #fdf3dc; color: #8a5d00; }
+.haut { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.articles { display: grid; gap: 8px; }
+.article { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; background: var(--carte2); border-radius: 14px; padding: 10px 12px; border: 2px solid transparent; text-align: left; }
+.article.choisi { border-color: var(--marque); }
+.article b { display: block; } .article small { color: var(--gris); } .article .n { font-size: 26px; font-weight: 800; }
+.sortie { background: var(--sortie); border-color: var(--sortie); color: #fff; } .retour { background: var(--retour); border-color: var(--retour); color: #fff; }
+.journal { font: 13px/1.5 Consolas, monospace; background: #14171b; color: #e9eef8; border-radius: 14px; padding: 12px; max-height: 320px; overflow: auto; white-space: pre-wrap; }
+.message { color: var(--alerte); font-weight: 700; min-height: 22px; }
+video { width: 100%; border-radius: 14px; background: #000; max-height: 50vh; object-fit: cover; }
+.cache { display: none; }
+.chiffres { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
+.chiffres b { display: block; font-size: 22px; } .chiffres small { color: var(--gris); font-size: 12px; font-weight: 700; }
+</style>
+</head>
+<body>
+<main id="racine"></main>
+<script>
+"use strict";
+/* ---------------- Transport : page Google ou page web ---------------- */
+const SERVIE_PAR_GOOGLE = !!(window.google && google.script && google.script.run);
+const q = new URLSearchParams(location.search);
+let API = q.get("api") || (() => { try { return localStorage.getItem("proto-api") || ""; } catch (e) { return ""; } })();
+if (q.get("api")) try { localStorage.setItem("proto-api", API); } catch (e) {}
+function appeler(requete) {
+  const t0 = performance.now(), fin = r => Object.assign(r, { totalMs: Math.round(performance.now() - t0) });
+  if (SERVIE_PAR_GOOGLE) return new Promise((ok, ko) => google.script.run.withSuccessHandler(r => ok(fin(r))).withFailureHandler(e => ko(e)).api(JSON.stringify(requete)));
+  // text/plain : pas de requête préalable du navigateur, le script répond directement
+  return fetch(API, { method: "POST", body: JSON.stringify(requete), headers: { "Content-Type": "text/plain;charset=utf-8" }, redirect: "follow" }).then(r => r.json()).then(fin);
+}
+
+/* ---------------- État local ---------------- */
+const lire = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
+const ecrireL = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+let session = lire("proto-session", null);              // { jeton, nom, role }
+let attente = lire("proto-attente", []);                 // gestes pas encore envoyés
+let serveur = lire("proto-serveur", { articles: [], mouvements: [] });
+let choisi = null, envoiEnCours = false, dernier = null, msg = "";
+const journal = lire("proto-journal", []);
+function noter(t) { journal.unshift(new Date().toLocaleTimeString("fr-FR") + "  " + t); journal.length = Math.min(journal.length, 200); ecrireL("proto-journal", journal); const j = document.querySelector(".journal"); if (j) j.textContent = journal.join("\n"); }
+const idUnique = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 12));
+const SIGNE = { "Prêt": -1, "Retour": 1, "Sortie": -1, "Entrée": 1, "Perte": -1, "Ajustement": 1 };
+function stock(id) {
+  const a = serveur.articles.find(x => x.id === id); if (!a) return 0;
+  const vus = new Set(serveur.mouvements.map(m => m.client_id));
+  return +a.stock_depart + serveur.mouvements.concat(attente.filter(m => !vus.has(m.client_id))).filter(m => m.article === id).reduce((t, m) => t + SIGNE[m.type] * m.qte, 0);
+}
+const esc = t => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+/* ---------------- Écrans ---------------- */
+function rendre() {
+  const r = document.getElementById("racine");
+  const enLigne = navigator.onLine !== false;
+  const tete = `<div class="haut"><div><h1>Prototype</h1><p class="sous" style="margin:0">${SERVIE_PAR_GOOGLE ? "Page servie par Google" : "Page web hébergée"}</p></div>
+    <span class="etat ${enLigne ? "" : "hors"}">${enLigne ? "En ligne" : "Hors ligne"}${attente.length ? " · " + attente.length + " en attente" : ""}</span></div>`;
+  if (!SERVIE_PAR_GOOGLE && !API) {
+    r.innerHTML = tete + `<div class="bloc"><h2>Adresse du script</h2><p class="sous">Collez l'adresse qui se termine par /exec (docs/19, étape 4).</p>
+      <form id="f-api"><label>Adresse<input name="api" required placeholder="https://script.google.com/macros/s/…/exec"></label><button class="plein">Enregistrer</button></form></div>`;
+    document.getElementById("f-api").onsubmit = e => { e.preventDefault(); API = e.target.api.value.trim(); try { localStorage.setItem("proto-api", API); } catch (x) {} rendre(); };
+    return;
+  }
+  if (!session) {
+    r.innerHTML = tete + `<div class="bloc"><h2>Connexion</h2><form id="f-cnx">
+      <label>Identifiant<input name="ident" autocomplete="username" autocapitalize="none" required></label>
+      <label>Mot de passe<input name="mdp" type="password" autocomplete="current-password" required></label>
+      <p class="message">${esc(msg)}</p><button class="plein">Se connecter</button></form>
+      <p class="sous" style="margin-top:10px">Comptes de test : ousmane / depot-24 · lea / depot-25 · awa / gerant-24</p></div>
+      ${blocJournal()}`;
+    document.getElementById("f-cnx").onsubmit = connecter;
+    brancherCopie();
+    return;
+  }
+  const a = choisi && serveur.articles.find(x => x.id === choisi);
+  r.innerHTML = tete + `<p class="sous">Connecté : <b>${esc(session.nom)}</b> · <button style="min-height:36px" id="b-sortir">Sortir</button></p>
+  <div class="bloc"><h2 style="margin-top:0">1. Scanner</h2>
+    <div class="ligne"><button class="plein" id="b-cam">Caméra en direct</button><label class="btn" style="display:flex;align-items:center;justify-content:center;margin:0">Photo de l'étiquette<input id="i-photo" class="cache" type="file" accept="image/*" capture="environment"></label></div>
+    <div id="cam"></div>
+    <form id="f-code" class="ligne" style="margin-top:8px"><input name="code" placeholder="Code : 1 à 4"><button>OK</button></form></div>
+  <div class="bloc"><h2 style="margin-top:0">2. Un geste</h2>
+    <div class="articles">${serveur.articles.map(x => `<button class="article ${x.id === choisi ? "choisi" : ""}" data-art="${x.id}"><span><b>${esc(x.nom)}</b><small>${x.id}</small></span><span class="n">${stock(x.id)}</span></button>`).join("") || `<p class="sous">Chargement…</p>`}</div>
+    ${a ? `<div class="ligne" style="margin-top:10px"><input id="i-qte" type="number" inputmode="numeric" min="1" value="1" style="flex:0 0 90px"><button class="sortie" data-geste="Sortie">Sortie</button><button class="retour" data-geste="Entrée">Entrée</button></div>` : `<p class="sous" style="margin-top:8px">Touchez un objet, ou scannez-le.</p>`}
+    <div class="chiffres" style="margin-top:12px"><div><b>${attente.length}</b><small>en attente</small></div><div><b>${dernier ? dernier.totalMs + " ms" : "—"}</b><small>dernier envoi</small></div><div><b>${dernier ? dernier.serveurMs + " ms" : "—"}</b><small>dont le script</small></div></div></div>
+  <div class="bloc"><h2 style="margin-top:0">3. Essais</h2>
+    <div class="ligne"><button id="b-vitesse">Vitesse : 5 lectures</button><button id="b-plusieurs">20 envois en même temps</button><button id="b-doublon">Renvoyer un lot déjà envoyé</button><button id="b-maj">Recharger le classeur</button></div></div>
+  ${blocJournal()}`;
+  brancher();
+}
+const blocJournal = () => `<div class="bloc"><div class="haut"><h2 style="margin:0">Journal des essais</h2><button id="b-copier" style="min-height:40px">Copier</button></div><div class="journal" style="margin-top:8px">${esc(journal.join("\n"))}</div></div>`;
+
+function brancher() {
+  const $ = id => document.getElementById(id);
+  $("b-sortir").onclick = () => { session = null; ecrireL("proto-session", null); rendre(); };
+  document.querySelectorAll("[data-art]").forEach(b => b.onclick = () => { choisi = b.dataset.art; rendre(); });
+  document.querySelectorAll("[data-geste]").forEach(b => b.onclick = () => geste(b.dataset.geste, Math.max(1, Math.floor(+$("i-qte").value || 1))));
+  $("b-cam").onclick = cameraDirecte;
+  $("i-photo").onchange = e => lirePhoto(e.target.files[0]);
+  $("f-code").onsubmit = e => { e.preventDefault(); trouve(e.target.code.value); };
+  $("b-vitesse").onclick = essaiVitesse; $("b-plusieurs").onclick = essaiPlusieurs; $("b-doublon").onclick = essaiDoublon; $("b-maj").onclick = () => charger(true);
+  brancherCopie();
+}
+function brancherCopie() { const b = document.getElementById("b-copier"); if (b) b.onclick = async () => { try { await navigator.clipboard.writeText(journal.join("\n")); b.textContent = "Copié"; } catch (e) { prompt("Résultats :", journal.join("\n")); } }; }
+
+/* ---------------- Connexion et chargement ---------------- */
+async function connecter(e) {
+  e.preventDefault();
+  try {
+    const r = await appeler({ action: "connexion", identifiant: e.target.ident.value, mdp: e.target.mdp.value });
+    noter(`Connexion ${r.ok ? "réussie" : "refusée"} : ${r.totalMs} ms (script ${r.serveurMs} ms)${r.ok ? "" : " · " + r.erreur}`);
+    if (!r.ok) { msg = r.erreur; return rendre(); }
+    session = { jeton: r.jeton, nom: r.nom, role: r.role }; ecrireL("proto-session", session); msg = "";
+    rendre(); charger(true);
+  } catch (x) { msg = "Pas de réponse du script. Vérifiez l'adresse et le réseau."; noter("Connexion impossible : " + (x.message || x)); rendre(); }
+}
+async function charger(bruit) {
+  if (!session || navigator.onLine === false) return;
+  try {
+    const r = await appeler({ action: "etat", jeton: session.jeton });
+    if (!r.ok) { noter("Lecture refusée : " + r.erreur); if (/connect/i.test(r.erreur)) { session = null; ecrireL("proto-session", null); } return rendre(); }
+    serveur = { articles: r.articles, mouvements: r.mouvements }; ecrireL("proto-serveur", serveur);
+    if (bruit) noter(`Classeur lu : ${r.mouvements.length} mouvements en ${r.totalMs} ms (script ${r.serveurMs} ms)`);
+    rendre();
+  } catch (x) { noter("Lecture impossible : " + (x.message || x)); }
+}
+
+/* ---------------- Geste, file d'attente, envoi ---------------- */
+function geste(type, qte) {
+  // L'écran change tout de suite ; l'envoi part en arrière-plan, ou plus tard sans réseau
+  attente.push({ client_id: idUnique(), date: Date.now(), article: choisi, type, qte, evenement: "Prototype" });
+  ecrireL("proto-attente", attente); rendre(); envoyer();
+}
+async function envoyer() {
+  if (envoiEnCours || !attente.length || !session || navigator.onLine === false) return;
+  envoiEnCours = true;
+  const lot = attente.slice(0, 50);
+  try {
+    const r = await appeler({ action: "ecrire", jeton: session.jeton, mouvements: lot });
+    if (r.ok) {
+      const faits = new Set(r.ecrits.concat(r.doublons));
+      lot.filter(m => faits.has(m.client_id)).forEach(m => serveur.mouvements.push(m));
+      attente = attente.filter(m => !faits.has(m.client_id)); ecrireL("proto-attente", attente); ecrireL("proto-serveur", serveur);
+      dernier = r; noter(`Envoi de ${lot.length} geste${lot.length > 1 ? "s" : ""} : ${r.totalMs} ms (script ${r.serveurMs} ms)${r.doublons.length ? ", " + r.doublons.length + " déjà reçu(s)" : ""}`);
+    } else noter("Envoi refusé : " + r.erreur);
+  } catch (x) { noter("Envoi impossible, nouvel essai dans 5 s : " + (x.message || x)); setTimeout(envoyer, 5000); }
+  envoiEnCours = false; rendre();
+  if (attente.length) setTimeout(envoyer, 300);
+}
+window.addEventListener("online", () => { noter("Réseau revenu : envoi de ce qui attendait."); rendre(); envoyer(); });
+window.addEventListener("offline", () => { noter("Réseau perdu : les gestes sont gardés sur le téléphone."); rendre(); });
+setInterval(() => { if (!attente.length) charger(false); }, 20000);
+
+/* ---------------- Scan : caméra en direct, ou photo de l'étiquette ---------------- */
+function trouve(texte) {
+  const m = String(texte).toUpperCase().match(/ART-\d{4}/), id = m ? m[0] : "ART-" + String(texte).replace(/\D/g, "").padStart(4, "0");
+  if (!serveur.articles.some(a => a.id === id)) { noter("Code non reconnu : " + texte); return false; }
+  choisi = id; noter("Objet reconnu : " + id); rendre(); return true;
+}
+const chargerJsQR = () => window.jsQR ? Promise.resolve() : new Promise((ok, ko) => { const s = document.createElement("script"); s.src = "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"; s.onload = ok; s.onerror = ko; document.head.appendChild(s); });
+async function cameraDirecte() {
+  const zone = document.getElementById("cam");
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { noter("Caméra en direct : non disponible sur cette page."); return; }
+  let flux;
+  try { flux = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false }); }
+  catch (e) { noter(`Caméra en direct : REFUSÉE (${e.name}${e.message ? " · " + e.message : ""}). Essayez « Photo de l'étiquette ».`); return; }
+  noter("Caméra en direct : AUTORISÉE.");
+  zone.innerHTML = `<video playsinline muted></video><button id="b-stop" style="width:100%;margin-top:6px">Arrêter</button>`;
+  const v = zone.querySelector("video"); v.srcObject = flux; await v.play();
+  let fini = false; const stop = () => { fini = true; flux.getTracks().forEach(t => t.stop()); zone.innerHTML = ""; };
+  document.getElementById("b-stop").onclick = stop;
+  let lire;
+  if ("BarcodeDetector" in window) { const d = new BarcodeDetector({ formats: ["qr_code"] }); lire = async () => { const r = await d.detect(v); return r[0] && r[0].rawValue; }; }
+  else { await chargerJsQR(); const cv = document.createElement("canvas"), cx = cv.getContext("2d", { willReadFrequently: true }); lire = async () => { if (!v.videoWidth) return null; const k = Math.min(1, 640 / v.videoWidth); cv.width = v.videoWidth * k; cv.height = v.videoHeight * k; cx.drawImage(v, 0, 0, cv.width, cv.height); const r = jsQR(cx.getImageData(0, 0, cv.width, cv.height).data, cv.width, cv.height); return r && r.data; }; }
+  const t0 = performance.now();
+  const boucle = async () => { if (fini) return; try { const t = await lire(); if (t && trouve(t)) { noter(`Scan réussi en ${Math.round(performance.now() - t0)} ms.`); return stop(); } } catch (e) {} setTimeout(boucle, 200); };
+  boucle();
+}
+async function lirePhoto(f) {
+  if (!f) return;
+  try {
+    await chargerJsQR();
+    const im = await createImageBitmap(f), k = Math.min(1, 1200 / Math.max(im.width, im.height)), cv = document.createElement("canvas");
+    cv.width = im.width * k; cv.height = im.height * k; const cx = cv.getContext("2d"); cx.drawImage(im, 0, 0, cv.width, cv.height);
+    const r = jsQR(cx.getImageData(0, 0, cv.width, cv.height).data, cv.width, cv.height);
+    if (r && trouve(r.data)) noter("Photo de l'étiquette : lue."); else noter("Photo de l'étiquette : QR illisible, reprenez la photo de plus près.");
+  } catch (e) { noter("Photo de l'étiquette : erreur " + (e.message || e)); }
+}
+
+/* ---------------- Essais ---------------- */
+async function essaiVitesse() {
+  const t = [];
+  for (let i = 0; i < 5; i++) { const r = await appeler({ action: "etat", jeton: session.jeton }); t.push(r.totalMs); }
+  t.sort((a, b) => a - b);
+  noter(`Vitesse, 5 lectures : médiane ${t[2]} ms, plus rapide ${t[0]} ms, plus lente ${t[4]} ms.`);
+}
+async function essaiPlusieurs() {
+  if (!serveur.articles.length) return;
+  const a = serveur.articles[0].id, ids = Array.from({ length: 20 }, idUnique);
+  noter("20 envois en même temps, comme 20 téléphones…");
+  const t0 = performance.now();
+  const res = await Promise.allSettled(ids.map(id => appeler({ action: "ecrire", jeton: session.jeton, mouvements: [{ client_id: id, date: Date.now(), article: a, type: "Entrée", qte: 1, evenement: "Essai à plusieurs" }] })));
+  const reussis = res.filter(x => x.status === "fulfilled" && x.value.ok).length;
+  await charger(false);
+  const presents = ids.filter(id => serveur.mouvements.filter(m => m.client_id === id).length === 1).length;
+  noter(`20 envois : ${reussis} acceptés en ${Math.round(performance.now() - t0)} ms au total. Dans le classeur : ${presents} sur 20, chacun une seule fois. ${presents === 20 ? "RÉUSSI" : "ÉCHEC"}`);
+  rendre();
+}
+async function essaiDoublon() {
+  const m = serveur.mouvements.slice(-1)[0];
+  if (!m) return noter("Faites d'abord un geste.");
+  const r = await appeler({ action: "ecrire", jeton: session.jeton, mouvements: [m] });
+  noter(`Renvoi d'un geste déjà reçu : ${r.ok && r.doublons.length === 1 && !r.ecrits.length ? "ignoré, pas de doublon. RÉUSSI" : "ÉCHEC " + JSON.stringify(r)}`);
+}
+
+rendre();
+if (session) { charger(true); envoyer(); }
+</script>
+</body>
+</html>

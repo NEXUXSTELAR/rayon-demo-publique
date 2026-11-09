@@ -37,42 +37,7 @@ function blocAtelier() {
   return `<h2>À l'atelier</h2><ul class="b-liste">${l.map(x => `<li><div class="l" style="display:grid;grid-template-columns:48px 1fr auto;gap:12px;align-items:center;padding:10px 14px">${img(x.a)}<span><b>${esc(x.a.nom)}</b><small>${x.qte} ${x.motif === "Au nettoyage" ? "au nettoyage" : "en réparation"}</small></span><button class="btn petit" data-retour-atelier="${x.a.id}|${esc(x.motif)}|${x.qte}">Revenu</button></div></li>`).join("")}</ul>`;
 }
 
-/* ---------------- Clients de location ---------------- */
-function clientDe(ev) {
-  const r = S.reservations.find(x => x.nom === ev);
-  const id = (r && r.client) || (S.clientsEv || {})[ev];
-  return id ? (S.clientsLoc || []).find(c => c.id === id) || null : null;
-}
-function bClients() {
-  const l = S.clientsLoc || [];
-  return `<h1>Clients de location</h1><p class="sous">Nom, téléphone et caution versée. La caution s'affiche sur la facture de casse.</p>
-  <ul class="b-liste">${l.map(c => {
-    const resas = S.reservations.filter(r => r.client === c.id);
-    const casse = S.mouvements.filter(m => m.type === "Perte" && m.refac && clientDe(m.evenement) === c).reduce((t, m) => t + valeurM(m), 0);
-    return `<li><div class="l" style="display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:12px 14px"><span><b>${esc(c.nom)}</b><small>${esc(c.tel || "")} · ${resas.length} réservation${resas.length > 1 ? "s" : ""}${casse ? " · casse : " + argent(casse) : ""}</small></span><span class="n" style="font-size:16px">${c.caution ? "Caution " + argent(c.caution) : "Sans caution"}</span></div></li>`;
-  }).join("") || `<li class="vide" style="padding:16px">Aucun client enregistré.</li>`}</ul>
-  <p style="margin-top:12px"><button class="btn plein petit" data-act="nouveauClient">Ajouter un client</button></p>`;
-}
-function feuilleClient() {
-  const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="tcl"><h1 id="tcl" style="font-size:26px">Nouveau client</h1>
-    <label class="champ">Nom<input name="nom" maxlength="60" autocomplete="off"></label>
-    <label class="champ">Téléphone<input name="tel" type="tel" maxlength="20" autocomplete="off"></label>
-    <label class="champ">Caution versée (en euros)<input name="caution" type="number" inputmode="numeric" min="0" value="0"></label>
-    <div class="valider"><button class="btn" data-x>Annuler</button><button class="btn plein" data-ok>Enregistrer</button></div></div>`);
-  f.querySelector("[data-x]").onclick = () => f.remove();
-  f.querySelector("[data-ok]").onclick = () => {
-    const nom = f.querySelector("[name=nom]").value.trim(); if (!nom) return toast("Indiquez le nom.");
-    (S.clientsLoc = S.clientsLoc || []).push({ id: "CL-" + String(S.clientsLoc.length + 1).padStart(3, "0"), nom, tel: f.querySelector("[name=tel]").value.trim(), caution: Math.max(0, +f.querySelector("[name=caution]").value || 0) });
-    sauver(); f.remove(); rendre(); toast("Client enregistré.");
-  };
-}
-
 /* ---------------- Coordonnées sur les documents ---------------- */
-function enTeteDoc() {
-  const e = S.entreprise || {};
-  if (!e.nom && !e.logo) return "";
-  return `<div class="entete-doc">${e.logo ? `<img src="${e.logo}" alt="Logo">` : ""}<div><b>${esc(e.nom || "")}</b>${[e.adresse, e.tel, e.email].filter(Boolean).map(x => `<br>${esc(x)}`).join("")}</div></div>`;
-}
 function feuilleCoordonnees() {
   const e = S.entreprise || {};
   const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="tco"><h1 id="tco" style="font-size:26px">Vos coordonnées sur les documents</h1>
@@ -98,22 +63,6 @@ function feuilleCoordonnees() {
     try { sauver(); } catch (e2) { return toast("Logo trop lourd pour la démo : choisissez une image plus petite."); }
     f.remove(); rendre(); toast("Coordonnées enregistrées.");
   };
-}
-
-/* ---------------- Inventaire de fin d'année (pour le comptable) ---------------- */
-function exporterFinAnnee() {
-  const annee = new Date().getFullYear(), debut = new Date(annee, 0, 1).getTime();
-  const l = [[`Inventaire valorisé au ${new Date().toLocaleDateString("fr-FR")}`], ["Code", "Objet", "Emplacement", "Quantité en stock", "À l'atelier", "Chez les clients", "Prix unitaire", "Valeur totale"]];
-  let total = 0;
-  S.articles.forEach(a => {
-    const q = Math.max(0, stock(a.id)), at = totalAtelier(a.id), dh = dehors(a.id).reduce((t, d) => t + d.qte, 0), v = (q + at + dh) * a.prix;
-    total += v;
-    l.push([a.id, a.nom, (S.emplacements.find(e => e.id === a.emp) || {}).nom || "", q, at, dh, a.prix.toFixed(2).replace(".", ","), v.toFixed(2).replace(".", ",")]);
-  });
-  l.push(["", "Total", "", "", "", "", "", total.toFixed(2).replace(".", ",")], [], [`Pertes de l'année ${annee}`], ["Date", "Code", "Objet", "Quantité", "Motif", "Refacturable", "Valeur"]);
-  S.mouvements.filter(m => m.type === "Perte" && m.date >= debut).forEach(m => l.push([new Date(m.date).toLocaleDateString("fr-FR"), m.article, art(m.article).nom, m.qte, m.motif, m.refac ? "oui" : "non", valeurM(m).toFixed(2).replace(".", ",")]));
-  const csv = "﻿" + l.map(r => r.map(x => `"${String(x).replace(/"/g, '""')}"`).join(";")).join("\r\n");
-  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); a.download = `inventaire-fin-${annee}.csv`; a.click();
 }
 
 /* ---------------- Compter une zone ---------------- */

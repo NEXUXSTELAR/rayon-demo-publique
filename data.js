@@ -12,6 +12,12 @@ const CATALOGUE = {
   "AL-WA":   { nom: "Alertes WhatsApp", detail: "Branchées sur le compte WhatsApp du client, qui paie ses messages à son fournisseur", eur: 190, xof: 90000 },
 };
 const OFFRE = { nom: "Complet", eur: 1990, xof: 950000, jours: 60, heures: 4 };
+// Les trois offres (docs/16). « inclus » : modules compris dans le prix ; les autres s'ajoutent au prix du catalogue.
+const OFFRES = {
+  demarrage: { nom: "Démarrage", eur: 1190, xof: 500000, inclus: [], jours: 30, heures: 2, sites: 1, utilisateurs: 5, etiquettes: 300, surPlace: "une demi-journée" },
+  complet:   { nom: "Complet", eur: 1990, xof: 950000, inclus: ["MO-PRET", "MO-CMD", "MO-DASH"], jours: 60, heures: 4, sites: 3, utilisateurs: 20, etiquettes: 1000, surPlace: "une journée" },
+  mesure:    { nom: "Sur mesure", eur: 4400, xof: 0, inclus: Object.keys(CATALOGUE), jours: 90, heures: 10, sites: "plusieurs", utilisateurs: "au contrat", etiquettes: 3000, surPlace: "plusieurs journées", aPartirDe: true },
+};
 const TARIF_INTERVENTION = { eur: 60, xof: 25000 };
 
 // Trois profils, trois façons de travailler, donc trois écrans différents.
@@ -19,18 +25,22 @@ const PROFILS = {
   terrain:   { nom: "Magasinier", role: "Au dépôt et au camion", theme: "terrain", accueil: "terrain" },
   bureau:    { nom: "Responsable du parc", role: "Stock, commandes, étiquettes", theme: "bureau", accueil: "releve" },
   direction: { nom: "Gérant", role: "Argent, pertes, installation", theme: "direction", accueil: "direction" },
+  chauffeur: { nom: "Chauffeur-livreur", role: "Livraisons et reprises chez les clients", theme: "terrain", accueil: "accueil" },
 };
 
-// Équipe de démonstration. Chaque personne a son rôle et son code personnel.
-// Les codes de démo sont affichés sur l'écran de connexion. Seule leur empreinte est enregistrée.
+// Équipe de démonstration. Chacun entre avec son identifiant et son mot de passe : la liste de l'équipe n'est jamais affichée.
+// Les mots de passe de démo ne sont montrés que dans le volet « Comptes de démonstration ». Seule leur empreinte est enregistrée.
 const EQUIPE_DEMO = [
-  { id: "U-01", nom: "Ousmane", poste: "Magasinier", role: "terrain", pin: "1111" },
-  { id: "U-02", nom: "Léa", poste: "Magasinière", role: "terrain", pin: "2222" },
-  { id: "U-03", nom: "Karim", poste: "Responsable du parc", role: "bureau", pin: "3333" },
-  { id: "U-04", nom: "Awa", poste: "Gérante", role: "direction", pin: "4444", admin: true },
+  { id: "U-01", nom: "Ousmane", identifiant: "ousmane", mdp: "depot-24", poste: "Magasinier", role: "terrain" },
+  { id: "U-02", nom: "Léa", identifiant: "lea", mdp: "depot-25", poste: "Magasinière", role: "terrain" },
+  { id: "U-03", nom: "Karim", identifiant: "karim", mdp: "bureau-24", poste: "Responsable du parc", role: "bureau" },
+  { id: "U-04", nom: "Awa", identifiant: "awa", mdp: "gerant-24", poste: "Gérante", role: "direction", admin: true },
+  { id: "U-05", nom: "Moussa", identifiant: "moussa", mdp: "route-24", poste: "Chauffeur-livreur", role: "chauffeur", metiers: ["loueur"] },
 ];
-// Empreinte du code (FNV-1a sur l'identifiant et le code). En démo, tout reste dans le navigateur ;
-// en production, le code est vérifié par le serveur et n'est jamais stocké sur le téléphone.
+// Code de l'espace installateur (démo). En vrai : notre propre compte, jamais donné au client.
+const CODE_INSTALLATEUR = "2580";
+// Empreinte du mot de passe (FNV-1a sur l'identifiant interne et le mot de passe). En démo, tout reste dans le navigateur ;
+// en production, le mot de passe est vérifié par le serveur et n'est jamais stocké sur le téléphone.
 function empreinte(uid, pin) {
   let h = 0x811c9dc5;
   const s = "rayon|" + uid + "|" + pin;
@@ -39,13 +49,17 @@ function empreinte(uid, pin) {
 }
 
 const SEED = () => ({
-  version: 11,
-  entreprise: { nom: "Votre entreprise (démo)", adresse: "Adresse de l'entreprise", tel: "", email: "", logo: "" },
+  version: 12,
+  entreprise: { nom: "Location Fêtes (démo)", adresse: "Zone d'activités, entrepôt 4", tel: "", email: "", logo: "" },
+  detail: "complet", // simple ou complet : ce que les documents demandent et affichent (documents.js)
+  infosEv: {}, // client, dates, lieu et contact des événements sans réservation
+  taille: "bureau", // seul, petite ou bureau : la taille de l'équipe règle l'appli (config.js)
   clientsLoc: [],
   installation: { livreLe: Date.now() - 20 * 86400000, heuresUtilisees: 1.5 },
   interventions: [],
   metier: "loueur",
-  equipe: EQUIPE_DEMO.map(u => ({ id: u.id, nom: u.nom, poste: u.poste, role: u.role, admin: !!u.admin, actif: true, empreinte: empreinte(u.id, u.pin) })),
+  equipe: EQUIPE_DEMO.filter(u => !u.metiers || u.metiers.includes("loueur")).map(u => ({ id: u.id, nom: u.nom, identifiant: u.identifiant, poste: u.poste, role: u.role, admin: !!u.admin, actif: true, empreinte: empreinte(u.id, u.mdp) })),
+  config: null, // ce que chaque rôle voit et peut faire, réglé par l'installateur (config.js) ; null = réglages du métier
   connexions: [],
   essais: {},
   reglages: { verrou: 5 },
@@ -62,16 +76,16 @@ const SEED = () => ({
     { id: "EMP-D1", nom: "Mezzanine · textile" },
   ],
   articles: [
-    { id: "ART-0001", nom: "Chaise pliante blanche", img: "chaise", type: "conso", unite: "chaise", emp: "EMP-A1", seuil: 80, cible: 300, prix: 18, lot: 10, fou: "FOU-01" },
-    { id: "ART-0002", nom: "Table ronde 180 cm", img: "table", type: "conso", unite: "table", emp: "EMP-A1", seuil: 8, cible: 30, prix: 145, lot: 1, fou: "FOU-01" },
-    { id: "ART-0003", nom: "Assiette plate", img: "assiette", type: "conso", unite: "assiette", emp: "EMP-B2", seuil: 200, cible: 800, prix: 2.4, lot: 40, fou: "FOU-01" },
-    { id: "ART-0004", nom: "Verre à pied", img: "verre", type: "conso", unite: "verre", emp: "EMP-B2", seuil: 200, cible: 900, prix: 1.6, lot: 36, fou: "FOU-01" },
-    { id: "ART-0005", nom: "Nappe ronde ivoire", img: "nappe", type: "conso", unite: "nappe", emp: "EMP-D1", seuil: 24, cible: 40, prix: 22, lot: 5, fou: "FOU-02" },
-    { id: "ART-0006", nom: "Enceinte 15 pouces n°1", img: "enceinte", type: "equip", unite: "enceinte", emp: "EMP-C1", seuil: 0, cible: 1, prix: 690, lot: 1, fou: "FOU-01", serie: "SN-EA15-4471" },
-    { id: "ART-0007", nom: "Enceinte 15 pouces n°2", img: "enceinte", type: "equip", unite: "enceinte", emp: "EMP-C1", seuil: 0, cible: 1, prix: 690, lot: 1, fou: "FOU-01", serie: "SN-EA15-4472" },
-    { id: "ART-0008", nom: "Groupe électrogène 3 kW", img: "groupe", type: "equip", unite: "groupe", emp: "EMP-C1", seuil: 0, cible: 1, prix: 1150, lot: 1, fou: "FOU-01", serie: "SN-GE3-0912" },
-    { id: "ART-0009", nom: "Rallonge 25 m", img: "rallonge", type: "conso", unite: "rallonge", emp: "EMP-C1", seuil: 6, cible: 20, prix: 34, lot: 1, fou: "FOU-01" },
-    { id: "ART-0010", nom: "Housse de chaise", img: "housse", type: "conso", unite: "housse", emp: "EMP-D1", seuil: 60, cible: 300, prix: 3.9, lot: 25, fou: "FOU-02" },
+    { id: "ART-0001", nom: "Chaise pliante blanche", img: "chaise", type: "conso", unite: "chaise", emp: "EMP-A1", seuil: 80, cible: 300, prix: 18, loc: 1.5, lot: 10, fou: "FOU-01" },
+    { id: "ART-0002", nom: "Table ronde 180 cm", img: "table", type: "conso", unite: "table", emp: "EMP-A1", seuil: 8, cible: 30, prix: 145, loc: 9, lot: 1, fou: "FOU-01" },
+    { id: "ART-0003", nom: "Assiette plate", img: "assiette", type: "conso", unite: "assiette", emp: "EMP-B2", seuil: 200, cible: 800, prix: 2.4, loc: 0.3, lot: 40, fou: "FOU-01" },
+    { id: "ART-0004", nom: "Verre à pied", img: "verre", type: "conso", unite: "verre", emp: "EMP-B2", seuil: 200, cible: 900, prix: 1.6, loc: 0.3, lot: 36, fou: "FOU-01" },
+    { id: "ART-0005", nom: "Nappe ronde ivoire", img: "nappe", type: "conso", unite: "nappe", emp: "EMP-D1", seuil: 24, cible: 40, prix: 22, loc: 6, lot: 5, fou: "FOU-02" },
+    { id: "ART-0006", nom: "Enceinte 15 pouces n°1", img: "enceinte", type: "equip", unite: "enceinte", emp: "EMP-C1", seuil: 0, cible: 1, prix: 690, loc: 60, lot: 1, fou: "FOU-01", serie: "SN-EA15-4471" },
+    { id: "ART-0007", nom: "Enceinte 15 pouces n°2", img: "enceinte", type: "equip", unite: "enceinte", emp: "EMP-C1", seuil: 0, cible: 1, prix: 690, loc: 60, lot: 1, fou: "FOU-01", serie: "SN-EA15-4472" },
+    { id: "ART-0008", nom: "Groupe électrogène 3 kW", img: "groupe", type: "equip", unite: "groupe", emp: "EMP-C1", seuil: 0, cible: 1, prix: 1150, loc: 90, lot: 1, fou: "FOU-01", serie: "SN-GE3-0912" },
+    { id: "ART-0009", nom: "Rallonge 25 m", img: "rallonge", type: "conso", unite: "rallonge", emp: "EMP-C1", seuil: 6, cible: 20, prix: 34, loc: 5, lot: 1, fou: "FOU-01" },
+    { id: "ART-0010", nom: "Housse de chaise", img: "housse", type: "conso", unite: "housse", emp: "EMP-D1", seuil: 60, cible: 300, prix: 3.9, loc: 1.2, lot: 25, fou: "FOU-02" },
   ],
   kits: [
     { id: "KIT-01", nom: "Kit 50 couverts", lignes: [["ART-0003", 50], ["ART-0004", 50], ["ART-0005", 5]] },
@@ -146,7 +160,9 @@ function seedMouvements(state) {
     { id: "CL-003", nom: "Association de quartier (démo)", tel: "06 00 00 00 03", caution: 150 },
   ];
   const lien = { "R-P01": "CL-001", "R-P02": "CL-002", "R-P03": "CL-001", "R-001": "CL-001", "R-002": "CL-002", "R-003": "CL-003" };
-  state.reservations.forEach(r => { r.client = lien[r.id] || ""; });
+  // Adresses fictives, pour la tournée du chauffeur
+  const adresse = { "R-P01": "Salle des fêtes, place de la Mairie", "R-P02": "Hôtel du centre, salle Horizon", "R-P03": "12 rue des Lilas, jardin", "R-001": "Domaine des Tilleuls, route du Lac", "R-002": "Hôtel du centre, salle Horizon", "R-003": "Parc des expositions, hall B" };
+  state.reservations.forEach(r => { r.client = lien[r.id] || ""; r.adresse = adresse[r.id] || ""; });
   // Une enceinte au nettoyage et des nappes en réparation, pour montrer l'atelier
   add(maintenant - 2 * jour, "terrain", "ART-0010", "Réparation", 25, "", "Au nettoyage");
   // Une livraison attendue, à réceptionner depuis le terrain
