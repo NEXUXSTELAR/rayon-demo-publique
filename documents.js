@@ -132,7 +132,7 @@ function tBon(arg) {
   const manq = b.manquants || [], valManq = manq.reduce((t, [id, q]) => t + q * art(id).prix, 0);
   const loueur = (moi().nom) || "";
   const table = cp
-    ? `<table><thead><tr><th>Code</th><th>Objet</th><th class="n">${sortie ? "Remis" : "Rendu"}</th><th class="n">Valeur unitaire</th></tr></thead><tbody>${b.lignes.map(([id, q]) => `<tr><td class="code">${id}</td><td>${esc(art(id).nom)}</td><td class="n">${q}</td><td class="n">${argent(art(id).prix)}</td></tr>`).join("") || `<tr><td colspan="4">Rien n'est revenu.</td></tr>`}</tbody>
+    ? `<table><thead><tr><th class="code">Code</th><th>Objet</th><th class="n">${sortie ? "Remis" : "Rendu"}</th><th class="n">Valeur unitaire</th></tr></thead><tbody>${b.lignes.map(([id, q]) => `<tr><td class="code">${id}</td><td>${esc(art(id).nom)}</td><td class="n">${q}</td><td class="n">${argent(art(id).prix)}</td></tr>`).join("") || `<tr><td colspan="4">Rien n'est revenu.</td></tr>`}</tbody>
       <tfoot><tr><td colspan="2">${pieces} pièce${pieces > 1 ? "s" : ""}</td><td class="n">${pieces}</td><td class="n">${argent(valeur)}</td></tr></tfoot></table>`
     : `<table><thead><tr><th>Objet</th><th class="n">${sortie ? "Remis" : "Rendu"}</th></tr></thead><tbody>${b.lignes.map(([id, q]) => `<tr><td>${esc(art(id).nom)}</td><td class="n">${q}</td></tr>`).join("") || `<tr><td colspan="2">Rien n'est revenu.</td></tr>`}</tbody></table>`;
   const tableManq = manq.length ? `<h2>Manquants ou cassés, à refacturer</h2><table><tbody>${manq.map(([id, q]) => `<tr>${cp ? `<td class="code">${id}</td>` : ""}<td>${esc(art(id).nom)}</td><td class="n">${q}</td>${cp ? `<td class="n">${argent(q * art(id).prix)}</td>` : ""}</tr>`).join("")}</tbody>${cp ? `<tfoot><tr><td colspan="3">Total à refacturer</td><td class="n">${argent(valManq)}</td></tr></tfoot>` : ""}</table>` : "";
@@ -166,7 +166,7 @@ function vFacture(ev) {
   const bon = S.bons.slice().reverse().find(b => b.evenement === ev && b.type === "retour");
   return `<div class="feuille-doc">${teteDoc("Facture de casse", n, "Établie le " + new Date().toLocaleDateString("fr-FR"))}${cp ? blocParties(ev) : `<p>Client : <b>${esc(c ? c.nom : ev)}</b>${c && c.tel ? " · " + esc(c.tel) : ""}<br>${esc(V("imp"))} : ${esc(ev)}</p>`}
   ${bon && bon.signataire ? `<p class="petit">Bon de retour n° ${bon.id}, signé par ${esc(bon.signataire)} le ${quand(bon.signeLe)}.</p>` : ""}
-  <table><thead><tr>${cp ? "<th>Code</th>" : ""}<th>Objet</th><th class="n">Qté</th><th class="n">Valeur de remplacement</th><th class="n">Montant</th></tr></thead><tbody>
+  <table><thead><tr>${cp ? '<th class="code">Code</th>' : ""}<th>Objet</th><th class="n">Qté</th><th class="n">Valeur de remplacement</th><th class="n">Montant</th></tr></thead><tbody>
   ${l.map(m => `<tr>${cp ? `<td class="code">${m.article}</td>` : ""}<td>${esc(art(m.article).nom)}${m.motif ? `<br><small>${esc(m.motif)}</small>` : ""}</td><td class="n">${m.qte}</td><td class="n">${argent(art(m.article).prix)}</td><td class="n">${argent(valeurM(m))}</td></tr>`).join("") || `<tr><td colspan="${cp ? 5 : 4}">Aucune casse refacturable.</td></tr>`}</tbody>
   <tfoot><tr><td colspan="${cp ? 4 : 3}">Total</td><td class="n">${argent(tot)}</td></tr>
   ${c && c.caution ? `<tr><td colspan="${cp ? 4 : 3}">Retenu sur la caution de ${argent(c.caution)}</td><td class="n">− ${argent(Math.min(tot, c.caution))}</td></tr><tr class="fort"><td colspan="${cp ? 4 : 3}">${tot > c.caution ? "Reste à payer" : "Caution à rendre"}</td><td class="n">${argent(Math.abs(tot - c.caution))}</td></tr>` : ""}</tfoot></table>

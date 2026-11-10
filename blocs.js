@@ -31,7 +31,7 @@ function wPouls() {
     <div class="pouls-tete">
       <div><small>${(S.metier || "loueur") === "loueur" ? "Valeur du matériel au dépôt" : "Valeur du stock"}</small>
         <b class="pouls-chiffre">${prix ? compte(v, "argent") : compte(S.articles.reduce((t, a) => t + Math.max(0, stock(a.id)), 0)) + " pièces"}</b>
-        <span class="pouls-delta ${d > 0 ? "haut" : d < 0 ? "bas" : ""}">${d ? `<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M5 1 9.5 9h-9z"/></svg>` : ""}${d > 0 ? "+" : ""}${d} % en 30 jours</span></div>
+        <span class="pouls-delta ${d > 0 ? "monte" : d < 0 ? "descend" : ""}">${d ? `<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M5 1 9.5 9h-9z"/></svg>` : ""}${d > 0 ? "+" : ""}${d} % en 30 jours</span></div>
       ${permis("analyses") ? `<button class="rond clair" data-racine="analyses" aria-label="Voir les analyses">${I.fleche}</button>` : ""}
     </div>
     <svg class="pouls-courbe" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
@@ -106,7 +106,9 @@ function reponseDispo(f) {
   const a = art(f.a.value), d = f.d.value || aujourdHui(), q = Math.max(1, Math.floor(+f.q.value || 1));
   const p = prisSur(a.id, d, d), libre = Math.max(0, possede(a.id) - p.total), ok = q <= libre;
   const qui = p.qui.filter(x => x.q > 0).slice(0, 2).map(x => `${x.q} pour ${x.nom}`).join(", ");
-  return { ok, txt: ok ? `Oui : ${libre} ${a.nom.toLowerCase()} libres le ${dateCourte(d)}.` : `Il en manque ${q - libre} : ${libre} libres le ${dateCourte(d)}${qui ? ` (déjà pris : ${qui})` : ""}.`,
+  const mot = n => a.unite ? a.unite + (n > 1 && !/[sx]$/.test(a.unite) ? "s" : "") : a.nom.toLowerCase();
+  const jour = dateCourte(d).replace(/\.$/, "");
+  return { ok, txt: ok ? `Oui : ${libre} ${mot(libre)} libres le ${jour}.` : `Il en manque ${q - libre} : ${libre} libres le ${jour}${qui ? ` (déjà pris : ${qui})` : ""}.`,
     message: ok ? `Bonjour, oui : nous avons ${q} × ${a.nom} disponibles le ${dateLongue(d)}. Voulez-vous que je les réserve ?` : `Bonjour, le ${dateLongue(d)} nous avons ${libre} × ${a.nom} disponibles sur les ${q} demandés. Voulez-vous que je réserve ceux-là ?` };
 }
 
@@ -174,35 +176,34 @@ function wTournee() {
 }
 
 /* ---------------- Devis de l'installateur ---------------- */
-let devisOffre = "complet";
+let devisOffre = "complet", devisMode = "distance";
+// Le devis de l'appli suit les règles communes (calculerDevis, data.js) : en francs CFA, c'est le Sénégal, donc à distance.
 function prixDevis() {
-  const o = OFFRES[devisOffre], u = S.monnaie === "XOF" ? "xof" : "eur";
-  const ajouts = Object.keys(CATALOGUE).filter(k => actif(k) && !o.inclus.includes(k));
-  const base = o[u] || OFFRES[devisOffre].eur * (u === "xof" ? EUR_XOF : 1);
-  const total = base + ajouts.reduce((t, k) => t + CATALOGUE[k][u], 0);
-  const fmt = n => u === "xof" ? Math.round(n).toLocaleString("fr-FR") + " FCFA" : n.toLocaleString("fr-FR") + " €";
-  return { o, u, ajouts, base, total, fmt };
+  return calculerDevis({ offre: devisOffre, pays: S.monnaie === "XOF" ? "SN" : "FR", mode: devisMode, modules: Object.keys(CATALOGUE).filter(k => actif(k)), utilisateurs: (S.equipe || []).filter(u => u.actif !== false).length });
 }
 function blocDevis() {
-  const p = prixDevis();
+  const p = prixDevis(), ajouts = p.lignes.filter(l => l.code);
   return `<div class="bloc">
-    <div class="module"><label for="offre"><b>Offre</b></label><select id="offre" data-offre>${Object.entries(OFFRES).map(([k, o]) => `<option value="${k}" ${k === devisOffre ? "selected" : ""}>${o.nom}</option>`).join("")}</select><p>${p.o.sites} site${p.o.sites === 1 ? "" : "s"}, ${p.o.utilisateurs} utilisateurs, ${p.o.etiquettes} étiquettes, ${p.o.surPlace} sur place, assistance ${p.o.jours} jours et ${p.o.heures} h.</p></div>
-    <div class="module"><b>Modules en plus de l'offre</b><span>${p.ajouts.length ? p.ajouts.map(k => CATALOGUE[k].nom).join(", ") : "aucun"}</span><p>Cochez les modules ci-dessus : ceux qui ne sont pas compris dans l'offre s'ajoutent ici.</p></div>
+    <div class="module"><label for="offre"><b>Offre</b></label><select id="offre" data-offre>${Object.entries(OFFRES).map(([k, o]) => `<option value="${k}" ${k === devisOffre ? "selected" : ""}>${o.nom}</option>`).join("")}</select><p>${p.o.sites} site${p.o.sites === 1 ? "" : "s"}, ${p.o.utilisateurs} utilisateurs, ${p.o.etiquettes} étiquettes, assistance ${p.o.jours} jours et ${p.o.heures} h.</p></div>
+    ${p.sn ? `<div class="module"><b>Installation</b><span>À distance</span><p>Étiquettes envoyées, pose par l'équipe guidée en visio. Relais sur place en option.</p></div>`
+      : `<div class="module"><label for="mode-devis"><b>Installation</b></label><select id="mode-devis" data-mode-devis><option value="distance" ${devisMode === "distance" ? "selected" : ""}>À distance</option><option value="place" ${devisMode === "place" ? "selected" : ""}>Sur place</option></select><p>${devisMode === "distance" ? "Étiquettes envoyées, pose par l'équipe guidée en visio, formation en visio." : `Nous venons ${p.o.surPlace} : pose, inventaire de départ, formation.`}</p></div>`}
+    <div class="module"><b>Modules en plus de l'offre</b><span>${ajouts.length ? ajouts.map(l => CATALOGUE[l.code].nom + (l.m ? "" : " (compris)")).join(", ") : "aucun"}</span><p>Cochez les modules ci-dessus : ceux qui ne sont pas compris dans l'offre s'ajoutent ici. Complet comprend un pack métier.</p></div>
+    ${p.alertes.map(a => `<p class="w-note rouge">${esc(a)}</p>`).join("")}
     <div class="total"><span>Total HT${p.o.aPartirDe ? ", à partir de" : ""}</span><span>${p.fmt(p.total)}</span></div>
   </div>
   <p style="margin-top:10px"><button class="btn plein" data-act="voirDevis">Voir le devis à envoyer</button></p>`;
 }
 function feuilleDevis() {
   const p = prixDevis(), e = S.entreprise || {}, n = "D-" + new Date().getFullYear() + "-" + String(Math.floor(Date.now() / 1e5) % 1000).padStart(3, "0");
-  const lignes = [[`Offre ${p.o.nom} : installation, paramétrage, ${p.o.etiquettes} étiquettes, formation (${p.o.surPlace} sur place), assistance ${p.o.jours} jours et ${p.o.heures} h à distance`, p.base]]
+  const lignes = [[`Offre ${p.o.nom} : paramétrage, ${p.o.etiquettes} étiquettes, ${p.installation}, assistance ${p.o.jours} jours et ${p.o.heures} h à distance`, p.base]]
     .concat(p.o.inclus.length ? [[`Compris dans l'offre : ${p.o.inclus.map(k => CATALOGUE[k].nom).join(", ")}`, 0]] : [])
-    .concat(p.ajouts.map(k => [`Module ${CATALOGUE[k].nom} : ${CATALOGUE[k].detail}`, CATALOGUE[k][p.u]]));
+    .concat(p.lignes.map(l => [`${l.t} : ${l.d}`, l.m]));
   const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-label="Devis"><div class="feuille-doc">
     <h1>Devis n° ${n}</h1><p>Pour : <b>${esc(e.nom || "Client")}</b> · ${esc(METIERS[S.metier || "loueur"].nom)}<br>Établi le ${new Date().toLocaleDateString("fr-FR")}, valable 30 jours</p>
     <table><thead><tr><th>Désignation</th><th style="text-align:right">Montant HT</th></tr></thead><tbody>
     ${lignes.map(([t, m]) => `<tr><td>${esc(t)}</td><td style="text-align:right">${m ? p.fmt(m) : "compris"}</td></tr>`).join("")}</tbody></table>
     <p style="text-align:right;font-size:18px"><b>Total HT${p.o.aPartirDe ? " (à partir de)" : ""} : ${p.fmt(p.total)}</b></p>
-    <p class="petit">Paiement unique : 40 % à la commande, le solde à la livraison. Aucun abonnement. Les licences Google sont payées directement par le client. Après l'assistance incluse, interventions à ${p.u === "xof" ? TARIF_INTERVENTION.xof.toLocaleString("fr-FR") + " FCFA" : TARIF_INTERVENTION.eur + " €"} HT de l'heure, sur devis. Un module ajouté plus tard fait l'objet d'un nouveau devis. TVA en sus selon la réglementation applicable.</p></div>
+    <p class="petit">Paiement unique : 40 % à la commande, le solde à la livraison. Aucun abonnement. Les licences Google sont payées directement par le client. Après l'assistance incluse, interventions à ${p.u === "xof" ? TARIF_INTERVENTION.xof.toLocaleString("fr-FR") + " FCFA" : TARIF_INTERVENTION.eur + " €"} HT de l'heure, sur devis. Un module ajouté après la livraison coûte ${p.fmt(PRIX_MODULE_APRES[p.u])} HT, sur un nouveau devis. TVA en sus selon la réglementation applicable.</p></div>
     <div class="valider"><button class="btn" data-x>Fermer</button><button class="btn plein" data-ok>${I.imprimer}Imprimer ou PDF</button></div></div>`);
   f.querySelector("[data-x]").onclick = () => f.remove();
   f.querySelector("[data-ok]").onclick = () => { document.body.classList.add("impression-feuille"); window.print(); setTimeout(() => document.body.classList.remove("impression-feuille"), 500); };
@@ -216,6 +217,7 @@ function brancherBlocs() {
     dv.querySelector("[data-dv-envoyer]").onclick = () => partagerTexte(reponseDispo(dv).message);
   }
   $$("[data-offre]").forEach(s => s.onchange = () => { devisOffre = s.value; rendre(); });
+  $$("[data-mode-devis]").forEach(s => s.onchange = () => { devisMode = s.value; rendre(); });
   $$("[data-taille]").forEach(b => b.onclick = () => {
     if (!confirm(`Régler l'appli pour « ${TAILLES_EQUIPE[b.dataset.taille].nom} » ? Les blocs, la barre et les droits de chaque rôle sont remis selon ce modèle.`)) return;
     S.taille = b.dataset.taille; S.detail = S.taille === "bureau" ? "complet" : "simple"; S.config = configParDefaut(S.metier, S.taille); roleConf = rolesUtiles().includes(roleConf) ? roleConf : rolesUtiles()[0]; sauver(); rendre(); toast(`Appli réglée : ${TAILLES_EQUIPE[S.taille].nom}.`);

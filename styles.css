@@ -658,17 +658,13 @@ body:has(.barre-bas) .toast, body:has(.barre-bas) .tour { bottom: calc(96px + en
 :root[data-theme="sombre"] { --panneau: #0b0d0f; --panneau2: #191c20; }
 :root[data-theme="nuit"] { --panneau: #0a1222; --panneau2: #15213a; --panneau-gris: #9aa8c3; }
 .pouls { position: relative; background: var(--panneau); color: var(--sur-panneau); border-radius: 26px; padding: 20px 18px 16px; isolation: isolate; }
-/* Deux cartes en retrait derrière le panneau : la profondeur d'une pile, sans ombre colorée */
-.pouls::before, .pouls::after { content: ""; position: absolute; z-index: -1; left: 14px; right: 14px; bottom: -8px; height: 30px; border-radius: 0 0 22px 22px; background: var(--panneau); opacity: .45; }
-.pouls::after { left: 28px; right: 28px; bottom: -15px; opacity: .2; }
-.w.nu:has(.pouls) { margin-bottom: 14px; }
 .pouls-tete { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .pouls small { color: var(--panneau-gris); font-weight: 700; font-size: 14px; display: block; }
 .pouls-chiffre { display: block; font-size: clamp(36px, 10vw, 56px); font-weight: 800; letter-spacing: -.035em; line-height: 1.05; margin: 6px 0 4px; font-variant-numeric: tabular-nums; }
 .pouls-delta { display: inline-flex; align-items: center; gap: 4px; line-height: 1.4; font-size: 14px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: var(--panneau2); color: var(--panneau-gris); }
-.pouls-delta.haut { color: #3ccf86; } .pouls-delta.bas { color: #ff7a72; }
+.pouls-delta.monte { color: #3ccf86; } .pouls-delta.descend { color: #ff7a72; }
 .pouls-delta svg { width: 10px; height: 10px; fill: currentColor; }
-.pouls-delta.bas svg { transform: rotate(180deg); }
+.pouls-delta.descend svg { transform: rotate(180deg); }
 .rond.clair { border-color: #3a4049; color: var(--sur-panneau); }
 .pouls-courbe { display: block; width: 100%; height: 70px; margin: 14px 0 12px; overflow: visible; }
 .pouls-courbe .aire { fill: color-mix(in srgb, var(--marque) 20%, transparent); }
@@ -872,4 +868,73 @@ body.impression-feuille .app, body.impression-feuille .connexion, body.impressio
 .espace .cote .avatar.direction, .plus-moi .avatar.direction { background: var(--marque); }
 @media (prefers-reduced-motion: no-preference) {
   #racine.entree .etape, #racine.entree .client { animation: monte .5s cubic-bezier(.2, .8, .2, 1) both; }
+}
+
+/* =========================================================
+   Rien ne se superpose (9 novembre) : l'en-tête et la barre du bas sont pleins,
+   le contenu s'efface en fondu avant la barre au lieu de passer à travers.
+   ========================================================= */
+.haut.verre { background: var(--fond); -webkit-backdrop-filter: none; backdrop-filter: none; border-color: var(--trait); }
+.barre-bas.verre:not(.mini) { background: var(--carte); -webkit-backdrop-filter: none; backdrop-filter: none; }
+body:has(.barre-bas:not(.mini))::after { content: ""; position: fixed; z-index: 11; left: 0; right: 0; bottom: 0; height: calc(104px + env(safe-area-inset-bottom)); pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--fond) 46%); }
+@media (min-width: 960px) { body:has(.barre-bas)::after { display: none; } }
+@media print { body::after { display: none !important; } }
+.barre-bas button { font-size: 11.5px; letter-spacing: -.01em; }
+
+/* Journal sur téléphone : une carte par mouvement (objet et quantité, puis le geste, puis qui et quand) */
+@media (max-width: 640px) {
+  table.t.mvts, table.t.mvts tbody { display: block; }
+  table.t.mvts thead { display: none; }
+  table.t.mvts tr { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "objet qte" "quoi qte" "meta meta"; column-gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--trait); }
+  table.t.mvts:not(.avec-objet) tr { grid-template-areas: "quoi qte" "meta meta"; }
+  table.t.mvts tr:last-child { border-bottom: 0; }
+  table.t.mvts td { padding: 0; border: 0; }
+  table.t.mvts .m-objet { grid-area: objet; font-weight: 700; }
+  table.t.mvts .m-quoi { grid-area: quoi; color: var(--gris); font-size: 14px; }
+  table.t.mvts .m-quoi br { display: none; }
+  table.t.mvts .m-quoi small::before { content: " · "; }
+  table.t.mvts .m-qte { grid-area: qte; align-self: center; font-size: 18px; }
+  table.t.mvts .m-quand, table.t.mvts .m-qui { grid-row: 3; font-size: 13px; color: var(--gris); margin-top: 4px; }
+  table.t.mvts .m-quand { grid-column: 1; }
+  table.t.mvts .m-qui { grid-column: 2; text-align: right; }
+  .defile:has(> table.t.mvts) { overflow: visible; }
+}
+
+/* Mon espace : le statut du client sur sa propre ligne */
+.client-etat { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 6px; }
+.client-etat .statut { margin-top: 0; }
+.client-etat small { margin: 0; }
+/* Commandes passées sur téléphone : date et fournisseur, statut, puis le bouton sur toute la largeur */
+@media (max-width: 640px) {
+  table.t.cmdes, table.t.cmdes tbody { display: block; }
+  table.t.cmdes tr { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; padding: 12px 16px; border-bottom: 1px solid var(--trait); }
+  table.t.cmdes tr:last-child { border-bottom: 0; }
+  table.t.cmdes td { padding: 0; border: 0; }
+  table.t.cmdes td.n { grid-column: 1 / -1; text-align: left; white-space: normal; }
+  table.t.cmdes td.n .btn { width: 100%; }
+}
+
+/* Plan d'étiquetage (écran Étiquettes) */
+.plan-etiq { margin: 8px 0 26px; }
+.plan-l { display: grid; gap: 8px; }
+.plan-ligne { background: var(--carte); border-radius: 16px; padding: 12px 14px; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: start; }
+.plan-ligne b { grid-column: 1; }
+.plan-ligne small { grid-column: 1; color: var(--gris); font-size: 14px; line-height: 1.4; }
+.plan-sur { grid-column: 1 / -1; justify-self: start; font-size: 12px; font-weight: 800; padding: 2px 9px; border-radius: 999px; background: var(--trait); color: var(--encre); }
+.plan-sur.s-objet { background: color-mix(in srgb, var(--sortie) 16%, transparent); }
+.plan-sur.s-contenant { background: color-mix(in srgb, var(--retour) 16%, transparent); }
+.plan-support { grid-column: 2; grid-row: 2 / span 2; align-self: center; font-size: 13px; font-weight: 700; text-align: right; max-width: 120px; }
+.plan-supports { margin-top: 12px; background: var(--carte); border-radius: 16px; padding: 12px 14px; }
+.plan-supports summary { font-weight: 700; cursor: pointer; }
+.plan-supports ul { margin: 10px 0 0; padding-left: 18px; line-height: 1.5; }
+.etiquette .proprio { display: block; font-size: 10px; color: #444; margin-top: 4px; }
+
+/* Documents sur téléphone : tout tient dans la largeur (texte plus petit, en-têtes sur deux lignes) */
+@media screen and (max-width: 640px) {
+  .feuille-doc { padding: 20px 14px; font-size: 14px; }
+  .feuille-doc table { font-size: 13px; }
+  .feuille-doc th, .feuille-doc td { padding: 7px 5px; }
+  .feuille-doc th.n { white-space: normal; }
+  .feuille-doc td.code { font-size: 11px; }
 }

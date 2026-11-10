@@ -65,7 +65,7 @@ let pile = [];            // écrans précédents, pour le bouton retour
 
 /* ---------------- Stockage ---------------- */
 function charger() {
-  try { const b = localStorage.getItem(CLE); if (b) { const s = JSON.parse(b); if (s.version === 12) return s; } } catch (e) { /* stockage bloqué : données de démo */ }
+  try { const b = localStorage.getItem(CLE); if (b) { const s = JSON.parse(b); if (s.version === 13) return s; } } catch (e) { /* stockage bloqué : données de démo */ }
   return seedMouvements(SEED());
 }
 function sauver() { try { localStorage.setItem(CLE, JSON.stringify(S)); } catch (e) { /* mode privé */ } }
@@ -85,7 +85,7 @@ function dehors(id) {
 }
 function etat(a) {
   const q = stock(a.id);
-  if (a.type === "equip") return q >= 1 ? { c: "", t: "Au dépôt" } : { c: "sorti", t: "Chez un client" };
+  if (a.type === "equip") return q >= 1 ? { c: "", t: "Au dépôt" } : { c: "sorti", t: (S.metier && S.metier !== "loueur" && V("chez")) || "Chez un client" };
   if (q <= 0) return { c: "zero", t: "Plus aucun" };
   if (q <= a.seuil) return { c: "bas", t: "Bientôt à commander" };
   return { c: "", t: "Disponible" };
@@ -335,7 +335,7 @@ function coque() {
   const barre = cfg().barre.filter(k => permis(k)).slice(0, 3);
   while (barre.length < 3) barre.push("");
   const courant = k => (k === sec ? 'aria-current="page"' : "");
-  const bouton = k => k ? `<button data-racine="${k}" ${courant(k)}>${I[SECTIONS[k].i]}<span>${esc(titreSection(k))}</span></button>` : `<span></span>`;
+  const bouton = k => k ? `<button data-racine="${k}" ${courant(k)}>${I[SECTIONS[k].i]}<span>${esc(titreCourt(k))}</span></button>` : `<span></span>`;
   const dansBarre = barre.includes(sec);
   // Menu de gauche : les gestes du dépôt tiennent en une entrée (plus les raccourcis du rôle), pour garder la gestion visible.
   const groupes = Object.entries(GROUPES).map(([g, t]) => { const l = sectionsPermises().filter(k => SECTIONS[k].g === g && (g !== "depot" || k === "depot" || barre.includes(k))); return l.length ? `<h4>${t}</h4>${l.map(k => `<button data-racine="${k}" ${courant(k)}>${I[SECTIONS[k].i]}<span>${esc(titreSection(k))}</span></button>`).join("")}` : ""; }).join("");
@@ -498,8 +498,8 @@ function bFiche(id) {
 }
 function tableMouvements(l, avecObjet) {
   if (!l.length) return `<p class="vide">Aucun mouvement.</p>`;
-  return `<div class="defile"><table class="t"><thead><tr><th>Quand</th><th>Qui</th><th>Quoi</th>${avecObjet ? "<th>Objet</th>" : ""}<th class="n">Qté</th></tr></thead><tbody>
-  ${l.map(m => `<tr><td>${quand(m.date)}</td><td>${esc(m.qui || PROFILS[m.profil].nom)}</td><td>${esc(m.type)}${(m.evenement || m.imputation) ? "<br><small>" + esc(m.evenement || m.imputation) + "</small>" : ""}${m.motif ? "<br><small>" + esc(m.motif) + "</small>" : ""}</td>${avecObjet ? `<td>${esc(art(m.article).nom)}</td>` : ""}<td class="n">${m.qte}</td></tr>`).join("")}</tbody></table></div>`;
+  return `<div class="defile"><table class="t mvts${avecObjet ? " avec-objet" : ""}"><thead><tr><th>Quand</th><th>Qui</th><th>Quoi</th>${avecObjet ? "<th>Objet</th>" : ""}<th class="n">Qté</th></tr></thead><tbody>
+  ${l.map(m => `<tr><td class="m-quand">${quand(m.date)}</td><td class="m-qui">${esc(m.qui || PROFILS[m.profil].nom)}</td><td class="m-quoi">${esc(m.type)}${(m.evenement || m.imputation) ? "<br><small>" + esc(m.evenement || m.imputation) + "</small>" : ""}${m.motif ? "<br><small>" + esc(m.motif) + "</small>" : ""}</td>${avecObjet ? `<td class="m-objet">${esc(art(m.article).nom)}</td>` : ""}<td class="n m-qte">${m.qte}</td></tr>`).join("")}</tbody></table></div>`;
 }
 const bJournal = () => `<h1>Journal</h1><p class="sous">Tout est gardé. Une erreur se corrige par un nouveau mouvement, jamais en effaçant.</p>${tableMouvements(S.mouvements.slice().reverse(), true)}`;
 function brouillons() {
@@ -523,7 +523,7 @@ function bCommandes() {
     </section>`;
   }).join("") || `<p class="vide">Rien à commander.</p>`}
   <h2>Commandes passées</h2>
-  ${S.commandes.length ? `<table class="t"><tbody>${S.commandes.slice().reverse().map(c => `<tr><td>${quand(c.date)}<br><small>${esc(c.fournisseur)}</small></td><td>${esc(c.statut)}</td><td class="n">${c.statut === "Envoyée" ? `<button class="btn petit" data-recevoir="${c.id}">Réceptionner</button>` : ""}</td></tr>`).join("")}</tbody></table>` : `<p class="vide">Aucune pour l'instant.</p>`}`;
+  ${S.commandes.length ? `<table class="t cmdes"><tbody>${S.commandes.slice().reverse().map(c => `<tr><td>${quand(c.date)}<br><small>${esc(c.fournisseur)}</small></td><td>${esc(c.statut)}</td><td class="n">${c.statut === "Envoyée" ? `<button class="btn petit" data-recevoir="${c.id}">Réceptionner</button>` : ""}</td></tr>`).join("")}</tbody></table>` : `<p class="vide">Aucune pour l'instant.</p>`}`;
 }
 function creerCommande(fid, statut) {
   const l = brouillons()[fid], f = S.fournisseurs.find(x => x.id === fid);
@@ -545,9 +545,10 @@ function bDocs() {
 }
 const retourDocs = `<p class="pas-imprimer"><button class="lien" data-aller="docs">← Documents</button> · <button class="lien" data-act="imprimer">Imprimer ou enregistrer en PDF</button></p>`;
 const bEtiquettes = () => `${retourDocs}<div class="pas-imprimer"><h1>Planche d'étiquettes</h1><p class="sous">Scanné avec l'appareil photo, le QR ouvre directement la fiche de l'objet.</p></div>
-  <div class="planche">${S.articles.map(a => `<div class="etiquette"><div data-qr="${a.id}"></div><div><b>${esc(a.nom)}</b><span class="code">${a.id}</span></div></div>`).join("")}</div>`;
+  ${blocPlanEtiquetage()}<h2 class="pas-imprimer">La planche à imprimer</h2>
+  <div class="planche">${S.articles.map(a => `<div class="etiquette"><div data-qr="${a.id}"></div><div><b>${esc(a.nom)}</b><span class="code">${a.id}</span><small class="proprio">Propriété de ${esc((S.entreprise || {}).nom || "l'entreprise")}</small></div></div>`).join("")}</div>`;
 const bInventairePapier = () => `${retourDocs}<div class="feuille-doc">${enTeteDoc()}<h1>Fiche d'inventaire</h1><p>Date : ____ / ____ / ________ · Compté par : ______________________</p>
-  ${S.emplacements.map(e => `<h2 style="font-size:17px">${esc(e.nom)}</h2><table><thead><tr><th>Code</th><th>Objet</th><th>Attendu</th><th>Compté</th></tr></thead><tbody>
+  ${S.emplacements.map(e => `<h2 style="font-size:17px">${esc(e.nom)}</h2><table><thead><tr><th class="code">Code</th><th>Objet</th><th>Attendu</th><th>Compté</th></tr></thead><tbody>
   ${S.articles.filter(a => a.emp === e.id).map(a => `<tr><td>${a.id}</td><td>${esc(a.nom)}</td><td>${stock(a.id)}</td><td style="width:90px"></td></tr>`).join("")}</tbody></table>`).join("")}</div>`;
 function bRefacturer() {
   const l = S.mouvements.filter(m => m.type === "Perte" && m.refac);
@@ -805,7 +806,7 @@ async function camera(rafale) {
   if ("BarcodeDetector" in window) { const d = new BarcodeDetector({ formats: ["qr_code"] }); lire = async () => { const r = await d.detect(v); return r[0] && r[0].rawValue; }; }
   else {
     // iPhone et Android anciens : pas de lecteur intégré au navigateur, on charge jsQR.
-    try { await script("https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"); } catch (e) { fermer(); return toast("Lecteur indisponible hors ligne : tapez le code."); }
+    try { await script("lib/jsQR.js"); } catch (e) { fermer(); return toast("Lecteur indisponible hors ligne : tapez le code."); }
     const cv = document.createElement("canvas"), cx = cv.getContext("2d", { willReadFrequently: true });
     lire = async () => { const w = v.videoWidth; if (!w) return null; const s = Math.min(1, 640 / w); cv.width = w * s; cv.height = v.videoHeight * s; cx.drawImage(v, 0, 0, cv.width, cv.height); const r = window.jsQR(cx.getImageData(0, 0, cv.width, cv.height).data, cv.width, cv.height); return r && r.data; };
   }
@@ -825,7 +826,7 @@ async function camera(rafale) {
 }
 async function dessinerQr() {
   const cases = $$("[data-qr]"); if (!cases.length) return;
-  try { await script("https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"); } catch (e) { cases.forEach(c => c.textContent = "QR indisponible hors ligne"); return; }
+  try { await script("lib/qrcode.js"); } catch (e) { cases.forEach(c => c.textContent = "QR indisponible hors ligne"); return; }
   const base = location.href.split("#")[0].split("?")[0];
   cases.forEach(c => { const q = window.qrcode(0, "M"); q.addData(base + "#/a/" + c.dataset.qr); q.make(); c.innerHTML = q.createSvgTag({ cellSize: 3, margin: 0, scalable: true }); });
 }
@@ -931,7 +932,7 @@ function lienProfond() { const id = code(location.hash); if (id && art(id)) vue 
 })();
 window.addEventListener("hashchange", () => { if (session) { lienProfond(); rendre(); } });
 ["online", "offline"].forEach(ev => window.addEventListener(ev, () => { if (session && !verrouille) { rendre(); toast(ev === "online" ? "Réseau revenu : tout est envoyé." : "Hors ligne : vos gestes sont gardés et partiront au retour du réseau."); } }));
-if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) navigator.serviceWorker.register("sw.js").catch(() => {});
 rendre();
 // Les graphiques se redessinent à la largeur de l'écran (rotation du téléphone, fenêtre redimensionnée).
 let attenteTaille, largeurAvant = window.innerWidth;

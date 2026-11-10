@@ -16,8 +16,9 @@ const ETAPES_INSTALL = [
   { id: "google", phase: "Avant", t: "Compte Google du client prêt" },
   { id: "classeur", phase: "Avant", t: "Classeur créé et script installé" },
   { id: "reglage", phase: "Avant", t: "Appli réglée : taille de l'équipe, détail, rôles, blocs" },
-  { id: "etiquettes", phase: "Sur place", t: "Étiquettes imprimées et posées" },
-  { id: "comptes", phase: "Sur place", t: "Identifiants remis à chaque personne, en main propre" },
+  { id: "plan_etiq", phase: "Avant", t: "Plan d'étiquetage validé : quoi, où, sur quel support (docs/21)" },
+  { id: "etiquettes", phase: "Sur place", t: "Étiquettes imprimées et posées (par nous, ou par l'équipe du client guidée en visio)" },
+  { id: "comptes", phase: "Sur place", t: "Identifiants remis à chaque personne, en main propre ou en visio" },
   { id: "form_terrain", phase: "Sur place", t: "Formation du dépôt : scanner, sortir, rentrer, compter" },
   { id: "form_bureau", phase: "Sur place", t: "Formation du bureau et de la direction" },
   { id: "premier", phase: "Sur place", t: "Premier vrai geste scanné par le client" },
@@ -30,12 +31,12 @@ const ETAPES_INSTALL = [
 /* ---------------- Données ---------------- */
 function pilotageDemo() {
   const J = 86400000, n = Date.now(), fait = (ids, il) => Object.fromEntries(ids.map(k => [k, n - il * J]));
-  const avant = ["devis", "acompte", "articles", "google", "classeur", "reglage"], tout = ETAPES_INSTALL.map(e => e.id);
+  const avant = ["devis", "acompte", "articles", "google", "classeur", "reglage", "plan_etiq"], tout = ETAPES_INSTALL.map(e => e.id);
   return { clients: [
-    { id: "C-01", nom: "Location Fêtes (démo)", metier: "loueur", pays: "SN", ville: "Dakar", contact: "Mme Ndiaye", tel: "+221 70 000 00 01", offre: "complet", modules: ["MO-RES", "MO-KIT"], devisLe: n - 45 * J, livreLe: n - 20 * J, etapes: fait(tout, 21), heuresEstimees: 14, heuresPassees: 16.5,
+    { id: "C-01", nom: "Location Fêtes (démo)", metier: "loueur", pays: "SN", ville: "Dakar", contact: "Mme Ndiaye", tel: "+221 70 000 00 01", offre: "complet", modules: ["MO-RES", "MO-KIT"], relais: 2, devisLe: n - 45 * J, livreLe: n - 20 * J, etapes: fait(tout, 21), heuresEstimees: 14, heuresPassees: 16.5,
       interventions: [{ date: n - 9 * J, h: 0.75, t: "Ajout de deux kits", statut: "incluse" }, { date: n - 3 * J, h: 0.75, t: "Nouveau magasinier : identifiant et formation", statut: "incluse" }], notes: "Client pilote au Sénégal, par la société partenaire." },
-    { id: "C-02", nom: "Atelier Élec (démo)", metier: "artisan", pays: "FR", ville: "Toulouse", contact: "M. Martin", tel: "06 00 00 00 21", offre: "demarrage", modules: [], devisLe: n - 12 * J, prevuLe: isoJour(n + 5 * J), etapes: fait(["devis", "acompte", "articles", "google"], 4), heuresEstimees: 8, heuresPassees: 2, interventions: [], notes: "" },
-    { id: "C-03", nom: "Le Comptoir (démo)", metier: "restaurant", pays: "FR", ville: "Montreuil", contact: "Mme Bernard", tel: "06 00 00 00 31", offre: "complet", modules: ["AL-WA"], devisLe: n - 9 * J, etapes: {}, heuresEstimees: 13, heuresPassees: 1, interventions: [], notes: "Veut les dates limites et la consommation par service." },
+    { id: "C-02", nom: "Atelier Élec (démo)", metier: "artisan", pays: "FR", ville: "Toulouse", contact: "M. Martin", tel: "06 00 00 00 21", offre: "demarrage", mode: "place", modules: [], devisLe: n - 12 * J, prevuLe: isoJour(n + 5 * J), etapes: fait(["devis", "acompte", "articles", "google"], 4), heuresEstimees: 8, heuresPassees: 2, interventions: [], notes: "" },
+    { id: "C-03", nom: "Le Comptoir (démo)", metier: "restaurant", pays: "FR", ville: "Montreuil", contact: "Mme Bernard", tel: "06 00 00 00 31", offre: "complet", mode: "distance", essaiDeduit: true, modules: ["AL-WA"], devisLe: n - 9 * J, etapes: {}, heuresEstimees: 13, heuresPassees: 1, interventions: [], notes: "Veut les dates limites et la consommation par service." },
     { id: "C-04", nom: "Projet Santé Solidaire (démo)", metier: "ong", pays: "SN", ville: "Thiès", contact: "Mme Faye", tel: "+221 77 000 00 41", offre: "mesure", prixEur: 4400, modules: [], devisLe: n - 130 * J, livreLe: n - 100 * J, etapes: fait(tout, 101), heuresEstimees: 32, heuresPassees: 38,
       interventions: [{ date: n - 70 * J, h: 2, t: "Rapport par bailleur", statut: "incluse" }, { date: n - 6 * J, h: 1.5, t: "Nouvel entrepôt à Kaolack", statut: "facturée" }], notes: "" },
     { id: "C-05", nom: "Quincaillerie du Centre (démo)", metier: "distribution", pays: "SN", ville: "Dakar", contact: "M. Sow", tel: "+221 76 000 00 51", offre: "demarrage", modules: [], devisLe: n - 70 * J, livreLe: n - 50 * J, etapes: fait(tout.filter(k => k !== "note"), 50), heuresEstimees: 8, heuresPassees: 9,
@@ -49,12 +50,12 @@ const clientP = id => P_.clients.find(c => c.id === id);
 /* ---------------- Calculs ---------------- */
 const fmtEur = n => Math.round(n).toLocaleString("fr-FR") + " €";
 const fmtXof = n => Math.round(n).toLocaleString("fr-FR") + " FCFA";
-// Prix de vente HT : l'offre, plus les modules qu'elle ne comprend pas. En FCFA au Sénégal.
+// Prix de vente HT : règles communes de calculerDevis (data.js, docs/23). France sur place ou à distance ; Sénégal à distance.
+// Les anciens clients sans mode sont comptés sur place en France.
 function prixVente(c) {
-  const o = OFFRES[c.offre], sn = c.pays === "SN", ajouts = (c.modules || []).filter(k => !o.inclus.includes(k));
-  const base = sn ? (o.xof || (c.prixEur || o.eur) * EUR_XOF) : (c.prixEur || o.eur);
-  return { base, ajouts, total: base + ajouts.reduce((t, k) => t + CATALOGUE[k][sn ? "xof" : "eur"], 0), fmt: sn ? fmtXof : fmtEur };
+  return calculerDevis({ offre: c.offre, pays: c.pays, mode: c.mode || "place", modules: c.modules || [], utilisateurs: c.utilisateurs || 0, relais: c.relais || 0, essaiDeduit: !!c.essaiDeduit, prixEur: c.prixEur || 0 });
 }
+const modeTexte = c => c.pays === "SN" ? "à distance" + (c.relais ? `, relais ${c.relais} demi-journée${c.relais > 1 ? "s" : ""}` : "") : (c.mode === "distance" ? "à distance" : "sur place");
 const enEur = (c, v) => c.pays === "SN" ? v / EUR_XOF : v;
 // Prix d'une heure d'intervention, en euros pour les calculs ; affiché dans la monnaie du client
 const heureEur = c => c.pays === "SN" ? TARIF_INTERVENTION.xof / EUR_XOF : TARIF_INTERVENTION.eur;
@@ -184,9 +185,9 @@ function eClients() {
     const s = statutP(c), p = prixVente(c), a = assistance(c);
     return `<button class="client client-p" data-e="client" data-earg="${c.id}"><span class="avatar">${esc(initiales(c.nom))}</span>
       <span><b>${esc(c.nom)}</b><small>${esc(METIERS[c.metier].nom)} · ${esc(c.ville)} · ${c.pays === "SN" ? "Sénégal" : "France"}</small>
-        <span class="statut ${s.c}">${esc(s.t)}</span>${a && a.enCours ? ` <small>· ${a.jours} j et ${String(a.heures).replace(".", ",")} h restants</small>` : ""}
+        <span class="client-etat"><span class="statut ${s.c}">${esc(s.t)}</span>${a && a.enCours ? `<small>${a.jours} j et ${String(a.heures).replace(".", ",")} h restants</small>` : ""}</span>
         <i class="barre"><i style="width:${Math.round(avancement(c) / ETAPES_INSTALL.length * 100)}%"></i></i></span>
-      <span class="client-chiffres"><small>${esc(OFFRES[c.offre].nom)}</small><b>${p.fmt(p.total)}</b></span></button>`;
+      <span class="client-chiffres"><small>${esc(OFFRES[c.offre].nom)} · ${modeTexte(c)}</small><b>${p.fmt(p.total)}</b></span></button>`;
   }).join("") || `<p class="vide">Aucun client dans cette liste.</p>`}</div>`;
 }
 function eClient(id) {
@@ -202,8 +203,8 @@ function eClient(id) {
     <button class="btn petit" data-modifier-p="${c.id}">Modifier</button></div>
   <div class="bento" style="margin-top:14px">
     <section class="w w-m"><h3 class="w-titre">${I.argent}Vente</h3>
-      <div class="lignes-p"><div><span>Offre ${esc(o.nom)}</span><b>${p.fmt(p.base)}</b></div>${p.ajouts.map(k => `<div><span>${esc(CATALOGUE[k].nom)}</span><b>${p.fmt(CATALOGUE[k][c.pays === "SN" ? "xof" : "eur"])}</b></div>`).join("")}
-      <div class="fort"><span>Total HT${o.aPartirDe ? " (à partir de)" : ""}</span><b>${p.fmt(p.total)}</b></div>
+      <div class="lignes-p"><div><span>Offre ${esc(o.nom)}, ${modeTexte(c)}</span><b>${p.fmt(p.base)}</b></div>${p.lignes.map(l => `<div><span>${esc(l.t)}</span><b>${l.m ? p.fmt(l.m) : "compris"}</b></div>`).join("")}
+      <div class="fort"><span>Total HT${o.aPartirDe ? " (à partir de)" : ""}</span><b>${p.fmt(p.total)}</b></div>${p.alertes.map(a => `<div><span class="rouge">${esc(a)}</span></div>`).join("")}
       <div><span>Acompte de 40 %</span><b class="${c.etapes.acompte ? "vert" : ""}">${c.etapes.acompte ? "reçu" : p.fmt(.4 * p.total)}</b></div>
       <div><span>Solde de 60 %</span><b class="${c.etapes.solde ? "vert" : ""}">${c.etapes.solde ? "reçu" : p.fmt(.6 * p.total)}</b></div>
       ${c.pays === "SN" ? `<div><span>Notre part (${Math.round(PART_NOUS_SN * 100)} %)</span><b>${p.fmt(p.total * PART_NOUS_SN)}</b></div>` : ""}</div></section>
@@ -281,13 +282,15 @@ function gVentesMois() {
 
 /* ---------------- Saisies ---------------- */
 function feuilleClientP(id) {
-  const c = id ? clientP(id) : { pays: "FR", offre: "complet", metier: "loueur", modules: [] };
+  const c = id ? clientP(id) : { pays: "FR", mode: "distance", offre: "complet", metier: "loueur", modules: [] };
   const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="tcp"><h1 id="tcp" style="font-size:26px">${id ? "Modifier" : "Nouveau client"}</h1>
     <label class="champ">Entreprise<input name="nom" maxlength="60" autocomplete="off" value="${esc(c.nom || "")}"></label>
     <label class="champ">Métier<select name="metier">${Object.entries(METIERS).map(([k, m]) => `<option value="${k}" ${c.metier === k ? "selected" : ""}>${m.nom}</option>`).join("")}</select></label>
     <div class="dispo-dates"><label class="champ">Pays<select name="pays"><option value="FR" ${c.pays === "FR" ? "selected" : ""}>France</option><option value="SN" ${c.pays === "SN" ? "selected" : ""}>Sénégal</option></select></label><label class="champ">Ville<input name="ville" maxlength="40" value="${esc(c.ville || "")}"></label></div>
     <div class="dispo-dates"><label class="champ">Contact<input name="contact" maxlength="50" value="${esc(c.contact || "")}"></label><label class="champ">Téléphone<input name="tel" type="tel" maxlength="20" value="${esc(c.tel || "")}"></label></div>
-    <label class="champ">Offre<select name="offre">${Object.entries(OFFRES).map(([k, o]) => `<option value="${k}" ${c.offre === k ? "selected" : ""}>${o.nom} · ${fmtEur(o.eur)}${o.aPartirDe ? " et plus" : ""}</option>`).join("")}</select></label>
+    <label class="champ">Offre<select name="offre">${Object.entries(OFFRES).map(([k, o]) => `<option value="${k}" ${c.offre === k ? "selected" : ""}>${o.nom} · ${o.aPartirDe ? "dès " + fmtEur(o.eur) : `${fmtEur(o.eurDist)} à distance, ${fmtEur(o.eur)} sur place, ${fmtXof(o.xof)}`}</option>`).join("")}</select></label>
+    <div class="dispo-dates"><label class="champ">Installation (France)<select name="mode"><option value="distance" ${c.mode !== "place" ? "selected" : ""}>À distance</option><option value="place" ${c.mode === "place" ? "selected" : ""}>Sur place</option></select></label><label class="champ">Relais au Sénégal (demi-journées)<input name="relais" type="number" inputmode="numeric" min="0" step="1" value="${c.relais || 0}"></label></div>
+    <div class="dispo-dates"><label class="champ">Utilisateurs prévus<input name="utilisateurs" type="number" inputmode="numeric" min="0" step="1" value="${c.utilisateurs || ""}"></label><label class="case" style="align-self:end"><input type="checkbox" name="essai" ${c.essaiDeduit ? "checked" : ""}>Essai payé, à déduire</label></div>
     <fieldset class="modules-p"><legend>Modules en plus</legend>${Object.entries(CATALOGUE).map(([k, m]) => `<label class="case"><input type="checkbox" name="mod" value="${k}" ${(c.modules || []).includes(k) ? "checked" : ""}>${esc(m.nom)}</label>`).join("")}</fieldset>
     <label class="champ">Heures prévues pour l'installation<input name="heures" type="number" inputmode="decimal" min="0" step="0.5" value="${c.heuresEstimees || ({ demarrage: 8, complet: 13, mesure: 32 })[c.offre]}"></label>
     <label class="champ">Notes<textarea name="notes" rows="2" maxlength="300">${esc(c.notes || "")}</textarea></label>
@@ -296,7 +299,7 @@ function feuilleClientP(id) {
   f.querySelector("[data-x]").onclick = () => f.remove();
   f.querySelector("[data-ok]").onclick = () => {
     if (!v("nom")) return toast("Indiquez le nom de l'entreprise.");
-    const d = { nom: v("nom"), metier: v("metier"), pays: v("pays"), ville: v("ville"), contact: v("contact"), tel: v("tel"), offre: v("offre"), modules: [...f.querySelectorAll("[name=mod]:checked")].map(x => x.value), heuresEstimees: Math.max(0, +v("heures") || 0), notes: v("notes") };
+    const d = { nom: v("nom"), metier: v("metier"), pays: v("pays"), ville: v("ville"), contact: v("contact"), tel: v("tel"), offre: v("offre"), mode: v("mode"), relais: v("pays") === "SN" ? Math.max(0, Math.round(+v("relais") || 0)) : 0, utilisateurs: Math.max(0, Math.round(+v("utilisateurs") || 0)), essaiDeduit: f.querySelector("[name=essai]").checked, modules: [...f.querySelectorAll("[name=mod]:checked")].map(x => x.value), heuresEstimees: Math.max(0, +v("heures") || 0), notes: v("notes") };
     if (id) Object.assign(c, d);
     else { const nid = "C-" + String(P_.clients.length + 1).padStart(2, "0"); P_.clients.push(Object.assign({ id: nid, devisLe: Date.now(), etapes: {}, heuresPassees: 0, interventions: [] }, d)); f.remove(); sauverP(); allerE("client", nid); return toast("Client ajouté. Le devis est prêt."); }
     sauverP(); f.remove(); rendre(); toast("Client enregistré.");
@@ -325,12 +328,12 @@ function feuilleDevisP(id) {
   const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-label="Devis"><div class="feuille-doc">
     <header class="doc-tete"><div class="doc-emetteur"><div><b>${sn ? "Société partenaire au Sénégal" : "[Vendeur, à compléter : docs/17]"}</b><br>${MON_COMPTE.complet}<br>${MON_COMPTE.compte}</div></div>
     <div class="doc-titre"><h1>Devis</h1><p>N° <b>D-${new Date(c.devisLe || Date.now()).getFullYear()}-${c.id.slice(2)}</b><br>Valable 30 jours</p></div></header>
-    <div class="doc-parties"><div><small>Client</small><b>${esc(c.nom)}</b>${c.contact ? "<br>" + esc(c.contact) : ""}${c.tel ? "<br>" + esc(c.tel) : ""}<br>${esc(c.ville)}</div><div><small>Offre</small><b>${esc(o.nom)}</b><br>${o.sites} site${o.sites === 1 ? "" : "s"}, ${o.utilisateurs} utilisateurs, ${o.etiquettes} étiquettes<br>${o.surPlace} sur place</div></div>
+    <div class="doc-parties"><div><small>Client</small><b>${esc(c.nom)}</b>${c.contact ? "<br>" + esc(c.contact) : ""}${c.tel ? "<br>" + esc(c.tel) : ""}<br>${esc(c.ville)}</div><div><small>Offre</small><b>${esc(o.nom)}</b><br>${o.sites} site${o.sites === 1 ? "" : "s"}, ${o.utilisateurs} utilisateurs, ${o.etiquettes} étiquettes<br>Installation ${modeTexte(c)}</div></div>
     <table><thead><tr><th>Désignation</th><th class="n">Montant HT</th></tr></thead><tbody>
-    <tr><td>Offre ${esc(o.nom)} : installation, paramétrage, étiquettes, formation, assistance ${o.jours} jours et ${o.heures} h à distance${o.inclus.length ? `<br><small>Compris : ${o.inclus.map(k => esc(CATALOGUE[k].nom)).join(", ")}</small>` : ""}</td><td class="n">${p.fmt(p.base)}</td></tr>
-    ${p.ajouts.map(k => `<tr><td>Module ${esc(CATALOGUE[k].nom)}<br><small>${esc(CATALOGUE[k].detail)}</small></td><td class="n">${p.fmt(CATALOGUE[k][sn ? "xof" : "eur"])}</td></tr>`).join("")}</tbody>
+    <tr><td>Offre ${esc(o.nom)} : paramétrage, étiquettes, ${esc(p.installation)}, assistance ${o.jours} jours et ${o.heures} h à distance${o.inclus.length ? `<br><small>Compris : ${o.inclus.map(k => esc(CATALOGUE[k].nom)).join(", ")}</small>` : ""}</td><td class="n">${p.fmt(p.base)}</td></tr>
+    ${p.lignes.map(l => `<tr><td>${esc(l.t)}<br><small>${esc(l.d)}</small></td><td class="n">${l.m ? p.fmt(l.m) : "compris"}</td></tr>`).join("")}</tbody>
     <tfoot><tr class="fort"><td>Total HT${o.aPartirDe ? " (à partir de)" : ""}</td><td class="n">${p.fmt(p.total)}</td></tr><tr><td>Acompte à la commande, 40 %</td><td class="n">${p.fmt(.4 * p.total)}</td></tr><tr><td>Solde à la livraison, 60 %</td><td class="n">${p.fmt(.6 * p.total)}</td></tr></tfoot></table>
-    <div class="doc-conditions"><p>Paiement unique, aucun abonnement. Les licences Google sont payées directement par le client. Après l'assistance incluse, interventions à ${sn ? fmtXof(TARIF_INTERVENTION.xof) : fmtEur(TARIF_INTERVENTION.eur)} HT de l'heure, sur devis. Un module ajouté plus tard fait l'objet d'un nouveau devis. TVA en sus selon la réglementation applicable.</p></div>
+    <div class="doc-conditions"><p>Paiement unique, aucun abonnement. Les licences Google sont payées directement par le client. Après l'assistance incluse, interventions à ${sn ? fmtXof(TARIF_INTERVENTION.xof) : fmtEur(TARIF_INTERVENTION.eur)} HT de l'heure, sur devis. Un module ajouté après la livraison coûte ${p.fmt(PRIX_MODULE_APRES[sn ? "xof" : "eur"])} HT, sur un nouveau devis. TVA en sus selon la réglementation applicable.</p></div>
     <div class="sign"><div>Pour le vendeur</div><div>Bon pour accord, date et signature du client</div></div></div>
     <div class="valider"><button class="btn" data-x>Fermer</button><button class="btn plein" data-ok>${I.imprimer}Imprimer ou PDF</button></div></div>`);
   f.querySelector("[data-x]").onclick = () => f.remove();
@@ -360,7 +363,7 @@ function brancherEspace() {
     if ((S.metier || "loueur") !== c.metier && !confirm(`L'appli de démo passe en « ${METIERS[c.metier].nom} » pour régler ${c.nom}. Continuer ?`)) return;
     if ((S.metier || "loueur") !== c.metier) changerMetier(c.metier);
     Object.keys(CATALOGUE).forEach(k => { S.modules[k] = OFFRES[c.offre].inclus.includes(k) || c.modules.includes(k) || (k === "MO-PRET" && S.articles.some(a => logique(a) === "pret")); });
-    S.entreprise = Object.assign({}, S.entreprise, { nom: c.nom }); devisOffre = c.offre; sauver();
+    S.entreprise = Object.assign({}, S.entreprise, { nom: c.nom }); devisOffre = c.offre; devisMode = c.pays === "SN" ? "distance" : (c.mode || "place"); sauver();
     allerE("reglages");
   });
 }

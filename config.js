@@ -24,23 +24,24 @@ const SECTIONS = {
   depot:        { t: "Au dépôt", i: "scan", g: "depot", s: "Scanner, sortir, rentrer" },
   tournee:      { t: "Tournée", i: "camion", g: "depot", mod: "MO-RES", si: () => (S.metier || "loueur") === "loueur", s: "Livraisons et reprises" },
   preparer:     { t: "Préparer", i: "camion", g: "depot", mod: "MO-RES", s: "Les départs prévus" },
-  recuperer:    { t: () => V("retourTitre") || "Retours", i: "retour", g: "depot", si: () => aDesPrets() },
+  recuperer:    { t: () => V("retourTitre") || "Retours", c: "Retours", i: "retour", g: "depot", si: () => aDesPrets() },
   reception:    { t: "Réception", i: "camion", g: "depot", s: "Une livraison" },
   zones:        { t: "Compter", i: "compter", g: "depot", s: "Une zone" },
   kits:         { t: "Kits", i: "kit", g: "depot", mod: "MO-KIT", si: () => S.kits.length > 0 },
   chercher:     { t: "Chercher", i: "loupe", g: "depot" },
   jour:         { t: "Ma journée", i: "jour", g: "depot" },
   materiel:     { t: "Stock", i: "materiel", g: "gestion", droit: "stock" },
-  reservations: { t: "Réservations", i: "jour", g: "gestion", mod: "MO-RES", droit: "reserver" },
+  reservations: { t: "Réservations", c: "Résas", i: "jour", g: "gestion", mod: "MO-RES", droit: "reserver" },
   clients:      { t: () => motClients(), i: "equipe", g: "gestion", si: () => actif("MO-RES") || complet(), droit: "reserver" },
-  commandes:    { t: "Commandes", i: "bon", g: "gestion", mod: "MO-CMD", droit: "commander" },
+  commandes:    { t: "Commandes", c: "Achats", i: "bon", g: "gestion", mod: "MO-CMD", droit: "commander" },
   journal:      { t: "Journal", i: "journal", g: "gestion", droit: "stock" },
   analyses:     { t: "Analyses", i: "releve", g: "gestion", droit: "analyses" },
   docs:         { t: "Documents", i: "docs", g: "gestion", droit: "documents" },
-  equipe:       { t: "Équipe et accès", i: "equipe", g: "compte", droit: "equipe" },
+  equipe:       { t: "Équipe et accès", c: "Équipe", i: "equipe", g: "compte", droit: "equipe" },
   installation: { t: "Installation", i: "abo", g: "compte", droit: "installation" },
 };
 const GROUPES = { depot: "Au dépôt", gestion: "Gestion", compte: "Compte" };
+const titreCourt = k => (SECTIONS[k] && SECTIONS[k].c) || titreSection(k);
 const titreSection = k => { const s = SECTIONS[k]; return !s ? "" : typeof s.t === "function" ? s.t() : s.t; };
 
 /* ---------------- Configuration par défaut, selon le métier ----------------
@@ -311,7 +312,7 @@ function vInstallateur(dansEspace) {
   const c = config()[roleConf], noms = NOMS_ROLES();
   const choix = Object.keys(SECTIONS).filter(k => permis(k, roleConf));
   const u = S.equipe.find(x => x.role === roleConf && x.actif);
-  const bouton = k => `<button disabled ${k === "accueil" ? 'aria-current="page"' : ""}>${I[SECTIONS[k].i]}<span>${esc(titreSection(k))}</span></button>`;
+  const bouton = k => `<button disabled ${k === "accueil" ? 'aria-current="page"' : ""}>${I[SECTIONS[k].i]}<span>${esc(titreCourt(k))}</span></button>`;
   return `${dansEspace ? "" : DEMO}<div class="inst${dansEspace ? " dans-espace" : ""}">
   ${dansEspace ? "" : `<div class="barre"><button class="btn petit" data-act="quitterInstallateur">← Quitter</button>${boutonReglages}</div>`}
   <h1>Réglage de l'appli${S.entreprise && S.entreprise.nom ? " · " + esc(S.entreprise.nom) : ""}</h1>

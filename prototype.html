@@ -178,7 +178,9 @@ function trouve(texte) {
   if (!serveur.articles.some(a => a.id === id)) { noter("Code non reconnu : " + texte); return false; }
   choisi = id; noter("Objet reconnu : " + id); rendre(); return true;
 }
-const chargerJsQR = () => window.jsQR ? Promise.resolve() : new Promise((ok, ko) => { const s = document.createElement("script"); s.src = "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"; s.onload = ok; s.onerror = ko; document.head.appendChild(s); });
+// Le lecteur de QR : d'abord la copie livrée avec la page (marche sans réseau), sinon le CDN (page servie par Google).
+const chargerUn = src => new Promise((ok, ko) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = ko; document.head.appendChild(s); });
+const chargerJsQR = () => window.jsQR ? Promise.resolve() : chargerUn("lib/jsQR.js").catch(() => chargerUn("https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"));
 async function cameraDirecte() {
   const zone = document.getElementById("cam");
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { noter("Caméra en direct : non disponible sur cette page."); return; }
