@@ -5,6 +5,7 @@
 const PRESENTATION_METIERS = {
   loueur: "Mariages, séminaires : réservations, départs, retours, casse refacturée",
   artisan: "Chantiers : outillage prêté et rendu, consommables par chantier",
+  paysagiste: "Espaces verts : machines prêtées et rendues, fournitures par chantier",
   restaurant: "Réserve et chambre froide : dates limites, consommation par service",
   labo: "Consommables, appareils prêtés, lots et dates limites",
   distribution: "Magasin et cour : ventes, retours de clients, réassort",

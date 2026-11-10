@@ -641,11 +641,11 @@ function dInstallation() {
   const restantes = Math.max(0, OFFRE.heures - inst.heuresUtilisees), enCours = jours > 0 && restantes > 0;
   const google = S.equipe.filter(u => u.actif).length * (unite === "xof" ? 4460 : 6.8);
   return `<h1>Votre installation</h1>
-  <p class="sous">Offre ${OFFRE.nom}, payée une fois : ${fmt(OFFRE[unite])} HT, livrée le ${new Date(inst.livreLe).toLocaleDateString("fr-FR")}. L'appli et les données vous appartiennent. Rien n'est dû chaque mois à RAYON.</p>
+  <p class="sous">Offre ${OFFRE.nom}, payée une fois : ${fmt(OFFRE[unite])} HT, livrée le ${new Date(inst.livreLe).toLocaleDateString("fr-FR")}. L'appli et les données vous appartiennent. Rien n'est dû chaque mois à Stockclair.</p>
   <div class="bloc"><div class="module"><b>Assistance incluse</b><span class="statut ${enCours ? "s-revenue" : "s-partie"}">${enCours ? "en cours" : "terminée"}</span>
     <p>${enCours ? `Encore ${jours} jour${jours > 1 ? "s" : ""} et ${String(restantes).replace(".", ",")} h sur ${OFFRE.heures} h. ` : `Terminée le ${new Date(fin).toLocaleDateString("fr-FR")}. `}Elle couvre les corrections de notre paramétrage et les questions d'utilisation, pas les nouvelles fonctions.</p></div>
   <div class="module"><b>Intervention ensuite</b><span>${fmt(TARIF_INTERVENTION[unite])} HT / h</span><p>À distance, par quart d'heure, 30 minutes au minimum, toujours sur devis accepté.</p></div>
-  <div class="module"><b>Payé chaque mois à Google, pas à RAYON</b><span>${fmt(Math.round(google * 100) / 100)}</span><p>Licences Google des ${S.equipe.filter(u => u.actif).length} personnes de l'équipe (environ 6,80 € HT par personne).</p></div></div>
+  <div class="module"><b>Payé chaque mois à Google, pas à Stockclair</b><span>${fmt(Math.round(google * 100) / 100)}</span><p>Licences Google des ${S.equipe.filter(u => u.actif).length} personnes de l'équipe (environ 6,80 € HT par personne).</p></div></div>
   <p style="margin-top:12px"><button class="btn plein" data-act="demanderIntervention">Demander une intervention</button></p>
   ${(S.interventions || []).length ? `<h2>Vos demandes</h2><table class="t"><tbody>${S.interventions.slice().reverse().map(i => `<tr><td>${quand(i.date)}<br><small>${esc(i.texte)}</small></td><td class="n">${i.incluse ? "dans l'assistance" : "devis envoyé"}</td></tr>`).join("")}</tbody></table>` : ""}
   <h2>Ce qui est installé</h2>

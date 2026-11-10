@@ -41,6 +41,33 @@ const METIERS = {
     kits: [{ id: "KIT-01", nom: "Kit tableau électrique", lignes: [["ART-0001", 10], ["ART-0003", 1], ["ART-0005", 1]] },
            { id: "KIT-02", nom: "Kit EPI chantier", lignes: [["ART-0010", 1], ["ART-0015", 1], ["ART-0004", 1]] }],
   },
+  paysagiste: {
+    entreprise: "Jardins et Espaces Verts (démo)", nom: "Paysagiste et espaces verts", logique: "conso", dlc: false,
+    v: { imp: "Chantier", imps: "chantiers", retourTitre: "Rentrer le matériel", retourSous: "machines dehors", chez: "Sur les chantiers",
+         pretSortie: "Je l'emprunte", pretSortieSous: "Pour un chantier", pretRetour: "Je le rends", pretRetourSous: "Il revient au dépôt",
+         prendre: "J'en prends", prendreSous: "Pour un chantier", remettre: "Je remets le surplus", remettreSous: "Pas utilisé sur le chantier",
+         terrain: "Chef d'équipe", bureau: "Conducteur de travaux", direction: "Gérant", parc: "Relevé du dépôt", sortiesMot: "Posé sur chantier" },
+    imputations: ["Résidence Les Tilleuls · entretien", "Siège d'entreprise · espaces verts", "Jardin particulier · création", "Copropriété Le Parc · taille"],
+    fournisseurs: [{ id: "FOU-01", nom: "Concessionnaire de motoculture (démo)", delai: 3 }, { id: "FOU-02", nom: "Pépinière (démo)", delai: 5 }, { id: "FOU-03", nom: "Fournisseur de fournitures et EPI (démo)", delai: 2 }],
+    emplacements: [{ id: "EMP-A1", nom: "Dépôt · machines thermiques" }, { id: "EMP-A2", nom: "Dépôt · machines à batterie et chargeurs" }, { id: "EMP-B1", nom: "Dépôt · fournitures" }, { id: "EMP-C1", nom: "Dépôt · EPI" }, { id: "EMP-V1", nom: "Fourgon équipe 1" }, { id: "EMP-V2", nom: "Fourgon équipe 2" }],
+    articles: [
+      ["ART-0001", "Paillage · sac de 50 L", "paillage", "conso", 10, 40, 9, 5, "EMP-B1", "FOU-02", 2],
+      ["ART-0002", "Fil de débroussailleuse · bobine", "fil_debroussaille", "conso", 3, 10, 38, 1, "EMP-B1", "FOU-03", .3],
+      ["ART-0003", "Huile 2 temps · bidon 5 L", "huile_moteur", "conso", 2, 6, 42, 1, "EMP-B1", "FOU-03", .2],
+      ["ART-0004", "Gants de travail · paire", "gants", "conso", 10, 30, 6, 5, "EMP-C1", "FOU-03", 1],
+      ["ART-0005", "Casque de protection", "casque", "conso", 2, 8, 18, 1, "EMP-C1", "FOU-03", .1],
+      ["ART-0006", "Taille-haie à batterie n°1", "taille_haie", "pret", 0, 1, 420, 1, "EMP-A2", "FOU-01", 0, "SN-TH-2201"],
+      ["ART-0007", "Taille-haie à batterie n°2", "taille_haie", "pret", 0, 1, 420, 1, "EMP-A2", "FOU-01", 0, "SN-TH-2202"],
+      ["ART-0008", "Batterie 36 V n°1", "batterie", "pret", 0, 1, 260, 1, "EMP-A2", "FOU-01", 0, "SN-BT-3601"],
+      ["ART-0009", "Batterie 36 V n°2", "batterie", "pret", 0, 1, 260, 1, "EMP-A2", "FOU-01", 0, "SN-BT-3602"],
+      ["ART-0010", "Débroussailleuse thermique n°1", "debroussailleuse", "pret", 0, 1, 690, 1, "EMP-A1", "FOU-01", 0, "SN-DB-1101"],
+      ["ART-0011", "Débroussailleuse thermique n°2", "debroussailleuse", "pret", 0, 1, 690, 1, "EMP-A1", "FOU-01", 0, "SN-DB-1102"],
+      ["ART-0012", "Souffleur à dos", "souffleur", "pret", 0, 1, 540, 1, "EMP-A1", "FOU-01", 0, "SN-SF-0501"],
+      ["ART-0013", "Tronçonneuse n°1", "tronconneuse", "pret", 0, 1, 610, 1, "EMP-A1", "FOU-01", 0, "SN-TR-0801"],
+    ],
+    kits: [{ id: "KIT-01", nom: "Kit taille équipe", lignes: [["ART-0006", 1], ["ART-0008", 1], ["ART-0009", 1]] },
+           { id: "KIT-02", nom: "Kit EPI débroussaillage", lignes: [["ART-0004", 1], ["ART-0005", 1]] }],
+  },
   restaurant: {
     entreprise: "Le Comptoir (démo)", nom: "Restaurant et traiteur", logique: "conso", dlc: true,
     v: { imp: "Service", imps: "services", retourTitre: "Retour d'une prestation", retourSous: "matériel dehors", chez: "En prestation",
@@ -177,6 +204,7 @@ function seedAutre(st, d) {
   let graine = 11;
   const alea = () => (graine = (graine * 16807) % 2147483647) / 2147483647;
   const J = 86400000, maintenant = Date.now(), debut = maintenant - 57 * J;
+  const minuit = new Date(maintenant).setHours(0, 0, 0, 0); // les gestes tombent aux heures de travail, pas la nuit
   let n = 0;
   const add = (t, profil, article, type, qte, extra) => {
     if (qte <= 0) return;
@@ -187,7 +215,7 @@ function seedAutre(st, d) {
   const q = {};
   st.articles.forEach(a => { q[a.id] = Math.round(a.cible * 1.1); add(debut, "bureau", a.id, "Inventaire initial", q[a.id], a.dlcJours ? { dlc: iso(debut + a.dlcJours * J) } : {}); });
   for (let j = 56; j >= 0; j--) {
-    const t = maintenant - j * J;
+    const t = minuit - j * J;
     st.articles.forEach(a => {
       if (a.logique === "pret") {
         if (j % 6 === 2 && j > 3) { const ev = d.imputations[(j + a.id.charCodeAt(7)) % d.imputations.length]; add(t + 8 * 3600000, "terrain", a.id, "Prêt", 1, { evenement: ev }); add(t + 2 * J + 17 * 3600000, "terrain", a.id, "Retour", 1, { evenement: ev }); }
