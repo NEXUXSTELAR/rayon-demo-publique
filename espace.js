@@ -334,7 +334,7 @@ function feuilleInterventionP(id) {
 function feuilleDevisP(id) {
   const c = clientP(id), p = prixVente(c), o = OFFRES[c.offre], sn = c.pays === "SN";
   const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-label="Devis"><div class="feuille-doc">
-    <header class="doc-tete"><div class="doc-emetteur"><div><b>${sn ? MON_COMPTE.complet : "[Vendeur, à compléter : docs/17]"}</b><br>${sn ? "RCCM et NINEA à compléter (docs/24)" : MON_COMPTE.complet}<br>${MON_COMPTE.compte}</div></div>
+    <header class="doc-tete"><div class="doc-emetteur"><img src="icone.svg" alt="Stockclair"><div><b>${sn ? MON_COMPTE.complet : "[Vendeur, à compléter : docs/17]"}</b><br>${sn ? "RCCM et NINEA à compléter (docs/24)" : MON_COMPTE.complet}<br>${MON_COMPTE.compte}</div></div>
     <div class="doc-titre"><h1>Devis</h1><p>N° <b>D-${new Date(c.devisLe || Date.now()).getFullYear()}-${c.id.slice(2)}</b><br>Valable 30 jours</p></div></header>
     <div class="doc-parties"><div><small>Client</small><b>${esc(c.nom)}</b>${c.contact ? "<br>" + esc(c.contact) : ""}${c.tel ? "<br>" + esc(c.tel) : ""}<br>${esc(c.ville)}</div><div><small>Offre</small><b>${esc(o.nom)}</b><br>${o.sites} site${o.sites === 1 ? "" : "s"}, ${o.utilisateurs} utilisateurs, ${o.etiquettes} étiquettes<br>Installation ${modeTexte(c)}</div></div>
     <table><thead><tr><th>Désignation</th><th class="n">Montant HT</th></tr></thead><tbody>
