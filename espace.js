@@ -7,7 +7,8 @@
 const CLE_PILOTAGE = "rayon-pilotage-v1";
 const MON_COMPTE = { nom: "Souleymane", complet: "Souleymane Diouf", compte: "souleymane.diouf.pro@gmail.com" };
 // Hypothèses de calcul, à remplacer par les vrais chiffres (TACHES, section 0 bis)
-const PART_NOUS_SN = 0.6;    // au Sénégal, la société partenaire garde environ 40 %
+// Sénégal : on vend en notre nom (docs/24). Le partenaire touche le relais qu'il fait, plus une commission s'il a apporté le client.
+const COMMISSION_APPORTEUR_SN = 0.10; // hypothèse, à négocier (TACHES, section 0 bis)
 const NET_PORTAGE_FR = 0.5;  // en France, ce qui reste après le portage salarial (simulateur)
 const ETAPES_INSTALL = [
   { id: "devis", phase: "Avant", t: "Devis signé" },
@@ -33,7 +34,7 @@ function pilotageDemo() {
   const J = 86400000, n = Date.now(), fait = (ids, il) => Object.fromEntries(ids.map(k => [k, n - il * J]));
   const avant = ["devis", "acompte", "articles", "google", "classeur", "reglage", "plan_etiq"], tout = ETAPES_INSTALL.map(e => e.id);
   return { clients: [
-    { id: "C-01", nom: "Location Fêtes (démo)", metier: "loueur", pays: "SN", ville: "Dakar", contact: "Mme Ndiaye", tel: "+221 70 000 00 01", offre: "complet", modules: ["MO-RES", "MO-KIT"], relais: 2, devisLe: n - 45 * J, livreLe: n - 20 * J, etapes: fait(tout, 21), heuresEstimees: 14, heuresPassees: 16.5,
+    { id: "C-01", nom: "Location Fêtes (démo)", metier: "loueur", pays: "SN", ville: "Dakar", contact: "Mme Ndiaye", tel: "+221 70 000 00 01", offre: "complet", modules: ["MO-RES", "MO-KIT"], relais: 2, apporteur: true, devisLe: n - 45 * J, livreLe: n - 20 * J, etapes: fait(tout, 21), heuresEstimees: 14, heuresPassees: 16.5,
       interventions: [{ date: n - 9 * J, h: 0.75, t: "Ajout de deux kits", statut: "incluse" }, { date: n - 3 * J, h: 0.75, t: "Nouveau magasinier : identifiant et formation", statut: "incluse" }], notes: "Client pilote au Sénégal, par la société partenaire." },
     { id: "C-02", nom: "Atelier Élec (démo)", metier: "artisan", pays: "FR", ville: "Toulouse", contact: "M. Martin", tel: "06 00 00 00 21", offre: "demarrage", mode: "place", modules: [], devisLe: n - 12 * J, prevuLe: isoJour(n + 5 * J), etapes: fait(["devis", "acompte", "articles", "google"], 4), heuresEstimees: 8, heuresPassees: 2, interventions: [], notes: "" },
     { id: "C-03", nom: "Le Comptoir (démo)", metier: "restaurant", pays: "FR", ville: "Montreuil", contact: "Mme Bernard", tel: "06 00 00 00 31", offre: "complet", mode: "distance", essaiDeduit: true, modules: ["AL-WA"], devisLe: n - 9 * J, etapes: {}, heuresEstimees: 13, heuresPassees: 1, interventions: [], notes: "Veut les dates limites et la consommation par service." },
@@ -60,7 +61,14 @@ const enEur = (c, v) => c.pays === "SN" ? v / EUR_XOF : v;
 // Prix d'une heure d'intervention, en euros pour les calculs ; affiché dans la monnaie du client
 const heureEur = c => c.pays === "SN" ? TARIF_INTERVENTION.xof / EUR_XOF : TARIF_INTERVENTION.eur;
 const prixHeures = (c, h) => c.pays === "SN" ? fmtXof(h * TARIF_INTERVENTION.xof) : fmtEur(h * TARIF_INTERVENTION.eur);
-const partNous = c => c.pays === "SN" ? PART_NOUS_SN : 1;
+// Ce qui revient au partenaire sénégalais sur une vente : ses demi-journées de relais, plus la commission d'apporteur
+function partPartenaire(c) {
+  if (c.pays !== "SN") return 0;
+  const p = prixVente(c);
+  return (c.relais || 0) * RELAIS_XOF + (c.apporteur ? COMMISSION_APPORTEUR_SN * p.total : 0);
+}
+// Part qui nous revient, en proportion du total (1 en France)
+const partNous = c => { const t = prixVente(c).total; return c.pays === "SN" && t ? (t - partPartenaire(c)) / t : 1; };
 function encaisse(c) {
   const p = enEur(c, prixVente(c).total);
   const vente = (c.etapes.acompte ? .4 * p : 0) + (c.etapes.solde ? .6 * p : 0);
@@ -207,7 +215,7 @@ function eClient(id) {
       <div class="fort"><span>Total HT${o.aPartirDe ? " (à partir de)" : ""}</span><b>${p.fmt(p.total)}</b></div>${p.alertes.map(a => `<div><span class="rouge">${esc(a)}</span></div>`).join("")}
       <div><span>Acompte de 40 %</span><b class="${c.etapes.acompte ? "vert" : ""}">${c.etapes.acompte ? "reçu" : p.fmt(.4 * p.total)}</b></div>
       <div><span>Solde de 60 %</span><b class="${c.etapes.solde ? "vert" : ""}">${c.etapes.solde ? "reçu" : p.fmt(.6 * p.total)}</b></div>
-      ${c.pays === "SN" ? `<div><span>Notre part (${Math.round(PART_NOUS_SN * 100)} %)</span><b>${p.fmt(p.total * PART_NOUS_SN)}</b></div>` : ""}</div></section>
+      ${c.pays === "SN" ? `<div><span>Pour le partenaire (relais${c.apporteur ? ", commission d'apporteur" : ""})</span><b>${p.fmt(partPartenaire(c))}</b></div><div><span>Pour nous</span><b>${p.fmt(p.total - partPartenaire(c))}</b></div>` : ""}</div></section>
     <section class="w w-m"><h3 class="w-titre">${I.abo}Assistance</h3>
       ${a ? `<div class="paire" style="margin-top:0">
         <div>${anneau(a.jours, o.jours, a.enCours ? "var(--retour)" : "var(--neutre)", a.jours, "jours restants", true)}<p>sur ${o.jours} jours</p></div>
@@ -247,7 +255,7 @@ function eChiffres() {
   const signe = P_.clients.filter(c => c.etapes.devis).reduce((t, c) => t + enEur(c, prixVente(c).total) * partNous(c), 0);
   const enc = P_.clients.reduce((t, c) => t + encaisse(c).total * partNous(c), 0);
   const h = P_.clients.reduce((t, c) => t + c.heuresPassees, 0), net = P_.clients.reduce((t, c) => t + gainHeure(c) * c.heuresPassees, 0);
-  return `<h1>Chiffres</h1><p class="sous">Ce qui nous revient : au Sénégal, après la part du partenaire (${Math.round((1 - PART_NOUS_SN) * 100)} %). Le gain net de l'heure compte aussi le portage en France (${Math.round(NET_PORTAGE_FR * 100)} % net). Ces deux taux sont à remplacer par les vrais.</p>
+  return `<h1>Chiffres</h1><p class="sous">Ce qui nous revient : au Sénégal, après le relais payé au partenaire et sa commission quand il a apporté le client (${Math.round(COMMISSION_APPORTEUR_SN * 100)} %, hypothèse). Le gain net de l'heure compte aussi le portage en France (${Math.round(NET_PORTAGE_FR * 100)} % net). Ces taux sont à remplacer par les vrais.</p>
   <div class="trio"><div><small>Signé</small><b>${fmtEur(signe)}</b><span class="delta">${P_.clients.filter(c => c.etapes.devis).length} clients</span></div><div><small>Encaissé</small><b>${fmtEur(enc)}</b><span class="delta">dont interventions ${fmtEur(P_.clients.reduce((t, c) => t + encaisse(c).interv * partNous(c), 0))}</span></div><div><small>Gain net de l'heure</small><b>${h ? fmtEur(net / h) : "—"}</b><span class="delta">${String(Math.round(h * 10) / 10).replace(".", ",")} h passées</span></div></div>
   <div class="bento" style="margin-top:14px"><section class="w w-l nu">${gVentesMois()}</section>
   <section class="w w-l"><h3 class="w-titre">Par client</h3><div class="defile"><table class="t"><thead><tr><th>Client</th><th class="n">Pour nous</th><th class="n">Heures prévues</th><th class="n">Heures passées</th><th class="n">Net de l'heure</th></tr></thead><tbody>
@@ -290,7 +298,7 @@ function feuilleClientP(id) {
     <div class="dispo-dates"><label class="champ">Contact<input name="contact" maxlength="50" value="${esc(c.contact || "")}"></label><label class="champ">Téléphone<input name="tel" type="tel" maxlength="20" value="${esc(c.tel || "")}"></label></div>
     <label class="champ">Offre<select name="offre">${Object.entries(OFFRES).map(([k, o]) => `<option value="${k}" ${c.offre === k ? "selected" : ""}>${o.nom} · ${o.aPartirDe ? "dès " + fmtEur(o.eur) : `${fmtEur(o.eurDist)} à distance, ${fmtEur(o.eur)} sur place, ${fmtXof(o.xof)}`}</option>`).join("")}</select></label>
     <div class="dispo-dates"><label class="champ">Installation (France)<select name="mode"><option value="distance" ${c.mode !== "place" ? "selected" : ""}>À distance</option><option value="place" ${c.mode === "place" ? "selected" : ""}>Sur place</option></select></label><label class="champ">Relais au Sénégal (demi-journées)<input name="relais" type="number" inputmode="numeric" min="0" step="1" value="${c.relais || 0}"></label></div>
-    <div class="dispo-dates"><label class="champ">Utilisateurs prévus<input name="utilisateurs" type="number" inputmode="numeric" min="0" step="1" value="${c.utilisateurs || ""}"></label><label class="case" style="align-self:end"><input type="checkbox" name="essai" ${c.essaiDeduit ? "checked" : ""}>Essai payé, à déduire</label></div>
+    <div class="dispo-dates"><label class="champ">Utilisateurs prévus<input name="utilisateurs" type="number" inputmode="numeric" min="0" step="1" value="${c.utilisateurs || ""}"></label><label class="case" style="align-self:end"><input type="checkbox" name="essai" ${c.essaiDeduit ? "checked" : ""}>Essai payé, à déduire</label><label class="case" style="align-self:end"><input type="checkbox" name="apporteur" ${c.apporteur ? "checked" : ""}>Client apporté par le partenaire (Sénégal)</label></div>
     <fieldset class="modules-p"><legend>Modules en plus</legend>${Object.entries(CATALOGUE).map(([k, m]) => `<label class="case"><input type="checkbox" name="mod" value="${k}" ${(c.modules || []).includes(k) ? "checked" : ""}>${esc(m.nom)}</label>`).join("")}</fieldset>
     <label class="champ">Heures prévues pour l'installation<input name="heures" type="number" inputmode="decimal" min="0" step="0.5" value="${c.heuresEstimees || ({ demarrage: 8, complet: 13, mesure: 32 })[c.offre]}"></label>
     <label class="champ">Notes<textarea name="notes" rows="2" maxlength="300">${esc(c.notes || "")}</textarea></label>
@@ -299,7 +307,7 @@ function feuilleClientP(id) {
   f.querySelector("[data-x]").onclick = () => f.remove();
   f.querySelector("[data-ok]").onclick = () => {
     if (!v("nom")) return toast("Indiquez le nom de l'entreprise.");
-    const d = { nom: v("nom"), metier: v("metier"), pays: v("pays"), ville: v("ville"), contact: v("contact"), tel: v("tel"), offre: v("offre"), mode: v("mode"), relais: v("pays") === "SN" ? Math.max(0, Math.round(+v("relais") || 0)) : 0, utilisateurs: Math.max(0, Math.round(+v("utilisateurs") || 0)), essaiDeduit: f.querySelector("[name=essai]").checked, modules: [...f.querySelectorAll("[name=mod]:checked")].map(x => x.value), heuresEstimees: Math.max(0, +v("heures") || 0), notes: v("notes") };
+    const d = { nom: v("nom"), metier: v("metier"), pays: v("pays"), ville: v("ville"), contact: v("contact"), tel: v("tel"), offre: v("offre"), mode: v("mode"), relais: v("pays") === "SN" ? Math.max(0, Math.round(+v("relais") || 0)) : 0, utilisateurs: Math.max(0, Math.round(+v("utilisateurs") || 0)), essaiDeduit: f.querySelector("[name=essai]").checked, apporteur: v("pays") === "SN" && f.querySelector("[name=apporteur]").checked, modules: [...f.querySelectorAll("[name=mod]:checked")].map(x => x.value), heuresEstimees: Math.max(0, +v("heures") || 0), notes: v("notes") };
     if (id) Object.assign(c, d);
     else { const nid = "C-" + String(P_.clients.length + 1).padStart(2, "0"); P_.clients.push(Object.assign({ id: nid, devisLe: Date.now(), etapes: {}, heuresPassees: 0, interventions: [] }, d)); f.remove(); sauverP(); allerE("client", nid); return toast("Client ajouté. Le devis est prêt."); }
     sauverP(); f.remove(); rendre(); toast("Client enregistré.");
@@ -326,7 +334,7 @@ function feuilleInterventionP(id) {
 function feuilleDevisP(id) {
   const c = clientP(id), p = prixVente(c), o = OFFRES[c.offre], sn = c.pays === "SN";
   const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-label="Devis"><div class="feuille-doc">
-    <header class="doc-tete"><div class="doc-emetteur"><div><b>${sn ? "Société partenaire au Sénégal" : "[Vendeur, à compléter : docs/17]"}</b><br>${MON_COMPTE.complet}<br>${MON_COMPTE.compte}</div></div>
+    <header class="doc-tete"><div class="doc-emetteur"><div><b>${sn ? MON_COMPTE.complet : "[Vendeur, à compléter : docs/17]"}</b><br>${sn ? "RCCM et NINEA à compléter (docs/24)" : MON_COMPTE.complet}<br>${MON_COMPTE.compte}</div></div>
     <div class="doc-titre"><h1>Devis</h1><p>N° <b>D-${new Date(c.devisLe || Date.now()).getFullYear()}-${c.id.slice(2)}</b><br>Valable 30 jours</p></div></header>
     <div class="doc-parties"><div><small>Client</small><b>${esc(c.nom)}</b>${c.contact ? "<br>" + esc(c.contact) : ""}${c.tel ? "<br>" + esc(c.tel) : ""}<br>${esc(c.ville)}</div><div><small>Offre</small><b>${esc(o.nom)}</b><br>${o.sites} site${o.sites === 1 ? "" : "s"}, ${o.utilisateurs} utilisateurs, ${o.etiquettes} étiquettes<br>Installation ${modeTexte(c)}</div></div>
     <table><thead><tr><th>Désignation</th><th class="n">Montant HT</th></tr></thead><tbody>

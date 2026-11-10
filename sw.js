@@ -1,5 +1,5 @@
 // Garde l'appli utilisable sans réseau, dans un dépôt ou un hangar.
-const VERSION = "rayon-v19";
+const VERSION = "rayon-v20";
 const FICHIERS = ["./", "index.html", "styles.css", "data.js", "metiers.js", "graphes.js", "plus.js", "outils.js", "config.js", "blocs.js", "visites.js", "xlsx.js", "documents.js", "etiquettes.js", "espace.js", "app.js", "icone.svg", "manifest.webmanifest", "lib/jsQR.js", "lib/qrcode.js", "img/chaise.webp", "img/table.webp", "img/assiette.webp", "img/verre.webp", "img/nappe.webp", "img/enceinte.webp", "img/groupe.webp", "img/rallonge.webp", "img/housse.webp"];
 
 self.addEventListener("install", e => {
