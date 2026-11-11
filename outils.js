@@ -78,7 +78,17 @@ function tZone(id) {
     <input type="number" inputmode="numeric" min="0" name="${a.id}" value="${Math.max(0, stock(a.id))}" aria-label="Compté : ${esc(a.nom)}"></div></li>`).join("")}</ul>
   <div class="valider"><button type="button" class="btn" data-aller="zones">Annuler</button><button class="btn plein" style="background:var(--compter);border-color:var(--compter);color:#fff">Valider le comptage</button></div></form>`;
 }
-function validerZone(form) {
+function validerZone(form, confirme) {
+  // Avant d'enregistrer : les lignes très loin de l'attendu sont montrées, la personne confirme ou corrige.
+  if (!confirme) {
+    const loin = [];
+    S.articles.filter(a => a.emp === form.dataset.zoneId).forEach(a => {
+      const c = form.elements[a.id]; if (!c) return;
+      const n = Math.max(0, Math.floor(+c.value || 0)), attendu = Math.max(0, stock(a.id));
+      if (grandEcart(n, attendu)) loin.push({ nom: a.nom, compte: n, attendu });
+    });
+    if (loin.length) return confirmerEcart(loin, () => validerZone(form, true));
+  }
   let ecarts = 0;
   S.articles.filter(a => a.emp === form.dataset.zoneId).forEach(a => {
     const c = form.elements[a.id]; if (!c) return;

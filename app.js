@@ -240,7 +240,7 @@ function vConnexion() {
       <p class="message" role="alert">${esc(msgConnexion)}</p>
       <button class="btn plein">Se connecter</button>
     </form>
-    <details class="c-demo"><summary><span><b>Comptes de démonstration</b><small>Entrer d'un geste, sans rien taper</small></span></summary>
+    <details class="c-demo" open><summary><span><b>Comptes de démonstration</b><small>Entrer d'un geste, sans rien taper</small></span></summary>
       <p class="sous">Touchez un compte pour entrer. Chacun voit un écran différent, réglé pour son travail. Dans l'appli livrée, cette liste n'existe pas : chacun reçoit son identifiant.</p>
       <div class="c-comptes">${EQUIPE_DEMO.filter(d => S.equipe.some(x => x.id === d.id)).map(d => { const u = S.equipe.find(x => x.id === d.id) || d; return `<button type="button" data-remplir="${d.identifiant}|${d.mdp}">${avatar(u)}<span><b>${esc(u.poste)}</b><small>${esc(u.nom)} · <span class="code">${d.identifiant}</span> · <span class="code">${d.mdp}</span></small></span>${I.fleche}</button>`; }).join("")}</div>
     </details>
@@ -578,7 +578,7 @@ function bCommandes() {
     </section>`;
   }).join("") || `<p class="vide">Rien à commander.</p>`}
   <h2>Commandes passées</h2>
-  ${S.commandes.length ? `<table class="t cmdes"><tbody>${S.commandes.slice().reverse().map(c => `<tr><td>${quand(c.date)}<br><small>${esc(c.fournisseur)}</small></td><td>${esc(c.statut)}</td><td class="n">${c.statut === "Envoyée" ? `<button class="btn petit" data-recevoir="${c.id}">Réceptionner</button>` : ""}</td></tr>`).join("")}</tbody></table>` : `<p class="vide">Aucune pour l'instant.</p>`}`;
+  ${S.commandes.length ? `<table class="t cmdes"><tbody>${S.commandes.slice().reverse().map(c => `<tr><td>${quand(c.date)}<br><small>${esc(c.fournisseur)}</small></td><td>${esc(c.statut)}</td><td class="n">${["Envoyée", "Reçue en partie"].includes(c.statut) ? `<button class="btn petit" data-recevoir="${c.id}">${c.statut === "Envoyée" ? "Réceptionner" : "Réceptionner le reste"}</button>` : ""}</td></tr>`).join("")}</tbody></table>` : `<p class="vide">Aucune pour l'instant.</p>`}`;
 }
 function creerCommande(fid, statut) {
   const l = brouillons()[fid], f = S.fournisseurs.find(x => x.id === fid);
@@ -779,6 +779,21 @@ function evChoisi(f) {
 function brancherAutre(f) { const t = f.querySelector("[name=evAutre]"); if (t) t.oninput = t.onfocus = () => { f.querySelector('input[name=ev][value="__autre"]').checked = true; }; }
 const radios = (nom, liste, etiquette) => `<p class="choix-titre">${etiquette}</p><div class="choix" role="radiogroup" aria-label="${etiquette}">${liste.map((e, i) => `<label><input type="radio" name="${nom}" value="${esc(e)}" ${i === 0 ? "checked" : ""}>${esc(e)}</label>`).join("")}</div>`;
 
+/* Comptage très loin de l'attendu : on demande confirmation avant d'enregistrer, une faute de frappe est vite arrivée.
+   La règle : l'écart fait au moins 5 unités ET au moins la moitié de la quantité attendue. */
+const grandEcart = (compte, attendu) => { const e = Math.abs(compte - attendu); return e >= 5 && e * 2 >= attendu; };
+// lignes : [{ nom, compte, attendu }]. « oui » n'est appelé que si la personne confirme ; sinon elle retrouve sa saisie.
+function confirmerEcart(lignes, oui) {
+  const un = lignes.length === 1 ? lignes[0] : null;
+  $$(".toast:not(.avec-bouton)").forEach(x => x.remove()); // un message encore affiché ne doit pas cacher les boutons
+  const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="tce">
+    <h1 id="tce" style="font-size:26px">${un ? `Vous avez compté ${un.compte}, l'appli en attendait ${un.attendu}. C'est bien ça ?` : `${lignes.length} comptages sont très loin de ce que l'appli attendait. C'est bien ça ?`}</h1>
+    ${un ? `<p class="sous">${esc(un.nom)}</p>` : `<ul class="ecarts">${lignes.map(l => `<li><b>${esc(l.nom)}</b><span>compté ${l.compte}, attendu ${l.attendu}</span></li>`).join("")}</ul>`}
+    <div class="valider pile"><button class="btn plein" data-oui>${un ? `Oui, il y en a ${un.compte}` : "Oui, enregistrer ces quantités"}</button><button class="btn" data-x>${un ? "Non, je recompte" : "Non, je corrige"}</button></div></div>`);
+  f.querySelector("[data-x]").onclick = () => f.remove();
+  f.querySelector("[data-oui]").onclick = () => { f.remove(); oui(); };
+}
+
 function feuille(id, type) {
   const a = art(id), q = stock(id), d = dehors(id);
   if (type === "Retour" && !d.length) return toast("Rien de cet objet n'est chez un client.");
@@ -799,9 +814,10 @@ function feuille(id, type) {
   brancherAutre(f);
   if (type === "Retour") f.querySelectorAll("input[name=ev]").forEach(r => r.onchange = () => { champ.value = d.find(x => x.evenement === r.value).qte; });
   f.querySelector("[data-x]").onclick = () => f.remove();
-  f.querySelector("[data-ok]").onclick = () => {
+  const valider = confirme => {
     const n = Math.floor(+champ.value);
     if (!(n >= 0) || (n === 0 && type !== "Compter")) return toast("Indiquez une quantité.");
+    if (type === "Compter" && !confirme && grandEcart(n, Math.max(0, q))) return confirmerEcart([{ nom: a.nom, compte: n, attendu: Math.max(0, q) }], () => valider(true));
     if (max !== null && n > max) return toast(`Il n'y en a que ${max} au dépôt.`);
     const ev = evChoisi(f);
     if (evs && !ev) return toast(`Indiquez : ${V("imp").toLowerCase()}.`);
@@ -827,6 +843,7 @@ function feuille(id, type) {
     const m = mouvement(id, type, n, { evenement: ev === "Au dépôt" ? "" : ev, motif, refac: type === "Perte" && ev !== "Au dépôt" && motif !== "Abîmé" });
     rendre(); annulable([m], "Enregistré.");
   };
+  f.querySelector("[data-ok]").onclick = () => valider();
 }
 function manquants(ev, liste, rendus) {
   const f = ouvrirFeuille(`<div role="dialog" aria-modal="true"><h1 style="font-size:26px">Il manque des objets</h1>
@@ -931,7 +948,8 @@ function brancher() {
   $$("[data-monnaie]").forEach(s => s.onchange = () => { S.monnaie = s.value; sauver(); rendre(); });
   $$("[data-cmd]").forEach(b => b.onclick = () => { creerCommande(b.dataset.cmd, b.dataset.statut); toast(b.dataset.statut === "Envoyée" ? "Bon de commande envoyé (simulation)." : "Demande envoyée au gérant."); rendre(); });
   $$("[data-valider]").forEach(b => b.onclick = () => { S.commandes.find(c => c.id === b.dataset.valider).statut = "Envoyée"; sauver(); toast("Commande validée et envoyée (simulation)."); rendre(); });
-  $$("[data-recevoir]").forEach(b => b.onclick = () => { const c = S.commandes.find(x => x.id === b.dataset.recevoir); c.lignes.forEach(l => mouvement(l.id, "Entrée", l.qte, { motif: "Réception " + c.id })); c.statut = "Reçue"; sauver(); toast("Réception enregistrée."); rendre(); });
+  // « Réceptionner » ouvre l'écran de réception, prérempli avec la commande : on y note un écart et on photographie le bon.
+  $$("[data-recevoir]").forEach(b => b.onclick = () => aller("receptionCmd", b.dataset.recevoir));
   const fc = $('[data-form="code"]'); if (fc) fc.onsubmit = e => { e.preventDefault(); const v = fc.code.value; const id = code(v) || code("ART-" + v.replace(/\D/g, "").padStart(4, "0")); if (id) ouvrir(id); else toast("Code non reconnu, exemple : ART-0003."); };
   // Recherche dans une liste : on filtre les lignes en place. « Entrée » ouvre l'objet s'il n'en reste qu'un.
   $$("[data-filtre]").forEach(c => {

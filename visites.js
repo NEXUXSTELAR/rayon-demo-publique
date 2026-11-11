@@ -8,6 +8,7 @@ const PRESENTATION_METIERS = {
   industrie: "Atelier : outils coupants, instruments prêtés, matière par affaire",
   brasserie: "Fûts chez les bars, reprise des vides, tireuses réservées",
   paysagiste: "Espaces verts : machines prêtées et rendues, fournitures par chantier",
+  menuisier: "Pose et agencement : machines et lasers prêtés, produits de pose par chantier",
   restaurant: "Réserve et chambre froide : dates limites, consommation par service",
   labo: "Consommables, appareils prêtés, lots et dates limites",
   distribution: "Magasin et cour : ventes, retours de clients, réassort",
