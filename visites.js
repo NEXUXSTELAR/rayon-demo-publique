@@ -5,6 +5,8 @@
 const PRESENTATION_METIERS = {
   loueur: "Mariages, séminaires : réservations, départs, retours, casse refacturée",
   artisan: "Chantiers : outillage prêté et rendu, consommables par chantier",
+  industrie: "Atelier : outils coupants, instruments prêtés, matière par affaire",
+  brasserie: "Fûts chez les bars, reprise des vides, tireuses réservées",
   paysagiste: "Espaces verts : machines prêtées et rendues, fournitures par chantier",
   restaurant: "Réserve et chambre froide : dates limites, consommation par service",
   labo: "Consommables, appareils prêtés, lots et dates limites",
@@ -17,14 +19,14 @@ function feuilleMetiers() {
   const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="tm"><h1 id="tm" style="font-size:26px">Une démo par métier</h1>
     <p class="sous">Mêmes gestes, mots et blocs adaptés. Le lien ouvre directement la démo du métier : c'est celui à envoyer au prospect.</p>
     <div class="metiers">${Object.entries(METIERS).map(([k, m]) => {
-      const a = (k === "loueur" ? SEED().articles : m.articles.map(x => ({ img: x[2] })))[0];
-      return `<div class="metier ${(S.metier || "loueur") === k ? "actuel" : ""}"><div class="vignette"><img src="img/${a.img}.webp" alt="" loading="lazy"></div>
+      const a = (k === "loueur" ? SEED().articles : m.articles ? m.articles.map(x => ({ img: x[2] })) : [{ img: m.vignette }])[0];
+      return `<div class="metier ${(S.variante || S.metier || "loueur") === k ? "actuel" : ""}"><div class="vignette"><img src="img/${a.img}.webp" alt="" loading="lazy"></div>
         <div><b>${esc(m.nom)}</b><small>${esc(PRESENTATION_METIERS[k] || "")}</small>
-        <div class="metier-boutons"><button class="btn petit plein" data-m="${k}">${(S.metier || "loueur") === k ? "Démo actuelle" : "Voir cette démo"}</button><button class="btn petit" data-lien="${k}">Copier le lien</button></div></div></div>`;
+        <div class="metier-boutons"><button class="btn petit plein" data-m="${k}">${(S.variante || S.metier || "loueur") === k ? "Démo actuelle" : "Voir cette démo"}</button><button class="btn petit" data-lien="${k}">Copier le lien</button></div></div></div>`;
     }).join("")}</div>
     <div class="valider" style="grid-template-columns:1fr"><button class="btn" data-x>Fermer</button></div></div>`);
   f.querySelector("[data-x]").onclick = () => f.remove();
-  f.querySelectorAll("[data-m]").forEach(b => b.onclick = () => { f.remove(); if ((S.metier || "loueur") !== b.dataset.m) { session = null; installateur = false; changerMetier(b.dataset.m); history.replaceState(null, "", "?metier=" + b.dataset.m); } });
+  f.querySelectorAll("[data-m]").forEach(b => b.onclick = () => { f.remove(); if ((S.variante || S.metier || "loueur") !== b.dataset.m) { session = null; installateur = false; changerMetier(b.dataset.m); history.replaceState(null, "", "?metier=" + b.dataset.m); } });
   f.querySelectorAll("[data-lien]").forEach(b => b.onclick = async () => {
     const l = lienDemo(b.dataset.lien);
     try { await navigator.clipboard.writeText(l); toast("Lien copié : " + l); } catch (e) { prompt("Lien de la démo :", l); }
@@ -42,7 +44,7 @@ function etapesMetier() {
     { t: `${bureau.nom}, ${m.v.bureau.toLowerCase()}, ouvre sa journée : ce qu'il y a à faire, le dépôt en 3D zone par zone${m.dlc ? ", les dates limites" : ""}, ce qui sort par ${m.v.imp.toLowerCase()}.`, f: () => { connecterRole("bureau"); aller("accueil", null, true); } },
     { t: `${dir.nom}, ${m.v.direction.toLowerCase()}, pilote : valeur du stock et sa tendance, ce qui est à commander, ce qui attend sa décision.`, f: () => { connecterRole("direction"); aller("accueil", null, true); } },
     { t: `Les analyses montrent où part l'argent, ${m.v.imp.toLowerCase()} par ${m.v.imp.toLowerCase()}, et ce qui dort sur les étagères.`, f: () => aller("analyses", null, true) },
-    { t: "Tout se règle pour votre entreprise : taille de l'équipe, écrans, blocs, droits de chacun. C'est nous qui le faisons, d'après votre devis.", f: () => { session = null; installateur = true; vueE = { nom: "reglages", arg: null }; entree = true; rendre(); window.scrollTo(0, 0); } },
+    ESPACE && { t: "Tout se règle pour votre entreprise : taille de l'équipe, écrans, blocs, droits de chacun. C'est nous qui le faisons, d'après votre devis.", f: () => { session = null; installateur = true; vueE = { nom: "reglages", arg: null }; entree = true; rendre(); window.scrollTo(0, 0); } },
   ];
   return etapes;
 }

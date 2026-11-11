@@ -225,7 +225,7 @@ function wValeur() {
 function wPartLoue() {
   if (aDesPrets()) {
     const valeur = valeurStock(), chez = dehors().reduce((t, d) => t + d.qte * art(d.article).prix, 0), part = Math.round(chez / ((chez + valeur) || 1) * 100);
-    return `<div class="w-jauge">${anneau(chez, chez + valeur, "var(--compter)", part + " %", S.metier === "loueur" ? "du parc loué" : "du matériel prêté", true)}<p>${droit("prix") ? argent(chez) + " " : ""}${V("chez").toLowerCase()}</p></div>`;
+    return `<div class="w-jauge">${anneau(chez, chez + valeur, "var(--compter)", part + " %", estLoueur() ? "du parc loué" : S.variante ? "du parc dehors" : "du matériel prêté", true)}<p>${droit("prix") ? argent(chez) + " " : ""}${V("chez").toLowerCase()}</p></div>`;
   }
   const ok = S.articles.filter(x => etat(x).c === "").length;
   return `<div class="w-jauge">${anneau(ok, S.articles.length, "var(--retour)", Math.round(ok / S.articles.length * 100) + " %", "au bon niveau", true)}<p>${S.articles.length - ok} à commander</p></div>`;

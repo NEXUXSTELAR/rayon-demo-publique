@@ -10,6 +10,41 @@ const METIERS = {
          prendre: "Je sors", prendreSous: "Sortie définitive", remettre: "Je remets", remettreSous: "Retour en stock",
          terrain: "Magasinier", bureau: "Responsable du parc", direction: "Gérante", parc: "Relevé du parc", sortiesMot: "Mis en location" },
   },
+  // La brasserie suit la logique du loueur (ça part chez le bar, ça revient vide, bons, tournée, réservations) :
+  // on part de la démo du loueur et on l'habille (objets, bars, mots). S.metier reste « loueur », S.variante dit « brasserie ».
+  brasserie: {
+    base: "loueur", vignette: "fut",
+    entreprise: "Brasserie du Canal (démo)", nom: "Brasserie artisanale", logique: "pret", dlc: false,
+    v: { imp: "Bar", imps: "bars", retourTitre: "Reprise des vides", retourSous: "fûts dehors", chez: "Chez les bars",
+         pretSortie: "Part chez le bar", pretSortieSous: "Livraison", pretRetour: "Revient vide", pretRetourSous: "Je le range au lavage",
+         prendre: "Je sors", prendreSous: "Sortie définitive", remettre: "Je remets", remettreSous: "Retour en stock",
+         terrain: "Livreur", bureau: "Responsable des livraisons", direction: "Brasseur", parc: "Relevé de la cave", sortiesMot: "Livré",
+         question: "Une tireuse et 20 fûts samedi ?", leDepart: "la livraison", chaque: "fût" },
+    habillage: {
+      articles: {
+        "ART-0001": { nom: "Fût inox 30 L", img: "fut", unite: "fût", prix: 95, loc: 4 },
+        "ART-0002": { nom: "Fût inox 20 L", img: "fut", unite: "fût", prix: 85, loc: 3 },
+        "ART-0003": { nom: "Gobelet réutilisable 50 cl", img: "gobelet", unite: "gobelet", prix: 1.2, loc: 0.2 },
+        "ART-0004": { nom: "Verre à bière 50 cl", img: "verre_biere", unite: "verre", prix: 2.5, loc: 0.3 },
+        "ART-0005": { nom: "Mange-debout", img: "mange_debout", unite: "mange-debout", prix: 120, loc: 8 },
+        "ART-0006": { nom: "Tireuse mobile 2 becs n°1", img: "tireuse", unite: "tireuse", prix: 690, loc: 60, serie: "SN-TIR-0201" },
+        "ART-0007": { nom: "Tireuse mobile 2 becs n°2", img: "tireuse", unite: "tireuse", prix: 690, loc: 60, serie: "SN-TIR-0202" },
+        "ART-0008": { nom: "Bouteille de CO2 · 10 kg n°1", img: "co2", unite: "bouteille", prix: 70, loc: 10, serie: "SN-CO2-1001" },
+        "ART-0009": { nom: "Tête de soutirage type S", img: "tete_soutirage", unite: "tête", prix: 45, loc: 5 },
+        "ART-0010": { nom: "Caisse de 24 bouteilles consignées", img: "caisse_biere", unite: "caisse", prix: 12, loc: 0 },
+        "ART-0011": { nom: "Tente 3 × 6 m", img: "tente", unite: "tente", prix: 900, loc: 80 },
+      },
+      evenements: { "Mariage · salle des fêtes": "Le Comptoir des Halles", "Séminaire · hôtel": "Bar Le Quai", "Anniversaire · particulier": "Restaurant La Cour",
+        "Fête de quartier · association": "Fête du quartier · samedi", "Mariage · samedi": "Fête de la bière · samedi", "Séminaire d'entreprise": "Festival du Canal", "Gala de fin d'année": "Marché de Noël" },
+      adresses: { "Hôtel du centre, salle Horizon": "Bar Le Quai, 4 quai du Canal", "Salle des fêtes, place de la Mairie": "Le Comptoir des Halles, place du Marché",
+        "12 rue des Lilas, jardin": "Restaurant La Cour, 12 rue des Lilas", "Domaine des Tilleuls, route du Lac": "Place de la Fontaine", "Parc des expositions, hall B": "Halle du marché couvert" },
+      clients: { "CL-001": "Le Comptoir des Halles (démo)", "CL-002": "Bar Le Quai (démo)", "CL-003": "Comité des fêtes (démo)" },
+      fournisseurs: [{ id: "FOU-01", nom: "Fournisseur de fûts inox (démo)", delai: 15 }, { id: "FOU-02", nom: "Fournisseur de verrerie et caisses (démo)", delai: 5 }, { id: "FOU-03", nom: "Fournisseur de matériel de tirage (démo)", delai: 7 }],
+      emplacements: [{ id: "EMP-A1", nom: "Cave · fûts" }, { id: "EMP-B2", nom: "Réserve · verres et gobelets" }, { id: "EMP-C1", nom: "Local matériel de tirage" }, { id: "EMP-D1", nom: "Quai · caisses consignées" }, { id: "EMP-E1", nom: "Cour · tentes et mange-debout" }],
+      kits: [{ id: "KIT-01", nom: "Kit fête de quartier", lignes: [["ART-0006", 1], ["ART-0008", 1], ["ART-0009", 2], ["ART-0003", 200]] },
+             { id: "KIT-02", nom: "Kit dégustation", lignes: [["ART-0005", 4], ["ART-0004", 50]] }],
+    },
+  },
   artisan: {
     entreprise: "Atelier Élec (démo)", nom: "Artisan et maintenance", logique: "conso", dlc: false,
     v: { imp: "Chantier", imps: "chantiers", retourTitre: "Rendre l'outillage", retourSous: "outils dehors", chez: "Sur les chantiers",
@@ -40,6 +75,36 @@ const METIERS = {
     ],
     kits: [{ id: "KIT-01", nom: "Kit tableau électrique", lignes: [["ART-0001", 10], ["ART-0003", 1], ["ART-0005", 1]] },
            { id: "KIT-02", nom: "Kit EPI chantier", lignes: [["ART-0010", 1], ["ART-0015", 1], ["ART-0004", 1]] }],
+  },
+  industrie: {
+    entreprise: "Atelier Méca (démo)", nom: "Sous-traitance industrielle", logique: "conso", dlc: false,
+    v: { imp: "Affaire", imps: "affaires", retourTitre: "Rendre l'outillage", retourSous: "outils sortis", chez: "Aux postes",
+         pretSortie: "Je l'emprunte", pretSortieSous: "Pour un poste ou une affaire", pretRetour: "Je le rends", pretRetourSous: "Il revient au magasin",
+         prendre: "J'en prends", prendreSous: "Pour une affaire", remettre: "Je remets le surplus", remettreSous: "Pas utilisé",
+         terrain: "Opérateur", bureau: "Chef d'atelier", direction: "Gérant", parc: "Relevé du magasin", sortiesMot: "Consommé" },
+    imputations: ["Affaire 2417 · carters aluminium", "Affaire 2422 · série de 200 brides", "Maintenance · centre d'usinage n°3", "Prototype · support moteur"],
+    fournisseurs: [{ id: "FOU-01", nom: "Distributeur d'outils coupants (démo)", delai: 2 }, { id: "FOU-02", nom: "Négociant en métaux (démo)", delai: 5 }, { id: "FOU-03", nom: "Fournisseur de consommables et EPI (démo)", delai: 3 }],
+    emplacements: [{ id: "EMP-A1", nom: "Magasin · armoire outils coupants" }, { id: "EMP-A2", nom: "Magasin · porte-outils et cônes" }, { id: "EMP-M1", nom: "Salle de mesure" }, { id: "EMP-R1", nom: "Racks matière" }, { id: "EMP-S1", nom: "Poste de soudure" }, { id: "EMP-C1", nom: "Magasin · EPI et consommables" }],
+    articles: [
+      ["ART-0001", "Plaquettes carbure CNMG · boîte de 10", "plaquette_carbure", "conso", 4, 15, 98, 1, "EMP-A1", "FOU-01", .5],
+      ["ART-0002", "Fraise carbure Ø12 · 4 dents", "fraise", "conso", 3, 10, 64, 1, "EMP-A1", "FOU-01", .3],
+      ["ART-0003", "Foret carbure Ø8,5", "foret", "conso", 3, 10, 42, 1, "EMP-A1", "FOU-01", .3],
+      ["ART-0004", "Taraud machine M8", "taraud", "conso", 4, 12, 28, 1, "EMP-A1", "FOU-01", .2],
+      ["ART-0005", "Micromètre 0-25 mm n°1", "micrometre", "pret", 0, 1, 185, 1, "EMP-M1", "FOU-01", 0, "SN-MIC-2501"],
+      ["ART-0006", "Porte-outil HSK63 n°1", "porte_outil", "pret", 0, 1, 340, 1, "EMP-A2", "FOU-01", 0, "SN-HSK-6301"],
+      ["ART-0007", "Pied à coulisse 150 mm n°1", "pied_coulisse", "pret", 0, 1, 129, 1, "EMP-M1", "FOU-01", 0, "SN-PAC-1501"],
+      ["ART-0008", "Calibre tampon M8", "calibre", "pret", 0, 1, 76, 1, "EMP-M1", "FOU-01", 0, "SN-CT-0808"],
+      ["ART-0009", "Clé dynamométrique 5-60 N·m", "cle_dynamo", "pret", 0, 1, 210, 1, "EMP-A2", "FOU-01", 0, "SN-CD-0560"],
+      ["ART-0010", "Barre alu 2017 Ø40 · 3 m", "barre_alu", "conso", 4, 15, 58, 1, "EMP-R1", "FOU-02", .4],
+      ["ART-0011", "Tôle acier S235 · 2 mm", "tole", "conso", 5, 20, 46, 1, "EMP-R1", "FOU-02", .5],
+      ["ART-0012", "Fil de soudure MIG 1 mm · bobine 15 kg", "bobine_mig", "conso", 2, 6, 52, 1, "EMP-S1", "FOU-03", .15],
+      ["ART-0013", "Disque à tronçonner 125 mm · boîte de 25", "disque", "conso", 2, 8, 35, 1, "EMP-S1", "FOU-03", .2],
+      ["ART-0014", "Huile de coupe soluble · bidon 20 L", "huile_moteur", "conso", 2, 6, 118, 1, "EMP-C1", "FOU-03", .1],
+      ["ART-0015", "Gants anti-coupure · paire", "gants", "conso", 10, 40, 6.5, 5, "EMP-C1", "FOU-03", 1.5],
+      ["ART-0016", "Lunettes de protection", "lunettes", "conso", 5, 20, 4.5, 1, "EMP-C1", "FOU-03", .3],
+    ],
+    kits: [{ id: "KIT-01", nom: "Kit de réglage série brides", lignes: [["ART-0002", 1], ["ART-0003", 1], ["ART-0004", 1]] },
+           { id: "KIT-02", nom: "Kit EPI atelier", lignes: [["ART-0015", 1], ["ART-0016", 1]] }],
   },
   paysagiste: {
     entreprise: "Jardins et Espaces Verts (démo)", nom: "Paysagiste et espaces verts", logique: "conso", dlc: false,
@@ -173,14 +238,24 @@ const METIERS = {
   },
 };
 
-const metier = () => METIERS[(typeof S !== "undefined" && S && S.metier) || "loueur"] || METIERS.loueur;
+const metier = () => {
+  const s = typeof S !== "undefined" && S;
+  if (s && s.variante && METIERS[s.variante]) return Object.assign({}, METIERS.loueur, METIERS[s.variante]);
+  return METIERS[(s && s.metier) || "loueur"] || METIERS.loueur;
+};
 const V = k => metier().v[k];
+// Vrai seulement pour la démo du loueur de matériel de réception (la brasserie part de la même base, avec ses mots à elle).
+const estLoueur = () => (S.metier || "loueur") === "loueur" && !S.variante;
+// Le mot du métier pour « événement » : chantier, service, bar, projet… Chez le quincaillier, où ce mot est « client », on dit « vente ».
+const motImp = () => { const m = (V("imp") || "Événement").toLowerCase(); return m === "client" ? "vente" : m; };
+const motImps = () => { const m = V("imps") || "événements"; return m === "clients" ? "ventes" : m; };
 const logique = a => a.logique || metier().logique;
 const aDesPrets = () => S.articles.some(a => logique(a) === "pret") && actif("MO-PRET");
 
 /* ---------------- Construire la démo d'un métier ---------------- */
 function construireDemo(m) {
   if (!METIERS[m] || m === "loueur") { const s = seedMouvements(SEED()); s.metier = "loueur"; return s; }
+  if (METIERS[m].base === "loueur") return habiller(seedMouvements(SEED()), METIERS[m], m);
   const d = METIERS[m], st = SEED();
   st.metier = m;
   st.entreprise = Object.assign({}, st.entreprise, { nom: d.entreprise, adresse: "Adresse de l'entreprise" });
@@ -196,6 +271,30 @@ function construireDemo(m) {
   const postes = { terrain: d.v.terrain, bureau: d.v.bureau, direction: d.v.direction };
   st.equipe.forEach(u => { u.poste = postes[u.role]; });
   seedAutre(st, d);
+  return st;
+}
+
+// Une variante du loueur : mêmes gestes et mêmes données, autres objets et autres mots. Les objets sans équivalent sont retirés.
+function habiller(st, d, m) {
+  const h = d.habillage, garde = id => !!h.articles[id];
+  st.metier = "loueur"; st.variante = m;
+  st.entreprise = Object.assign({}, st.entreprise, { nom: d.entreprise });
+  st.articles = st.articles.filter(a => garde(a.id)).map(a => Object.assign({}, a, h.articles[a.id]));
+  const ev = x => h.evenements[x] || x;
+  st.evenements = st.evenements.map(ev);
+  st.mouvements = st.mouvements.filter(x => garde(x.article)).map(x => Object.assign(x, { evenement: ev(x.evenement) }));
+  st.reservations = st.reservations.map(r => Object.assign(r, { nom: ev(r.nom), adresse: (h.adresses || {})[r.adresse] || r.adresse, lignes: r.lignes.filter(l => garde(l[0])) })).filter(r => r.lignes.length);
+  st.clientsLoc.forEach(c => { if (h.clients[c.id]) c.nom = h.clients[c.id]; });
+  st.clientsEv = Object.fromEntries(Object.entries(st.clientsEv || {}).map(([k, v]) => [ev(k), v]));
+  st.fournisseurs = h.fournisseurs; st.emplacements = h.emplacements; st.kits = h.kits;
+  st.commandes = st.commandes.map(c => Object.assign(c, { lignes: c.lignes.filter(l => garde(l.id)), fournisseur: (h.fournisseurs.find(f => f.id === c.fid) || {}).nom || c.fournisseur }))
+    .filter(c => c.lignes.length).map(c => Object.assign(c, { total: c.lignes.reduce((t, l) => t + l.qte * st.articles.find(a => a.id === l.id).prix, 0) }));
+  st.bons = (st.bons || []).filter(b => (b.lignes || []).some(l => garde(l[0])));
+  // Des fûts au lavage, comme les housses du loueur au nettoyage
+  st.mouvements.push({ id: "MV-L0001", date: Date.now() - 86400000, profil: "terrain", qui: "Ousmane", article: "ART-0001", type: "Réparation", qte: 24, evenement: "", motif: "Au nettoyage", refac: false });
+  st.mouvements.sort((a, b) => a.date - b.date);
+  const postes = { terrain: d.v.terrain, bureau: d.v.bureau, direction: d.v.direction, chauffeur: "Chauffeur-livreur" };
+  st.equipe.forEach(u => { u.poste = postes[u.role] || u.poste; });
   return st;
 }
 
@@ -239,6 +338,15 @@ function seedAutre(st, d) {
   }
   // Des lots reçus récemment avec une date limite courte, pour montrer « à utiliser en premier »
   (d.lotsCourts || []).forEach(([id, qte, jours]) => add(maintenant - 2 * J, "terrain", id, "Entrée", qte, { motif: "Livraison", dlc: iso(maintenant + jours * J) }));
+  // Toujours une commande à préparer : si aucun objet n'est sous son seuil ce jour-là, le plus proche y passe ce matin
+  const courts = (d.lotsCourts || []).map(l => l[0]);
+  const suivis = st.articles.filter(a => a.logique !== "pret" && a.jour > 0 && !courts.includes(a.id));
+  if (suivis.length && !suivis.some(a => q[a.id] <= a.seuil)) {
+    const a = suivis.slice().sort((x, y) => (q[x.id] - x.seuil) / x.cible - (q[y.id] - y.seuil) / y.cible)[0];
+    let s = q[a.id] - a.seuil; if (a.lot > 1) s = Math.ceil(s / a.lot) * a.lot;
+    s = Math.min(s, q[a.id]);
+    add(Math.min(minuit + 9 * 3600000, maintenant - 3600000), "terrain", a.id, "Sortie", s, { imputation: d.imputations[0] }); q[a.id] -= s;
+  }
   // Ce qui est à l'atelier ou au nettoyage (le linge de l'hôtel, par exemple)
   (d.atelier || []).forEach(([id, qte, motif]) => { if (q[id] >= qte) { add(maintenant - J, "terrain", id, "Réparation", qte, { motif }); q[id] -= qte; } });
   // Un outil encore dehors, si le métier en prête

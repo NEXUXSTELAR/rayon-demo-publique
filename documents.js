@@ -2,14 +2,14 @@
 /* Clients, événements, documents de sortie et exports Excel.
    Deux niveaux de détail, réglés par entreprise dans l'espace installateur :
    - Simple : un nom d'événement, des bons courts, des exports en un onglet.
-   - Complet : client, dates, lieu, contact sur place ; bons avec codes, valeurs et conditions ; devis de location ; exports en plusieurs onglets.
+   - Complet : client, dates, lieu, contact sur place ; bons avec codes et conditions (valeur de remplacement sur le seul bon de sortie du loueur) ; devis de location ; exports en plusieurs onglets.
    Le dépôt ne remplit jamais ces informations : le bureau ou le patron les complète, depuis le bon ou la réservation.
    Chargé avant app.js. */
 
 const complet = () => (S.detail || "complet") === "complet";
 const NIVEAUX = {
   simple: { nom: "Simple", detail: "Un nom d'événement suffit. Bons courts, exports en un onglet. Pour les petites équipes et ceux qui veulent le moins de champs possible." },
-  complet: { nom: "Complet", detail: "Client, dates, lieu et contact sur place. Bons avec codes, valeurs et conditions, devis de location, exports détaillés." },
+  complet: { nom: "Complet", detail: "Client, dates, lieu et contact sur place. Bons avec codes et conditions, devis de location, exports détaillés." },
 };
 const dateDoc = iso => iso ? new Date(iso + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }) : "";
 const motClients = () => ({ ong: "Bailleurs", labo: "Demandeurs" }[S.metier] || "Clients");
@@ -64,14 +64,14 @@ function feuilleEvenement(ev) {
 /* ---------------- Clients ---------------- */
 function bClients() {
   const l = (S.clientsLoc || []).slice().sort((a, b) => a.nom.localeCompare(b.nom));
-  return `<h1>${motClients()}</h1><p class="sous">${complet() ? "Coordonnées, caution, événements et casse de chacun. Tout s'imprime sur les bons et les factures." : "Nom, téléphone et caution. La caution s'affiche sur la facture de casse."}</p>
+  return `<h1>${motClients()}</h1><p class="sous">${complet() ? `Coordonnées, caution, ${motImps()} et casse de chacun. Tout s'imprime sur les bons et les factures.` : "Nom, téléphone et caution. La caution s'affiche sur la facture de casse."}</p>
   <div class="clients">${l.map(c => {
     const evs = evenementsDe(c), casse = evs.reduce((t, ev) => t + casseDe(ev), 0);
-    return `<button class="client" data-client="${c.id}"><span class="avatar">${esc(initiales(c.nom))}</span><span><b>${esc(c.nom)}</b><small>${[c.tel, evs.length + " événement" + (evs.length > 1 ? "s" : "")].filter(Boolean).map(esc).join(" · ")}</small></span>
+    return `<button class="client" data-client="${c.id}"><span class="avatar">${esc(initiales(c.nom))}</span><span><b>${esc(c.nom)}</b><small>${[c.tel, evs.length + " " + (evs.length > 1 ? motImps() : motImp())].filter(Boolean).map(esc).join(" · ")}</small></span>
       <span class="client-chiffres">${c.caution ? `<small>Caution</small><b>${argent(c.caution)}</b>` : ""}${casse ? `<small class="rouge">Casse ${argent(casse)}</small>` : ""}</span></button>`;
   }).join("") || `<p class="vide">Aucun client enregistré.</p>`}</div>
   <p style="margin-top:12px"><button class="btn plein petit" data-act="nouveauClient">Ajouter</button>${complet() ? ` <button class="btn petit" data-act="exportClients">${I.excel}Exporter en Excel</button>` : ""}</p>
-  ${complet() && evSansClient().length ? `<h2>À compléter</h2><p class="sous">Ces événements sont dehors sans client indiqué : leurs bons et leurs factures seraient incomplets.</p><div class="boutons">${evSansClient().map(ev => `<button class="btn petit" data-infos-ev="${esc(ev)}">${esc(ev)}</button>`).join("")}</div>` : ""}`;
+  ${complet() && evSansClient().length ? `<h2>À compléter</h2><p class="sous">Du matériel est dehors sans client indiqué : les bons et les factures seraient incomplets.</p><div class="boutons">${evSansClient().map(ev => `<button class="btn petit" data-infos-ev="${esc(ev)}">${esc(ev)}</button>`).join("")}</div>` : ""}`;
 }
 function vClient(id) {
   const c = (S.clientsLoc || []).find(x => x.id === id); if (!c) return bClients();
@@ -81,7 +81,7 @@ function vClient(id) {
   <div class="boutons">${c.tel ? `<a class="btn petit" href="tel:${esc(c.tel.replace(/\s/g, ""))}">Appeler</a><a class="btn petit" href="https://wa.me/${esc(c.tel.replace(/\D/g, "").replace(/^0/, "33"))}" target="_blank" rel="noopener">WhatsApp</a>` : ""}<button class="btn petit" data-modifier-client="${c.id}">Modifier</button></div>
   <div class="trio" style="margin-top:14px"><div><small>Événements</small><b>${evs.length}</b></div><div><small>Caution versée</small><b>${c.caution ? argent(c.caution) : "aucune"}</b></div><div><small>Casse refacturable</small><b style="${casse ? "color:var(--alerte)" : ""}">${argent(casse)}</b></div></div>
   ${c.notes ? `<p class="msg" style="margin-top:12px">${esc(c.notes)}</p>` : ""}
-  <h2>Ses événements</h2>
+  <h2>Ses ${motImps()}</h2>
   ${evs.length ? `<ul class="b-liste">${evs.map(x => `<li><div class="l ev-ligne"><span><b>${esc(x.ev)}</b><small>${[x.i.debut ? dateDoc(x.i.debut) : "", x.i.adresse].filter(Boolean).map(esc).join(" · ")}</small></span>
     <span class="boutons">${x.bons.map(b => `<button class="btn petit" data-aller="bon" data-arg="${b.id}">${b.type === "sortie" ? "Sortie" : "Retour"}${b.signature ? " ✓" : ""}</button>`).join("")}${x.casse ? `<button class="btn petit" data-facture="${esc(x.ev)}">Casse ${argentCourt(x.casse)}</button>` : ""}${x.i.resa && aDesPrixLocation() ? `<button class="btn petit" data-aller="devisLoc" data-arg="${x.i.resa.id}">Devis</button>` : ""}</span></div></li>`).join("")}</ul>` : `<p class="vide">Aucun événement pour l'instant.</p>`}`;
 }
@@ -128,16 +128,19 @@ const blocSignatures = (gauche, droite) => `<div class="sign"><div>${gauche}</di
 function tBon(arg) {
   const b = bonDe(arg); if (!b) return vAccueil();
   const cp = complet(), sortie = b.type === "sortie", i = infoEv(b.evenement), c = clientDe(b.evenement);
-  const pieces = b.lignes.reduce((t, [, q]) => t + q, 0), valeur = b.lignes.reduce((t, [id, q]) => t + q * art(id).prix, 0);
+  const pieces = b.lignes.reduce((t, [, q]) => t + q, 0);
+  // La valeur de remplacement ne figure que sur le bon de sortie d'un loueur : c'est ce que le client accepte de payer en cas de casse.
+  // Ailleurs (bon de retour, autres métiers), elle ne ferait que montrer au client ce que le matériel a coûté.
+  const val = cp && sortie && estLoueur();
   const manq = b.manquants || [], valManq = manq.reduce((t, [id, q]) => t + q * art(id).prix, 0);
   const loueur = (moi().nom) || "";
   const table = cp
-    ? `<table><thead><tr><th class="code">Code</th><th>Objet</th><th class="n">${sortie ? "Remis" : "Rendu"}</th><th class="n">Valeur unitaire</th></tr></thead><tbody>${b.lignes.map(([id, q]) => `<tr><td class="code">${id}</td><td>${esc(art(id).nom)}</td><td class="n">${q}</td><td class="n">${argent(art(id).prix)}</td></tr>`).join("") || `<tr><td colspan="4">Rien n'est revenu.</td></tr>`}</tbody>
-      <tfoot><tr><td colspan="2">${pieces} pièce${pieces > 1 ? "s" : ""}</td><td class="n">${pieces}</td><td class="n">${argent(valeur)}</td></tr></tfoot></table>`
+    ? `<table><thead><tr><th class="code">Code</th><th>Objet</th><th class="n">${sortie ? "Remis" : "Rendu"}</th>${val ? `<th class="n">Valeur de remplacement, l'unité</th>` : ""}</tr></thead><tbody>${b.lignes.map(([id, q]) => `<tr><td class="code">${id}</td><td>${esc(art(id).nom)}</td><td class="n">${q}</td>${val ? `<td class="n">${argent(art(id).prix)}</td>` : ""}</tr>`).join("") || `<tr><td colspan="3">Rien n'est revenu.</td></tr>`}</tbody>
+      <tfoot><tr><td colspan="2">${pieces} pièce${pieces > 1 ? "s" : ""}</td><td class="n">${pieces}</td>${val ? "<td></td>" : ""}</tr></tfoot></table>`
     : `<table><thead><tr><th>Objet</th><th class="n">${sortie ? "Remis" : "Rendu"}</th></tr></thead><tbody>${b.lignes.map(([id, q]) => `<tr><td>${esc(art(id).nom)}</td><td class="n">${q}</td></tr>`).join("") || `<tr><td colspan="2">Rien n'est revenu.</td></tr>`}</tbody></table>`;
   const tableManq = manq.length ? `<h2>Manquants ou cassés, à refacturer</h2><table><tbody>${manq.map(([id, q]) => `<tr>${cp ? `<td class="code">${id}</td>` : ""}<td>${esc(art(id).nom)}</td><td class="n">${q}</td>${cp ? `<td class="n">${argent(q * art(id).prix)}</td>` : ""}</tr>`).join("")}</tbody>${cp ? `<tfoot><tr><td colspan="3">Total à refacturer</td><td class="n">${argent(valManq)}</td></tr></tfoot>` : ""}</table>` : "";
   const conditions = cp ? `<div class="doc-conditions">${sortie
-    ? `${i.fin ? `<p>Retour prévu le <b>${dateDoc(i.fin)}</b>.</p>` : ""}${c && c.caution ? `<p>Caution versée : <b>${argent(c.caution)}</b>.</p>` : ""}<p>Le matériel est remis en bon état. Tout objet manquant ou cassé au retour est facturé à sa valeur de remplacement indiquée ci-dessus.</p>`
+    ? `${i.fin ? `<p>Retour prévu le <b>${dateDoc(i.fin)}</b>.</p>` : ""}${c && c.caution ? `<p>Caution versée : <b>${argent(c.caution)}</b>.</p>` : ""}<p>Le matériel est remis en bon état. Tout objet manquant ou cassé au retour est facturé à sa valeur de remplacement${val ? " indiquée ci-dessus" : ""}.</p>`
     : `<p>Matériel rendu le ${quand(b.date)}.${manq.length ? " Les manquants ci-dessus sont facturés à leur valeur de remplacement" + (c && c.caution ? ", retenue sur la caution." : ".") : " Tout est revenu."}</p>`}</div>` : "";
   return `<div class="feuille-doc">${cp ? teteDoc(sortie ? "Bon de sortie" : "Bon de retour", b.id, quand(b.date)) + blocParties(b.evenement) : `${enTeteDoc()}<h1>${sortie ? "Bon de sortie" : "Bon de retour"}</h1><p>${esc(b.evenement)}${c ? " · " + esc(c.nom) : ""}<br>${quand(b.date)} · n° ${b.id}</p>`}
     ${table}${tableManq}${conditions}
@@ -250,7 +253,7 @@ function exporterClients() {
       colonnes: [{ t: V("imp"), l: 32 }, { t: motClients().replace(/s$/, ""), l: 28 }, { t: "Début", l: 12, f: "date" }, { t: "Fin", l: 12, f: "date" }, { t: "Lieu", l: 32 }, { t: "Pièces sorties", l: 12, f: "entier" }, { t: "Encore dehors", l: 12, f: "entier" }, { t: "Casse refacturable", l: 16, f: "argent" }],
       lignes: evs.map(ev => { const i = infoEv(ev), c = clientDe(ev); return [ev, c ? c.nom : "", i.debut ? new Date(i.debut + "T12:00:00").getTime() : null, i.fin ? new Date(i.fin + "T12:00:00").getTime() : null, i.adresse, S.mouvements.filter(m => m.evenement === ev && m.type === "Prêt").reduce((t, m) => t + m.qte, 0), dehors().filter(d => d.evenement === ev).reduce((t, d) => t + d.qte, 0), casseDe(ev)]; }) },
   ]);
-  toast("Clients et événements exportés en Excel.");
+  toast(`${motClients()} et ${motImps()} exportés en Excel.`);
 }
 
 function brancherDocuments() {

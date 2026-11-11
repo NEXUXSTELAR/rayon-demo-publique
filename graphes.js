@@ -66,14 +66,14 @@ function gDepotClients() {
   let svg = "";
   lignes.forEach((l, i) => {
     const y = i * lh + 4, tot = l.dep + l.dh || 1, w1 = (l.dep / tot) * L, w2 = (l.dh / tot) * L;
-    const tip = `${l.a.nom} : ${entier(l.dep)} au dépôt, ${entier(l.dh)} chez les clients`;
+    const tip = `${l.a.nom} : ${entier(l.dep)} au dépôt, ${entier(l.dh)} ${V("chez").toLowerCase()}`;
     svg += `<text x="${g - 8}" y="${y + 15}" text-anchor="end">${esc(court(l.a.nom, W < 500 ? 17 : 26))}</text>`;
     svg += `<rect x="${g}" y="${y + 2}" width="${Math.max(0, w1 - 1)}" height="18" rx="3" fill="${C.depot}" data-tip="${esc(tip)}"/>`;
     if (w2 > 0) svg += `<rect x="${g + w1 + 1}" y="${y + 2}" width="${Math.max(2, w2 - 1)}" height="18" rx="3" fill="${C.sortie}" data-tip="${esc(tip)}"/>`;
     svg += `<text x="${W - 4}" y="${y + 15}" text-anchor="end" class="v">${Math.round(l.part * 100)} %</text>`;
   });
-  return cadre("Où est le matériel en ce moment", "Pourcentage de chaque objet parti chez les clients. En haut de la liste : ce qui risque de manquer.",
-    legende([[C.depot, "Au dépôt"], [C.sortie, "Chez les clients"]]) + `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Répartition dépôt et clients par objet">${svg}</svg>`);
+  return cadre("Où est le matériel en ce moment", estLoueur() ? "Pourcentage de chaque objet parti chez les clients. En haut de la liste : ce qui risque de manquer." : `Part de chaque objet qui est dehors (${V("chez").toLowerCase()}). En haut de la liste : ce qui risque de manquer.`,
+    legende([[C.depot, "Au dépôt"], [C.sortie, V("chez")]]) + `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Répartition dépôt et clients par objet">${svg}</svg>`);
 }
 
 /* Gérant : ce que coûtent les pertes chaque semaine, et ce qu'on peut refacturer. */
@@ -130,9 +130,9 @@ function gUtilisation() {
   svg += `<polyline points="${pts.map((p, i) => `${x(i)},${y(p.p)}`).join(" ")}" fill="none" stroke="${C.bleu}" stroke-width="2" stroke-linejoin="round"/>`;
   const der = pts[pts.length - 1];
   svg += `<circle cx="${x(pts.length - 1)}" cy="${y(der.p)}" r="4" fill="${C.bleu}" stroke="${C.carte}" stroke-width="2"/>`;
-  pts.forEach((p, i) => { svg += `<rect x="${x(i) - 5}" y="${base - haut}" width="10" height="${haut}" fill="transparent" data-tip="${esc(jourCourt(p.t) + " : " + Math.round(p.p * 100) + " % du parc loué en moyenne sur 7 jours")}"/>`; });
+  pts.forEach((p, i) => { svg += `<rect x="${x(i) - 5}" y="${base - haut}" width="10" height="${haut}" fill="transparent" data-tip="${esc(jourCourt(p.t) + " : " + Math.round(p.p * 100) + (estLoueur() ? " % du parc loué" : " % du parc dehors") + " en moyenne sur 7 jours")}"/>`; });
   [0, 30, pts.length - 1].forEach(i => { svg += `<text x="${x(i)}" y="${H - 6}" text-anchor="${i === 0 ? "start" : i === pts.length - 1 ? "end" : "middle"}">${new Date(pts[i].t).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</text>`; });
-  return cadre("Part du parc en location", "Valeur du matériel chez les clients rapportée à tout le parc, en moyenne sur 7 jours. Plus c'est haut, plus le matériel rapporte.",
+  return cadre(estLoueur() ? "Part du parc en location" : "Part du parc dehors", estLoueur() ? "Valeur du matériel chez les clients rapportée à tout le parc, en moyenne sur 7 jours. Plus c'est haut, plus le matériel rapporte." : `Valeur du matériel dehors (${V("chez").toLowerCase()}) rapportée à tout le parc, en moyenne sur 7 jours. Plus c'est haut, plus le matériel travaille.`,
     `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Taux d'utilisation du parc sur 60 jours">${svg}</svg>`);
 }
 
@@ -148,11 +148,11 @@ function gTopLoues() {
   actifs.forEach((x, i) => {
     const y = i * lh + 4, w = (x.n / max) * L;
     svg += `<text x="${g - 8}" y="${y + 15}" text-anchor="end">${esc(court(x.a.nom, W < 500 ? 17 : 26))}</text>`;
-    svg += `<path d="M${g},${y + 2}H${g + w - 4}Q${g + w},${y + 2} ${g + w},${y + 6}V${y + 16}Q${g + w},${y + 20} ${g + w - 4},${y + 20}H${g}Z" fill="${C.sortie}" data-tip="${esc(x.a.nom + " : " + entier(x.n) + " pièces louées en 30 jours")}"/>`;
+    svg += `<path d="M${g},${y + 2}H${g + w - 4}Q${g + w},${y + 2} ${g + w},${y + 6}V${y + 16}Q${g + w},${y + 20} ${g + w - 4},${y + 20}H${g}Z" fill="${C.sortie}" data-tip="${esc(x.a.nom + " : " + entier(x.n) + (estLoueur() ? " pièces louées" : " pièces sorties") + " en 30 jours")}"/>`;
     svg += `<text x="${g + w + 6}" y="${y + 15}" class="v">${entier(x.n)}</text>`;
   });
-  return cadre(S.metier === "loueur" || !S.metier ? "Ce qui se loue, et ce qui dort" : "Ce qui sort le plus, et ce qui dort", "Pièces louées sur 30 jours. Ce qui ne sort jamais immobilise de l'argent : à vendre ou à mettre en avant.",
-    `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Objets les plus loués">${svg}</svg>` +
+  return cadre(estLoueur() ? "Ce qui se loue, et ce qui dort" : "Ce qui sort le plus, et ce qui dort", (estLoueur() ? "Pièces louées" : "Pièces sorties") + " sur 30 jours. Ce qui ne sort jamais immobilise de l'argent : à vendre ou à mettre en avant.",
+    `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Objets qui sortent le plus">${svg}</svg>` +
     (dorment.length ? `<p class="q" style="margin-top:10px"><b style="color:var(--encre)">Pas sorti depuis 30 jours :</b> ${dorment.map(x => esc(x.a.nom)).join(", ")}.</p>` : ""));
 }
 

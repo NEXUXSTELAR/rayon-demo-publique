@@ -2,6 +2,14 @@
 // Tout est fictif et signalé comme tel dans l'interface.
 
 // Vente ponctuelle : chaque module est un ajout payé une fois, jamais un abonnement.
+// Mon espace (l'outil de l'installateur) est caché sur la démo publique : on l'ouvre une fois avec ?espace=1,
+// et le navigateur s'en souvient. Sans ce réglage, aucun bouton ni lien n'y mène. Défini ici, dans le premier fichier chargé.
+const ESPACE = (() => {
+  const demande = new URLSearchParams(location.search).get("espace") === "1";
+  try { if (demande) localStorage.setItem("rayon-espace", "1"); return demande || localStorage.getItem("rayon-espace") === "1"; }
+  catch (e) { return demande; }
+})();
+
 const CATALOGUE = {
   "MO-PRET": { nom: "Prêts et retours", detail: "Départ chez le client, retour, manquants à refacturer", eur: 290, xof: 140000 },
   "MO-RES":  { nom: "Réservations et préparation", detail: "Disponibilité à une date, liste de préparation scannée, facture de casse", eur: 490, xof: 230000, pack: true },

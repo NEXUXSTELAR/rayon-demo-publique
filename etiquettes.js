@@ -16,6 +16,20 @@ const SUR = { objet: "Sur l'objet", contenant: "Sur le contenant", emplacement: 
 
 // Par type d'objet (clé de la photo). Les chiffres « par 10 », « par 40 » suivent le lot de l'article.
 const PLAN_OBJETS = {
+  plaquette_carbure: { sur: "contenant", support: "rayon", ou: () => "Sur le bac du tiroir, jamais sur la plaquette : on tape le nombre" },
+  micrometre:     { sur: "contenant", support: "polyester", ou: () => "Sur l'étui de l'instrument" },
+  pied_coulisse:  { sur: "contenant", support: "polyester", ou: () => "Sur l'étui de l'instrument" },
+  porte_outil:    { sur: "emplacement", support: "metal", ou: () => "Sur l'alvéole du chariot à cônes, pas sur le cône" },
+  barre_alu:      { sur: "emplacement", support: "rayon", ou: () => "Sur le rack, une étiquette par diamètre" },
+  tole:           { sur: "emplacement", support: "rayon", ou: () => "Sur le rack à tôles, par épaisseur" },
+  fut:            { sur: "objet", support: "metal", ou: () => "Sur la jupe du fût, en bas : elle ne touche ni la tête ni le lavage intérieur" },
+  tireuse:        { sur: "objet", support: "polyester", ou: () => "Sous le plateau, à l'abri de la mousse" },
+  co2:            { sur: "objet", support: "polyester", ou: () => "Sur le col de la bouteille, au-dessus de l'étiquette du gaz" },
+  tete_soutirage: { sur: "contenant", support: "rayon", ou: () => "Sur le bac des têtes : on tape le nombre" },
+  caisse_biere:   { sur: "emplacement", support: "rayon", ou: () => "Sur le quai des caisses : on tape le nombre" },
+  gobelet:        { sur: "contenant", support: "rayon", ou: () => "Sur le carton de gobelets, jamais sur le gobelet" },
+  verre_biere:    { sur: "contenant", support: "rayon", ou: () => "Sur le casier de verres" },
+  mange_debout:   { sur: "objet", support: "polyester", ou: () => "Sous le plateau, près du pied" },
   chaise:     { sur: "contenant", support: "polyester", ou: a => `Sur le chariot ou la sangle de chaque pile de ${a.lot || 10}. Sous chaque assise, un petit « Propriété de… » sans QR, contre le vol` },
   table:      { sur: "objet", support: "polyester", ou: () => "Sous le plateau, près d'un pied : invisible des invités" },
   assiette:   { sur: "contenant", support: "metal", ou: a => `Sur le casier de lave-vaisselle de ${a.lot || 40} : jamais sur l'assiette` },

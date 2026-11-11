@@ -938,3 +938,125 @@ body:has(.barre-bas:not(.mini))::after { content: ""; position: fixed; z-index: 
   .feuille-doc th.n { white-space: normal; }
   .feuille-doc td.code { font-size: 11px; }
 }
+
+/* =========================================================
+   FINITIONS (11 novembre) : recherche dans les listes, journal filtré, feuilles au clavier,
+   ordinateur mieux rempli, retours d'action plus lisibles. Rien ne change de sens.
+   ========================================================= */
+/* Un objet sorti est en orange (ça sort), le rouge reste à la perte et à la rupture */
+.etat.sorti i { background: var(--sortie); }
+/* Les chiffres en colonne restent alignés */
+.b-liste .l .n, .t-liste .n, table.t td.n, .voyant-n, .trio b, .cycle .rondv, .chiffres b, .fiche dd, .compteur input { font-variant-numeric: tabular-nums; }
+
+/* Recherche : un champ rond avec la loupe, le même partout */
+.recherche { position: relative; display: flex; align-items: center; flex: 1 1 220px; min-width: 0; }
+.recherche > svg { position: absolute; left: 14px; width: 20px; height: 20px; color: var(--gris); pointer-events: none; }
+.recherche input { width: 100%; min-width: 0; height: 48px; border-radius: 999px; border: 2px solid var(--trait); background: var(--carte); color: var(--encre); padding: 0 14px 0 42px; font-family: inherit; font-weight: 600; font-size: 16px; text-transform: none; }
+.recherche input:focus { border-color: var(--marque); outline: none; }
+.t-ou .recherche input { height: 54px; border-radius: var(--r); font-family: inherit; font-size: 17px; text-transform: none; padding-left: 44px; }
+.outils-liste { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 14px; }
+.outils-liste .filtres { margin: 0; border-radius: 26px; }
+.filtres .nb { display: none; margin-left: 6px; font-size: 13px; opacity: .7; font-variant-numeric: tabular-nums; }
+.filtre-compte, .liste-compte { color: var(--gris); font-size: 14px; font-weight: 600; }
+.filtre-compte:empty { display: none; }
+.liste-compte { margin: 0 0 10px; }
+.b-liste li.vide, .t-liste li.vide { padding: 16px; }
+.l-zone { display: none; color: var(--gris); font-size: 14px; }
+@media (min-width: 720px) { .filtres .nb { display: inline; } }
+
+/* Le choix du lieu ou du motif porte son nom */
+.choix-titre { margin: 16px 0 0; font-size: 14px; font-weight: 700; color: var(--gris); }
+.choix-titre + .choix { margin-top: 6px; }
+.rapides button { min-height: 44px; }
+
+/* Annuler : le temps qui reste se voit. Visite guidée : l'avancement se voit. */
+.toast.avec-bouton { overflow: hidden; }
+.toast .decompte { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--marque); transform-origin: left center; }
+.tour-avance { display: block; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--fond) 24%, transparent); overflow: hidden; }
+.tour-avance i { display: block; height: 100%; border-radius: 2px; background: var(--marque); }
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes decompte { to { transform: scaleX(0); } }
+  .toast .decompte { animation: decompte 10s linear forwards; }
+  .tour-avance i { transition: width .3s ease; }
+}
+/* Nuit bleue : l'accent est le blanc glacé, comme le fond des messages. Les boutons posés dessus prennent le fond de l'appli. */
+:root[data-theme="nuit"] .toast.avec-bouton button, :root[data-theme="nuit"] .tour .btn.plein { background: var(--fond); border-color: var(--fond); color: var(--encre); }
+:root[data-theme="nuit"] .toast .decompte, :root[data-theme="nuit"] .tour-avance i { background: var(--compter); }
+
+/* Connexion : le volet des comptes de démonstration dit ce qu'il fait */
+.c-demo summary { list-style: none; justify-content: space-between; gap: 12px; min-height: 64px; }
+.c-demo summary::-webkit-details-marker { display: none; }
+.c-demo summary b { display: block; }
+.c-demo summary small { display: block; font-weight: 600; font-size: 14px; color: var(--gris); }
+.c-demo summary::after { content: ""; flex: none; width: 10px; height: 10px; margin: 0 6px 4px 0; border-right: 2.5px solid var(--gris); border-bottom: 2.5px solid var(--gris); transform: rotate(45deg); }
+.c-demo[open] summary::after { transform: rotate(-135deg); margin-bottom: -4px; }
+.c-comptes button { display: grid; grid-template-columns: 40px minmax(0, 1fr) 20px; gap: 12px; align-items: center; min-height: 60px; }
+.c-comptes button b { display: block; }
+.c-comptes button small { display: block; color: var(--gris); font-size: 14px; overflow-wrap: anywhere; }
+.c-comptes button .code { font-size: 13px; letter-spacing: 0; white-space: nowrap; }
+.c-comptes button > svg { width: 20px; height: 20px; color: var(--gris); }
+.c-pied .lien { min-height: 44px; display: inline-flex; align-items: center; }
+.c-pied p { margin: 0; }
+
+/* Interrupteur : la zone de toucher dépasse le dessin */
+.inter input { top: -6px; height: 44px; }
+
+/* Fiche d'un objet sur téléphone : la photo ne prend plus tout l'écran */
+@media (max-width: 719px) {
+  .fiche { gap: 12px; }
+  .fiche > .vignette { width: 148px; margin: 0 auto; }
+}
+
+/* Une feuille ouverte : la page derrière ne défile plus */
+body:has(.feuille) { overflow: hidden; }
+.feuille > div:focus { outline: none; }
+.ht-ordi, .haut-cherche { display: none; }
+
+/* Au survol de la souris : ce qui se touche le montre */
+@media (hover: hover) {
+  .t-tuile:hover, button.tache:hover, button.client:hover, .plus-grille button:hover, .voyant:not([disabled]):hover, .t-liste button:hover, .c-comptes button:hover, .etape:hover, .themes label:hover { box-shadow: inset 0 0 0 2px var(--trait-fort); }
+  .btn:not(.plein):hover { border-color: var(--encre); }
+  .puce:not([disabled]):hover { box-shadow: inset 0 0 0 2px #3a4049; }
+  .cycle button:hover .rondv { background: var(--carte2); }
+  .w .cycle button:hover .rondv { background: var(--carte); }
+}
+
+/* Ordinateur : le menu prend toute la hauteur, les feuilles s'ouvrent au milieu, l'en-tête porte la recherche */
+@media (min-width: 960px) {
+  .app > .demo { grid-column: 2; }
+  .cote { grid-row: 1 / 4; }
+  .haut { padding: 8px 32px; gap: 14px; }
+  .ht-tel { display: none; } .ht-ordi { display: inline; }
+  .haut-cherche { display: block; flex: 0 1 360px; }
+  .haut-cherche .recherche input { height: 44px; }
+  .feuille { align-items: center; padding: 24px; }
+  .feuille > div { border-radius: 24px; max-height: calc(100vh - 48px); padding-bottom: 22px; box-shadow: var(--flottant); }
+  .feuille > div::before { display: none; }
+  .b-liste button.l:has(.l-zone) { grid-template-columns: 48px minmax(0, 1.5fr) minmax(0, 1fr) 96px; }
+  .l-zone { display: block; }
+  main.b-main > h1:first-child { margin-bottom: 12px; }
+}
+@media print { .recherche, .outils-liste, .liste-compte { display: none !important; } }
+
+/* Liste filtrée : pas de trait au-dessus de la première ligne visible */
+.b-liste li.premier { border-top: 0; }
+/* Menu de l'ordinateur : tout tient dans 800 px de haut, même avec les écrans du gérant */
+@media (min-width: 960px) {
+  .cote { gap: 12px; padding: 16px 14px 14px; }
+  .cote nav button { min-height: 40px; padding: 8px 12px; }
+  .cote h4 { margin: 10px 12px 2px; }
+  .cote-pied { gap: 10px; padding-top: 12px; }
+}
+
+/* Petits téléphones (320 px) : les lignes de comptage et de réception tiennent dans la largeur */
+.t-retour { grid-template-columns: 64px minmax(0, 1fr) 96px; }
+.t-retour > span { min-width: 0; overflow-wrap: anywhere; }
+.t-retour .dlc input { width: 100%; min-width: 0; }
+.trio { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.trio > div { min-width: 0; }
+@media (max-width: 360px) {
+  .t-retour { grid-template-columns: 48px minmax(0, 1fr) 76px; gap: 8px; }
+  .t-retour input[type=number] { font-size: 22px; }
+  .trio > div { padding: 14px 6px; }
+  .trio b { font-size: 15px; }
+}

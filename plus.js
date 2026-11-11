@@ -33,7 +33,7 @@ function bReservations() {
   const d2 = (rechercheDispo && rechercheDispo.d2) || d1;
   const avenir = S.reservations.filter(r => r.fin >= aujourdHui() && r.statut !== "Revenue").sort((a, b) => a.debut.localeCompare(b.debut));
   return `<h1>Réservations</h1>
-  <p class="sous">« Avez-vous 300 chaises le 14 ? » Choisissez les dates : la réponse tient compte de ce qui est déjà réservé et de ce qui revient d'ici là.</p>
+  <p class="sous">« ${esc(V("question") || "Avez-vous 300 chaises le 14 ?")} » Choisissez les dates : la réponse tient compte de ce qui est déjà réservé et de ce qui revient d'ici là.</p>
   <form class="dispo-dates" data-form="dispo">
     <label class="champ">Du<input type="date" name="d1" value="${d1}" min="${aujourdHui()}"></label>
     <label class="champ">Au<input type="date" name="d2" value="${d2}" min="${aujourdHui()}"></label>
@@ -99,7 +99,7 @@ function feuilleReservation(d1, d2) {
 /* ---------------- Terrain : liste de préparation ---------------- */
 function tPreparer() {
   const l = S.reservations.filter(r => ["Confirmée", "Préparée"].includes(r.statut) && r.debut <= isoJour(Date.now() + 10 * JOUR_MS)).sort((a, b) => a.debut.localeCompare(b.debut));
-  return `<h1>Préparer un départ</h1><p class="sous">Choisissez l'événement. Scannez chaque caisse en la chargeant : l'appli dit ce qui manque avant que le camion parte.</p>
+  return `<h1>Préparer un départ</h1><p class="sous">Choisissez ${esc(V("leDepart") || "l'événement")}. Scannez chaque ${esc(V("chaque") || "caisse")} en ${V("chaque") === "fût" ? "le" : "la"} chargeant : l'appli dit ce qui manque avant que le camion parte.</p>
   <ul class="t-liste">${l.map(r => { const tot = r.lignes.reduce((t, x) => t + x[1], 0), ch = r.lignes.reduce((t, x) => t + Math.min(x[1], r.charge[x[0]] || 0), 0);
     return `<li><button data-prep="${r.id}">${pic(I.camion)}<span><b>${esc(r.nom)}</b><small>${dateCourte(r.debut)} · ${ch} / ${tot} pièces chargées</small></span><span class="n">${Math.round(ch / tot * 100)} %</span></button></li>`; }).join("") || `<li class="vide">Aucun départ prévu dans les 10 jours.</li>`}</ul>`;
 }
@@ -218,20 +218,22 @@ const ETAPES = [
   { t: "La facture de casse est prête à envoyer : plus de dispute sur la caution.", f: () => aller("facture", S.reservations.find(x => x.id === "R-001").nom) },
   { t: "Karim, au bureau, reçoit un appel : « Vous avez 350 chaises dans quinze jours ? » Il choisit la date et voit tout de suite combien sont libres, en tenant compte des autres réservations.", f: () => { connecterRole("bureau"); const d = isoJour(Date.now() + 15 * JOUR_MS); rechercheDispo = { d1: d, d2: d }; aller("reservations"); } },
   { t: "Awa, la gérante, pilote : valeur du parc et sa tendance, part louée, pertes et ce qu'elle récupère.", f: () => { connecterRole("direction"); aller("accueil", null, true); } },
-  { t: "Tout se règle pour votre entreprise : taille de l'équipe, écrans, blocs, droits de chacun. C'est nous qui le faisons, d'après votre devis.", f: () => { session = null; installateur = true; vueE = { nom: "reglages", arg: null }; entree = true; rendre(); window.scrollTo(0, 0); } },
+  ESPACE && { t: "Tout se règle pour votre entreprise : taille de l'équipe, écrans, blocs, droits de chacun. C'est nous qui le faisons, d'après votre devis.", f: () => { session = null; installateur = true; vueE = { nom: "reglages", arg: null }; entree = true; rendre(); window.scrollTo(0, 0); } },
 ];
 function demarrerTour() {
-  if (!confirm("La visite guidée repart des données de départ. Continuer ?")) return;
-  const garder = { monnaie: S.monnaie, reglages: S.reglages };
-  S = construireDemo(S.metier || "loueur"); Object.assign(S, garder); sauver();
-  tour = { i: 0, etapes: (S.metier || "loueur") === "loueur" ? ETAPES : etapesMetier() }; tour.etapes[0].f();
+  const garder = { monnaie: S.monnaie, reglages: S.reglages }, neuf = construireDemo(S.variante || S.metier || "loueur");
+  // On ne pose la question que s'il y a quelque chose à perdre : des gestes faits pendant la démo.
+  const touche = ["mouvements", "commandes", "reservations", "bons"].some(k => (S[k] || []).length !== (neuf[k] || []).length);
+  if (touche && !confirm("La visite guidée repart des données de départ : ce que vous avez fait pendant la démo sera effacé. Continuer ?")) return;
+  S = neuf; Object.assign(S, garder); sauver();
+  tour = { i: 0, etapes: ((S.metier || "loueur") === "loueur" ? ETAPES : etapesMetier()).filter(Boolean) }; tour.etapes[0].f();
 }
 function dessinerTour() {
   $$(".tour").forEach(x => x.remove());
   if (!tour) return;
   const e = tour.etapes[tour.i], d = document.createElement("div");
   d.className = "tour"; d.setAttribute("role", "dialog"); d.setAttribute("aria-label", "Démo guidée");
-  d.innerHTML = `<div><small>Étape ${tour.i + 1} sur ${tour.etapes.length}</small><p>${esc(e.t)}</p></div>
+  d.innerHTML = `<i class="tour-avance" aria-hidden="true"><i style="width:${Math.round((tour.i + 1) / tour.etapes.length * 100)}%"></i></i><div><small>Visite guidée · étape ${tour.i + 1} sur ${tour.etapes.length}</small><p>${esc(e.t)}</p></div>
     <div class="tour-boutons"><button class="btn petit" data-tour="quitter">Quitter</button><button class="btn petit plein" data-tour="suivant">${tour.i === tour.etapes.length - 1 ? "Terminer" : "Suivant"}</button></div>`;
   document.body.appendChild(d);
   d.querySelector('[data-tour="quitter"]').onclick = () => { tour = null; d.remove(); };

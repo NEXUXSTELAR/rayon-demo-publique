@@ -85,7 +85,7 @@ function dehors(id) {
 }
 function etat(a) {
   const q = stock(a.id);
-  if (a.type === "equip") return q >= 1 ? { c: "", t: "Au dépôt" } : { c: "sorti", t: (S.metier && S.metier !== "loueur" && V("chez")) || "Chez un client" };
+  if (a.type === "equip") return q >= 1 ? { c: "", t: "Au dépôt" } : { c: "sorti", t: (!estLoueur() && V("chez")) || "Chez un client" };
   if (q <= 0) return { c: "zero", t: "Plus aucun" };
   if (q <= a.seuil) return { c: "bas", t: "Bientôt à commander" };
   return { c: "", t: "Disponible" };
@@ -109,13 +109,19 @@ function anneau(val, max, coul, centre, sous, petit) {
   const r = 52, c = 2 * Math.PI * r, f = max > 0 ? Math.max(0, Math.min(1, val / max)) : 0;
   return `<div class="anneau ${petit ? "petit" : ""}" role="img" aria-label="${esc(sous)} : ${esc(String(centre))}"><svg viewBox="0 0 120 120"><circle class="piste" cx="60" cy="60" r="${r}" fill="none" stroke-width="10"/><circle cx="60" cy="60" r="${r}" fill="none" stroke="${coul}" stroke-width="10" stroke-linecap="round" stroke-dasharray="${(f * c).toFixed(1)} ${c.toFixed(1)}"/></svg><div class="centre"><b>${centre}</b><small>${sous}</small></div></div>`;
 }
-const couleurEtat = e => e.c === "zero" || e.c === "sorti" ? "var(--alerte)" : e.c === "bas" ? "var(--attention)" : "var(--retour)";
+const couleurEtat = e => e.c === "zero" ? "var(--alerte)" : e.c === "sorti" ? "var(--sortie)" : e.c === "bas" ? "var(--attention)" : "var(--retour)";
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 
 /* ---------------- Mouvements ---------------- */
+// Numéro du prochain mouvement : toujours au-dessus du plus grand déjà donné, pour ne jamais en réutiliser un.
+function prochainMv() {
+  let n = S.mouvements.length;
+  S.mouvements.forEach(m => { const k = +String(m.id).replace(/\D/g, ""); if (k > n) n = k; });
+  return "MV-" + String(n + 1).padStart(5, "0");
+}
 function mouvement(article, type, qte, extra) {
-  const id = "MV-" + String(S.mouvements.length + 1).padStart(5, "0");
+  const id = prochainMv();
   S.mouvements.push(Object.assign({ id, date: Date.now(), profil: session.profil, qui: session.nom, article, type, qte, evenement: "", motif: "" }, extra || {}));
   verifierSeuil(article);
   sauver();
@@ -126,7 +132,7 @@ function mouvement(article, type, qte, extra) {
 function annulable(ids, texte, bonId, lignes) {
   $$(".toast").forEach(x => x.remove());
   const d = document.createElement("div"); d.className = "toast avec-bouton"; d.setAttribute("role", "status");
-  d.innerHTML = `<span>${esc(texte)}</span><button>Annuler</button>`;
+  d.innerHTML = `<span>${esc(texte)}</span><button>Annuler</button><i class="decompte" aria-hidden="true"></i>`;
   document.body.appendChild(d);
   const t = setTimeout(() => d.remove(), 10000);
   d.querySelector("button").onclick = () => { clearTimeout(t); d.remove(); annuler(ids, bonId, lignes); };
@@ -135,7 +141,7 @@ function annuler(ids, bonId, lignes) {
   ids.filter(Boolean).forEach(id => {
     const m = S.mouvements.find(x => x.id === id);
     if (!m || S.mouvements.some(x => x.annule === id)) return;
-    const c = Object.assign({}, m, { id: "MV-" + String(S.mouvements.length + 1).padStart(5, "0"), date: Date.now(), profil: session.profil, qui: session.nom, qte: -m.qte, motif: "Annulation de " + m.id, annule: m.id });
+    const c = Object.assign({}, m, { id: prochainMv(), date: Date.now(), profil: session.profil, qui: session.nom, qte: -m.qte, motif: "Annulation de " + m.id, annule: m.id });
     delete c.photo; S.mouvements.push(c);
   });
   const b = bonId && S.bons.find(x => x.id === bonId);
@@ -160,8 +166,22 @@ function verifierSeuil(id) {
 // Les anciens noms d'écran restent valables (liens directs, démo guidée).
 const ALIAS = { terrain: "accueil", releve: "accueil", direction: "accueil", abonnement: "installation", scanner: "depot", profil: "accueil" };
 let entree = true, toutVoir = false;
+/* Recherche dans les listes : le texte tapé filtre les lignes sans redessiner l'écran (le clavier reste ouvert). */
+let filtreTexte = "", jr = { type: "tous", q: "", n: 60 };
+const sansAccent = t => String(t).toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+const cherchable = (...t) => esc(sansAccent(t.filter(Boolean).join(" ")));
+const champFiltre = (cible, exemple) => `<label class="recherche">${I.loupe}<span class="cache">Chercher dans la liste</span><input type="search" data-filtre="${cible}" value="${esc(filtreTexte)}" placeholder="${esc(exemple)}" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="search"></label>`;
+function filtrerListe(champ) {
+  const cible = $(champ.dataset.filtre); if (!cible) return 0;
+  const mots = sansAccent(champ.value.trim()).split(/\s+/).filter(Boolean); let n = 0;
+  cible.querySelectorAll("[data-cherche]").forEach(li => { const ok = mots.every(m => li.dataset.cherche.includes(m)); li.hidden = !ok; if (ok) n += 1; li.classList.toggle("premier", ok && n === 1); });
+  const rien = cible.querySelector("[data-rien]"); if (rien) rien.hidden = n > 0;
+  const c = $("[data-filtre-compte]"); if (c) c.textContent = mots.length ? `${n} sur ${cible.querySelectorAll("[data-cherche]").length}` : "";
+  return n;
+}
 function aller(nom, arg, racine) {
   entree = true; toutVoir = false;
+  if (vue.nom !== nom) { filtreTexte = ""; jr = { type: "tous", q: "", n: 60 }; }
   if (racine) pile = [];
   else if (vue.nom !== nom || vue.arg !== arg) pile = pile.concat([vue]).slice(-20);
   vue = { nom, arg }; rendre(); window.scrollTo(0, 0);
@@ -214,20 +234,20 @@ function vConnexion() {
     <div class="barre"><div class="marque">${e.logo ? `<img src="${e.logo}" alt="" class="logo-client">` : I.logo}<span>${esc(e.nom || "Stock démo")}</span></div>${boutonReglages}</div>
     <div class="c-tete"><h1>Bonjour</h1><p class="sous">Entrez l'identifiant et le mot de passe que votre responsable vous a donnés.</p></div>
     <form class="c-form verre" data-form="connexion">
-      <label class="champ">Identifiant<input name="ident" value="${esc(ident)}" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required></label>
+      <label class="champ">Identifiant<input name="ident" value="${esc(ident)}" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required${msgConnexion ? ' aria-invalid="true"' : ""}></label>
       <label class="champ">Mot de passe${champMdp("current-password")}</label>
       <label class="case"><input type="checkbox" name="memo" ${memo ? "checked" : ""}>Garder mon identifiant sur ce téléphone</label>
       <p class="message" role="alert">${esc(msgConnexion)}</p>
       <button class="btn plein">Se connecter</button>
     </form>
-    <details class="c-demo"><summary>Comptes de démonstration</summary>
-      <p class="sous">Touchez un compte pour entrer. Dans l'appli livrée, cette liste n'existe pas : chacun reçoit son identifiant.</p>
-      <div class="c-comptes">${EQUIPE_DEMO.filter(d => S.equipe.some(x => x.id === d.id)).map(d => { const u = S.equipe.find(x => x.id === d.id) || d; return `<button type="button" data-remplir="${d.identifiant}|${d.mdp}"><b>${esc(u.poste)}</b><span class="code">${d.identifiant} · ${d.mdp}</span></button>`; }).join("")}</div>
+    <details class="c-demo"><summary><span><b>Comptes de démonstration</b><small>Entrer d'un geste, sans rien taper</small></span></summary>
+      <p class="sous">Touchez un compte pour entrer. Chacun voit un écran différent, réglé pour son travail. Dans l'appli livrée, cette liste n'existe pas : chacun reçoit son identifiant.</p>
+      <div class="c-comptes">${EQUIPE_DEMO.filter(d => S.equipe.some(x => x.id === d.id)).map(d => { const u = S.equipe.find(x => x.id === d.id) || d; return `<button type="button" data-remplir="${d.identifiant}|${d.mdp}">${avatar(u)}<span><b>${esc(u.poste)}</b><small>${esc(u.nom)} · <span class="code">${d.identifiant}</span> · <span class="code">${d.mdp}</span></small></span>${I.fleche}</button>`; }).join("")}</div>
     </details>
     <div class="c-pied">
       <button class="btn plein visite" data-act="tour">${I.fleche}Visite guidée en 2 minutes</button>
       <p>Démo réglée pour : <b>${esc(metier().nom)}</b> · <button class="lien" data-act="metiers">Voir un autre métier</button></p>
-      <p><button class="lien" data-act="installateur">Mon espace (installateur)</button> · <button class="lien" data-act="reinit">Remettre la démo à zéro</button></p>
+      <p>${ESPACE ? `<button class="lien" data-act="installateur">Mon espace (installateur)</button> · ` : ""}<button class="lien" data-act="reinit">Remettre la démo à zéro</button></p>
     </div>
   </div>`;
 }
@@ -299,7 +319,7 @@ function feuilleReglages() {
   const ap = { clair: ["#f2f3f5", "#ffffff", "#f4b223"], sombre: ["#141619", "#1e2125", "#f5b82e"], nuit: ["#111a2c", "#182339", "#e9eef8"], auto: ["#f2f3f5", "#141619", "#f5b82e"] };
   const c = choixTheme();
   const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="tr"><h1 id="tr" style="font-size:26px">Réglages de l'appareil</h1>
-    <p class="sous">Le thème ne change que l'affichage de ce téléphone. Les couleurs des actions gardent leur sens : orange, ça part ; vert, ça revient.</p>
+    <p class="sous">Le thème ne change que l'affichage de cet appareil. Les couleurs des actions gardent leur sens : orange, ça part ; vert, ça revient.</p>
     <div class="themes" role="radiogroup" aria-label="Thème">${Object.entries(THEMES).map(([k, n]) => `<label><input type="radio" name="theme" value="${k}" ${k === c ? "checked" : ""}><span class="apercu" style="background:${ap[k][0]}"><i style="background:${ap[k][1]}"></i><i style="background:${ap[k][2]}"></i></span>${n}</label>`).join("")}</div>
     ${session ? `<div class="valider" style="grid-template-columns:1fr 1fr"><button class="btn" data-a="verrouiller">${I.cadenas}Verrouiller</button><button class="btn" data-a="sortir">${I.sortir}Se déconnecter</button></div>` : ""}
     <div class="valider" style="grid-template-columns:1fr"><button class="btn plein" data-x>Fermer</button></div></div>`);
@@ -350,7 +370,8 @@ function coque() {
     </aside>
     <header class="haut verre">
       ${nom === "accueil" ? `<div class="marque">${e.logo ? `<img src="${e.logo}" alt="" class="logo-client">` : I.logo}</div>` : `<button class="rond" data-act="retour" aria-label="Retour">${I.precedent}</button>`}
-      <b class="haut-titre">${titre}</b>${navigator.onLine === false ? `<span class="hors-ligne" title="Vos gestes sont gardés sur le téléphone et partiront au retour du réseau">Hors ligne</span>` : ""}
+      <b class="haut-titre">${nom === "accueil" ? `<span class="ht-tel">${titre}</span><span class="ht-ordi">Accueil</span>` : titre}</b>
+      <form class="haut-cherche" data-form="rapide" role="search"><label class="recherche">${I.loupe}<span class="cache">Chercher un objet ou taper le code d'une étiquette</span><input type="search" name="q" placeholder="Chercher un objet, ou taper un code" autocomplete="off" autocapitalize="none" spellcheck="false"></label></form>${navigator.onLine === false ? `<span class="hors-ligne" title="Vos gestes sont gardés sur le téléphone et partiront au retour du réseau">Hors ligne</span>` : ""}
       <div class="outils"><button class="rond" data-act="verrouiller" aria-label="Verrouiller l'écran">${I.cadenas}</button><button class="avatar-btn" data-act="plus" aria-label="Mon compte et tous les écrans">${avatar(u)}</button></div>
     </header>
     <main class="${ETROITS.has(nom) ? "t-main" : "b-main"}">${corps}</main>
@@ -412,12 +433,14 @@ function conseil(a) {
   if (logique(a) === "pret" && dehors(id).length) return { mvt: "Retour" };
   return { mvt: logique(a) === "pret" ? "Prêt" : "Sortie" };
 }
+const zoneDe = a => (S.emplacements.find(x => x.id === a.emp) || {}).nom || "";
+const exempleRecherche = () => S.articles.slice(0, 2).map(a => a.nom.split(/\s+/)[0].toLowerCase()).join(", ") + "…";
 function tChercher(filtre) {
-  const f = (filtre || "").toLowerCase();
-  const l = S.articles.filter(a => !f || a.nom.toLowerCase().includes(f));
-  return `<h1>Chercher un objet</h1>
-  <form class="t-ou" data-form="cherche"><label class="cache" for="q">Nom</label><input id="q" name="q" value="${esc(filtre || "")}" placeholder="chaise, verre…" style="text-transform:none;font-family:inherit"><button class="btn plein petit">OK</button></form>
-  <ul class="t-liste">${l.map(a => `<li><button data-objet="${a.id}">${img(a)}<span><b>${esc(a.nom)}</b><small>${esc((S.emplacements.find(x => x.id === a.emp) || {}).nom || "")}</small></span><span class="n">${stock(a.id)}</span></button></li>`).join("") || `<li class="vide">Rien trouvé.</li>`}</ul>`;
+  if (filtre && entree) filtreTexte = filtre;
+  return `<h1>Chercher un objet</h1><p class="sous">Tapez le début du nom, le code de l'étiquette ou la zone. La liste se réduit à mesure.</p>
+  <form class="t-ou" data-form="cherche">${champFiltre("#liste-cherche", exempleRecherche())}</form>
+  <ul class="t-liste" id="liste-cherche">${S.articles.map(a => `<li data-cherche="${cherchable(a.nom, a.id, zoneDe(a))}"><button data-objet="${a.id}">${img(a)}<span><b>${esc(a.nom)}</b><small>${esc(zoneDe(a))}</small></span><span class="n">${stock(a.id)}</span></button></li>`).join("")}
+  <li class="vide" data-rien hidden>Aucun objet ne correspond. Vérifiez l'orthographe, ou tapez le code écrit sous le QR.</li></ul>`;
 }
 function tJour() {
   const debut = new Date(); debut.setHours(0, 0, 0, 0);
@@ -426,7 +449,7 @@ function tJour() {
   <ul class="t-liste">${l.map(m => { const a = art(m.article); return `<li><button data-objet="${a.id}">${img(a)}<span><b>${esc(m.type)} · ${esc(a.nom)}</b><small>${quand(m.date)}${(m.evenement || m.imputation) ? " · " + esc(m.evenement || m.imputation) : ""}</small></span><span class="n">${m.qte}</span></button></li>`; }).join("") || `<li class="vide">Rien encore aujourd'hui. Scannez un objet pour commencer.</li>`}</ul>`;
 }
 function tKits() {
-  return `<h1>Sortir un kit</h1><p class="sous">Choisissez le kit, puis le nombre et l'événement.</p>
+  return `<h1>Sortir un kit</h1><p class="sous">Choisissez le kit, puis indiquez le nombre et la destination (${motImp()}).</p>
   <ul class="t-liste">${S.kits.map(k => {
     const ok = k.lignes.every(([id, q]) => stock(id) >= q);
     return `<li><button data-kit="${k.id}">${pic(I.kit)}<span><b>${esc(k.nom)}</b><small>${k.lignes.map(([id, q]) => q + " × " + esc(art(id).nom)).join(" · ")}</small></span><span class="etat ${ok ? "" : "zero"}"><i></i></span></button></li>`;
@@ -435,7 +458,7 @@ function tKits() {
 function tRecuperer() {
   const parEv = {};
   dehors().forEach(d => { (parEv[d.evenement] = parEv[d.evenement] || []).push(d); });
-  return `<h1>Retour d'un événement</h1><p class="sous">Touchez l'événement qui revient. Tout ce qui était parti s'affiche : vous ne corrigez que ce qui manque.</p>
+  return `<h1>${esc(V("retourTitre") || "Retours")}</h1><p class="sous">Touchez ce qui revient. Tout ce qui était parti s'affiche : vous ne corrigez que ce qui manque.</p>
   <ul class="t-liste">${Object.entries(parEv).map(([ev, l]) => `<li><button data-ev="${esc(ev)}">${pic(I.camion)}<span><b>${esc(ev)}</b><small>${l.length} sorte${l.length > 1 ? "s" : ""} d'objets</small></span><span class="n">${l.reduce((t, d) => t + d.qte, 0)}</span></button></li>`).join("") || `<li class="vide">Tout est rentré au dépôt.</li>`}</ul>`;
 }
 function tRetourEvenement(ev) {
@@ -476,9 +499,13 @@ function bMateriel(f) {
   f = f || "tous";
   const ids = new Set(dehors().map(d => d.article));
   const l = S.articles.filter(a => f === "tous" || (f === "alerte" && ["zero", "bas"].includes(etat(a).c)) || (f === "dehors" && ids.has(a.id)));
-  return `<h1>Matériel</h1>
-  <div class="filtres">${[["tous", "Tout"], ["alerte", "À commander"]].concat(aDesPrets() ? [["dehors", V("chez")]] : []).map(([k, t]) => `<button data-aller="materiel" data-arg="${k}" aria-pressed="${f === k}">${t}</button>`).join("")}</div>
-  <ul class="b-liste">${l.map(a => { const e = etat(a); return `<li><button class="l" data-fiche="${a.id}">${img(a)}<span><b>${esc(a.nom)}</b><small><span class="code">${a.id}</span> · <span class="etat ${e.c}"><i></i>${e.t}</span></small></span><span class="n">${stock(a.id)}</span></button></li>`; }).join("") || `<li class="vide" style="padding:16px">Rien dans cette liste.</li>`}</ul>`;
+  const vide = f === "alerte" ? "Rien à commander : tout est au-dessus du seuil." : f === "dehors" ? "Tout est rentré." : "Aucun objet pour l'instant.";
+  const compte = k => k === "tous" ? S.articles.length : k === "alerte" ? S.articles.filter(a => ["zero", "bas"].includes(etat(a).c)).length : ids.size;
+  return `<h1>${esc(titreSection("materiel"))}</h1>
+  <div class="outils-liste"><div class="filtres">${[["tous", "Tout"], ["alerte", "À commander"]].concat(aDesPrets() ? [["dehors", V("chez")]] : []).map(([k, t]) => `<button data-filtre-materiel="${k}" aria-pressed="${f === k}">${t}<span class="nb">${compte(k)}</span></button>`).join("")}</div>
+  ${champFiltre("#liste-materiel", exempleRecherche())}<span class="filtre-compte" data-filtre-compte role="status"></span></div>
+  <ul class="b-liste" id="liste-materiel">${l.map(a => { const e = etat(a); return `<li data-cherche="${cherchable(a.nom, a.id, zoneDe(a), e.t)}"><button class="l" data-fiche="${a.id}">${img(a)}<span><b>${esc(a.nom)}</b><small><span class="code">${a.id}</span> · <span class="etat ${e.c}"><i></i>${e.t}</span></small></span><span class="l-zone">${esc(zoneDe(a))}</span><span class="n">${stock(a.id)}</span></button></li>`; }).join("")}
+  <li class="vide" data-rien ${l.length ? "hidden" : ""}>${l.length ? "Aucun objet ne correspond à cette recherche." : vide}</li></ul>`;
 }
 function bFiche(id) {
   const a = art(id); if (!a) return "<p>Introuvable.</p>";
@@ -499,12 +526,40 @@ function bFiche(id) {
 function tableMouvements(l, avecObjet) {
   if (!l.length) return `<p class="vide">Aucun mouvement.</p>`;
   return `<div class="defile"><table class="t mvts${avecObjet ? " avec-objet" : ""}"><thead><tr><th>Quand</th><th>Qui</th><th>Quoi</th>${avecObjet ? "<th>Objet</th>" : ""}<th class="n">Qté</th></tr></thead><tbody>
-  ${l.map(m => `<tr><td class="m-quand">${quand(m.date)}</td><td class="m-qui">${esc(m.qui || PROFILS[m.profil].nom)}</td><td class="m-quoi">${esc(m.type)}${(m.evenement || m.imputation) ? "<br><small>" + esc(m.evenement || m.imputation) + "</small>" : ""}${m.motif ? "<br><small>" + esc(m.motif) + "</small>" : ""}</td>${avecObjet ? `<td class="m-objet">${esc(art(m.article).nom)}</td>` : ""}<td class="n m-qte">${m.qte}</td></tr>`).join("")}</tbody></table></div>`;
+  ${l.map(m => `<tr><td class="m-quand">${quand(m.date)}</td><td class="m-qui">${esc(m.qui || PROFILS[m.profil].nom)}</td><td class="m-quoi">${esc(m.type)}${(m.evenement || m.imputation) ? "<br><small>" + esc(m.evenement || m.imputation) + "</small>" : ""}${m.motif ? "<br><small>" + esc(m.motif) + "</small>" : ""}</td>${avecObjet ? `<td class="m-objet">${esc(art(m.article).nom)}</td>` : ""}<td class="n m-qte">${qteSignee(m)}</td></tr>`).join("")}</tbody></table></div>`;
 }
-const bJournal = () => `<h1>Journal</h1><p class="sous">Tout est gardé. Une erreur se corrige par un nouveau mouvement, jamais en effaçant.</p>${tableMouvements(S.mouvements.slice().reverse(), true)}`;
+// La quantité porte son sens : + ce qui entre au dépôt, − ce qui en sort.
+const qteSignee = m => { const v = (SIGNE[m.type] || 1) * m.qte; return (v < 0 ? "−" : "+") + Math.abs(v).toLocaleString("fr-FR"); };
+/* Journal : les 60 derniers mouvements, un filtre par geste et une recherche (objet, personne, lieu, motif). */
+const GESTES_JOURNAL = { sorties: ["Prêt", "Sortie"], entrees: ["Retour", "Entrée", "Inventaire initial"], pertes: ["Perte"], comptages: ["Ajustement"], atelier: ["Réparation", "Retour réparation"] };
+function lignesJournal() {
+  const types = GESTES_JOURNAL[jr.type], mots = sansAccent(jr.q.trim()).split(/\s+/).filter(Boolean);
+  return S.mouvements.filter(m => {
+    if (types && !types.includes(m.type)) return false;
+    if (!mots.length) return true;
+    const a = art(m.article), t = sansAccent([a ? a.nom : "", m.article, m.type, m.qui, m.evenement, m.imputation, m.motif].filter(Boolean).join(" "));
+    return mots.every(x => t.includes(x));
+  }).reverse().sort((a, b) => b.date - a.date);
+}
+function corpsJournal() {
+  const l = lignesJournal(), filtre = jr.type !== "tous" || jr.q.trim();
+  return `<p class="liste-compte" role="status">${l.length.toLocaleString("fr-FR")} mouvement${l.length > 1 ? "s" : ""}${filtre ? ` sur ${S.mouvements.length.toLocaleString("fr-FR")}` : ""}${l.length > jr.n ? ` · les ${jr.n} plus récents sont affichés` : ""}</p>
+  ${l.length ? tableMouvements(l.slice(0, jr.n), true) : `<p class="vide">Aucun mouvement ne correspond. Essayez un autre mot, ou revenez sur « Tout ».</p>`}
+  ${l.length > jr.n ? `<p style="margin-top:12px"><button class="btn" data-journal-plus>Afficher ${Math.min(60, l.length - jr.n)} mouvements de plus</button></p>` : ""}`;
+}
+function brancherJournal() {
+  const boite = $("[data-journal]"); if (!boite) return;
+  const plus = boite.querySelector("[data-journal-plus]"); if (plus) plus.onclick = () => { jr.n += 60; boite.innerHTML = corpsJournal(); brancherJournal(); };
+}
+const bJournal = () => `<h1>Journal</h1><p class="sous">Tout est gardé. Une erreur se corrige par un nouveau mouvement, jamais en effaçant.</p>
+  <div class="outils-liste"><div class="filtres">${[["tous", "Tout"], ["sorties", "Sorties"], ["entrees", "Entrées et retours"], ["pertes", "Pertes"], ["comptages", "Comptages"]].map(([k, t]) => `<button data-journal-type="${k}" aria-pressed="${jr.type === k}">${t}</button>`).join("")}</div>
+  <label class="recherche">${I.loupe}<span class="cache">Chercher dans le journal</span><input type="search" data-journal-q value="${esc(jr.q)}" placeholder="Objet, personne, ${esc((V("imp") || "lieu").toLowerCase())}…" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="search"></label></div>
+  <div data-journal>${corpsJournal()}</div>`;
 function brouillons() {
   const f = {};
-  S.articles.filter(a => a.type === "conso" && stock(a.id) <= a.seuil).forEach(a => {
+  // Un brouillon déjà envoyé depuis cet écran ne se propose pas une seconde fois tant que la livraison est attendue.
+  const dejaEnvoye = new Set(S.commandes.filter(c => c.deBrouillon && ["Envoyée", "Reçue en partie"].includes(c.statut)).flatMap(c => c.lignes.map(x => x.id)));
+  S.articles.filter(a => a.type === "conso" && stock(a.id) <= a.seuil && !dejaEnvoye.has(a.id)).forEach(a => {
     const q = a.cible - stock(a.id); if (q > 0) (f[a.fou] = f[a.fou] || []).push({ id: a.id, qte: q });
   });
   return f;
@@ -527,7 +582,7 @@ function bCommandes() {
 }
 function creerCommande(fid, statut) {
   const l = brouillons()[fid], f = S.fournisseurs.find(x => x.id === fid);
-  S.commandes.push({ id: "CMD-" + String(S.commandes.length + 1).padStart(4, "0"), date: Date.now(), fid, fournisseur: f.nom, lignes: l, total: l.reduce((t, x) => t + x.qte * art(x.id).prix, 0), statut });
+  S.commandes.push({ id: "CMD-" + String(S.commandes.length + 1).padStart(4, "0"), date: Date.now(), fid, fournisseur: f.nom, lignes: l, total: l.reduce((t, x) => t + x.qte * art(x.id).prix, 0), statut, deBrouillon: true });
   sauver();
 }
 
@@ -535,9 +590,9 @@ function creerCommande(fid, statut) {
 function bDocs() {
   const loueur = (S.metier || "loueur") === "loueur", cp = complet();
   const papier = [["etiquettes", I.etiquette, "Planche d'étiquettes", "QR à imprimer et coller"], ["inventairePapier", I.compter, "Fiche d'inventaire papier", "Pour compter sans téléphone, zone par zone"]];
-  const argent_ = [["rapport", I.argent, "Rapport du mois", "Valeur, pertes, refacturable, à imprimer ou garder en PDF"], ["refacturer", I.perte, "Manquants à refacturer", "Par événement, avec les montants et les factures"]];
+  const argent_ = [["rapport", I.argent, "Rapport du mois", "Valeur, pertes, refacturable, à imprimer ou garder en PDF"], ["refacturer", I.perte, "Manquants à refacturer", `Par ${motImp()}, avec les montants et les factures`]];
   const excel = [["csv", I.excel, "Journal des mouvements", cp ? "Excel : qui, quoi, quand, pour qui, avec la valeur" : "Excel : tous les gestes enregistrés"], ["finAnnee", I.excel, "Inventaire de fin d'année", cp ? "Excel en trois onglets : résumé, stock valorisé, pertes" : "Excel : stock valorisé et pertes de l'année"]]
-    .concat(cp && (loueur || (S.clientsLoc || []).length) ? [["exportClients", I.excel, motClients() + " et événements", "Excel : coordonnées, cautions, casse par événement"]] : []);
+    .concat(cp && (loueur || (S.clientsLoc || []).length) ? [["exportClients", I.excel, motClients() + " et " + motImps(), `Excel : coordonnées, cautions, casse par ${motImp()}`]] : []);
   const d = session.profil === "direction" ? argent_.concat(excel) : papier.concat(argent_.slice(1), excel);
   const acte = k => ["csv", "finAnnee", "exportClients"].includes(k);
   return `<h1>Documents</h1><p class="sous">Ce que vous pouvez imprimer, envoyer ou transmettre. Les fichiers Excel s'ouvrent aussi dans Google Sheets et LibreOffice.</p>
@@ -553,10 +608,10 @@ const bInventairePapier = () => `${retourDocs}<div class="feuille-doc">${enTeteD
 function bRefacturer() {
   const l = S.mouvements.filter(m => m.type === "Perte" && m.refac);
   return `${retourDocs}<div class="feuille-doc">${enTeteDoc()}<h1>Manquants à refacturer</h1>
-  <table><thead><tr><th>Événement</th><th>Objet</th><th>Qté</th><th>Montant</th></tr></thead><tbody>
+  <table><thead><tr><th>${esc(V("imp") || "Événement")}</th><th>Objet</th><th>Qté</th><th>Montant</th></tr></thead><tbody>
   ${l.map(m => `<tr><td>${esc(m.evenement)}</td><td>${esc(art(m.article).nom)}</td><td>${m.qte}</td><td>${argent(valeurM(m))}</td></tr>`).join("") || `<tr><td colspan="4">Rien à refacturer.</td></tr>`}</tbody></table>
   <p style="text-align:right"><b>Total : ${argent(l.reduce((t, m) => t + valeurM(m), 0))}</b></p></div>
-  ${l.length ? `<h2 class="pas-imprimer">Factures de casse par événement</h2><div class="boutons pas-imprimer">${[...new Set(l.map(m => m.evenement))].slice(-8).reverse().map(ev => `<button class="btn petit" data-facture="${esc(ev)}">${esc(ev)}</button>`).join("")}</div>` : ""}`;
+  ${l.length ? `<h2 class="pas-imprimer">Factures de casse par ${motImp()}</h2><div class="boutons pas-imprimer">${[...new Set(l.map(m => m.evenement))].slice(-8).reverse().map(ev => `<button class="btn petit" data-facture="${esc(ev)}">${esc(ev)}</button>`).join("")}</div>` : ""}`;
 }
 
 /* Période des chiffres de la direction (7, 30 ou 90 jours) */
@@ -625,13 +680,13 @@ function feuilleCode(uid) {
 function dRapport() {
   const valeur = S.articles.reduce((t, a) => t + Math.max(0, stock(a.id)) * a.prix, 0);
   const p = pertesN(30);
-  const sorties = S.mouvements.filter(m => m.type === "Prêt" && m.date >= Date.now() - 30 * 86400000);
+  const sorties = S.mouvements.filter(m => (m.type === "Prêt" || (!estLoueur() && m.type === "Sortie")) && m.qte > 0 && !S.mouvements.some(x => x.annule === m.id) && m.date >= Date.now() - 30 * 86400000);
   const top = {}; sorties.forEach(m => top[m.article] = (top[m.article] || 0) + m.qte);
   return `${retourDocs}<div class="feuille-doc">${enTeteDoc()}<h1>Rapport des 30 derniers jours</h1><p>Édité le ${new Date().toLocaleDateString("fr-FR")}</p>
   <table><tbody><tr><td>Valeur du matériel au dépôt</td><td>${argent(valeur)}</td></tr><tr><td>Cassé ou perdu</td><td>${argent(p.reduce((t, m) => t + valeurM(m), 0))}</td></tr>
   <tr><td>Refacturable aux clients</td><td>${argent(p.filter(m => m.refac).reduce((t, m) => t + valeurM(m), 0))}</td></tr>
-  <tr><td>Pièces sorties chez les clients</td><td>${sorties.reduce((t, m) => t + m.qte, 0)}</td></tr></tbody></table>
-  <h2 style="font-size:17px">Objets les plus loués</h2><table><tbody>${Object.entries(top).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id, q]) => `<tr><td>${esc(art(id).nom)}</td><td>${q}</td></tr>`).join("") || "<tr><td>Aucune sortie.</td></tr>"}</tbody></table></div>`;
+  <tr><td>${estLoueur() ? "Pièces sorties chez les clients" : "Pièces sorties du stock"}</td><td>${sorties.reduce((t, m) => t + m.qte, 0)}</td></tr></tbody></table>
+  <h2 style="font-size:17px">${estLoueur() ? "Objets les plus loués" : "Objets les plus sortis"}</h2><table><tbody>${Object.entries(top).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id, q]) => `<tr><td>${esc(art(id).nom)}</td><td>${q}</td></tr>`).join("") || "<tr><td>Aucune sortie.</td></tr>"}</tbody></table></div>`;
 }
 function dInstallation() {
   const unite = S.monnaie === "XOF" ? "xof" : "eur";
@@ -675,7 +730,29 @@ function feuilleIntervention(module) {
 /* =================================================================
    Saisies
    ================================================================= */
-function ouvrirFeuille(html) { const f = document.createElement("div"); f.className = "feuille"; f.innerHTML = html; document.body.appendChild(f); f.onclick = e => { if (e.target === f) f.remove(); }; return f; }
+function ouvrirFeuille(html) {
+  const f = document.createElement("div"); f.className = "feuille"; f.innerHTML = html; document.body.appendChild(f);
+  f.onclick = e => { if (e.target === f) f.remove(); };
+  // Au clavier : le focus entre dans la feuille, « Entrée » dans une quantité ou un mot de passe valide.
+  const d = f.firstElementChild; if (d) { d.tabIndex = -1; d.focus({ preventScroll: true }); }
+  f.addEventListener("keydown", e => {
+    if (e.key === "Enter" && e.target.matches("input[type=number], input[type=password]")) { const ok = f.querySelector("[data-ok]"); if (ok) { e.preventDefault(); ok.click(); } }
+    if (e.key !== "Tab") return;
+    const l = [...f.querySelectorAll("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])")].filter(x => !x.disabled && x.offsetParent !== null);
+    if (!l.length) return;
+    const premier = l[0], dernier = l[l.length - 1];
+    if (e.shiftKey && (document.activeElement === premier || document.activeElement === d)) { e.preventDefault(); dernier.focus(); }
+    else if (!e.shiftKey && document.activeElement === dernier) { e.preventDefault(); premier.focus(); }
+  });
+  return f;
+}
+// « Échap » ferme ce qui est ouvert par-dessus l'écran : la caméra, puis la feuille du dessus (sauf celle qui exige un choix).
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape") return;
+  const cam = $(".camera [data-x]"); if (cam) return cam.click();
+  const l = $$(".feuille"), f = l[l.length - 1]; if (!f || !f.onclick) return;
+  const x = f.querySelector("[data-x]"); if (x) x.click(); else f.remove();
+});
 function compteur(f, min, max) {
   const c = f.querySelector("input[type=number]");
   const borne = v => Math.max(min, max !== null ? Math.min(max, v) : v);
@@ -688,7 +765,7 @@ function choixEvenement(liste) {
   S.mouvements.forEach(m => { const k = m.evenement || m.imputation; if (k) usage[k] = Math.max(usage[k] || 0, m.date); });
   S.reservations.forEach(r => { if (["Préparée", "Partie", "Confirmée"].includes(r.statut)) usage[r.nom] = Math.max(usage[r.nom] || 0, Date.now() - Math.abs(new Date(r.debut) - Date.now()) / 10); });
   const tri = liste.slice().sort((a, b) => (usage[b] || 0) - (usage[a] || 0)), vus = tri.slice(0, 4);
-  return `<div class="choix" role="radiogroup" aria-label="${V("imp")}">${vus.map((e, i) => `<label><input type="radio" name="ev" value="${esc(e)}" ${i === 0 ? "checked" : ""}>${esc(e)}</label>`).join("")}
+  return `<p class="choix-titre">${V("imp")}</p><div class="choix" role="radiogroup" aria-label="${V("imp")}">${vus.map((e, i) => `<label><input type="radio" name="ev" value="${esc(e)}" ${i === 0 ? "checked" : ""}>${esc(e)}</label>`).join("")}
     <label class="autre"><input type="radio" name="ev" value="__autre" aria-label="Autre"><input type="text" name="evAutre" list="liste-ev" placeholder="Autre : chercher ou créer" autocomplete="off" maxlength="60"></label>
     <datalist id="liste-ev">${liste.map(e => `<option value="${esc(e)}">`).join("")}</datalist></div>`;
 }
@@ -700,7 +777,7 @@ function evChoisi(f) {
   return t;
 }
 function brancherAutre(f) { const t = f.querySelector("[name=evAutre]"); if (t) t.oninput = t.onfocus = () => { f.querySelector('input[name=ev][value="__autre"]').checked = true; }; }
-const radios = (nom, liste, etiquette) => `<div class="choix" role="radiogroup" aria-label="${etiquette}">${liste.map((e, i) => `<label><input type="radio" name="${nom}" value="${esc(e)}" ${i === 0 ? "checked" : ""}>${esc(e)}</label>`).join("")}</div>`;
+const radios = (nom, liste, etiquette) => `<p class="choix-titre">${etiquette}</p><div class="choix" role="radiogroup" aria-label="${etiquette}">${liste.map((e, i) => `<label><input type="radio" name="${nom}" value="${esc(e)}" ${i === 0 ? "checked" : ""}>${esc(e)}</label>`).join("")}</div>`;
 
 function feuille(id, type) {
   const a = art(id), q = stock(id), d = dehors(id);
@@ -730,7 +807,7 @@ function feuille(id, type) {
     if (evs && !ev) return toast(`Indiquez : ${V("imp").toLowerCase()}.`);
     const motif = (f.querySelector("input[name=motif]:checked") || {}).value || "";
     f.remove();
-    if (type === "Compter") { const e = n - q; if (!e) { toast("Le compte est bon."); return rendre(); } const m = mouvement(id, "Ajustement", e, { motif: "Comptage" }); rendre(); return annulable([m], `Écart de ${e > 0 ? "+" : ""}${e} enregistré.`); }
+    if (type === "Compter") { const e = n - q; if (!e) { toast("Le compte est bon."); return rendre(); } const m = mouvement(id, "Ajustement", e, { motif: "Comptage" }); rendre(); return annulable([m], `Écart de ${e > 0 ? "+" : "−"}${Math.abs(e)} enregistré.`); }
     if (type === "Retour") {
       const attendu = d.find(x => x.evenement === ev).qte, rendu = Math.min(n, attendu);
       const m = mouvement(id, "Retour", rendu, { evenement: ev });
@@ -856,7 +933,27 @@ function brancher() {
   $$("[data-valider]").forEach(b => b.onclick = () => { S.commandes.find(c => c.id === b.dataset.valider).statut = "Envoyée"; sauver(); toast("Commande validée et envoyée (simulation)."); rendre(); });
   $$("[data-recevoir]").forEach(b => b.onclick = () => { const c = S.commandes.find(x => x.id === b.dataset.recevoir); c.lignes.forEach(l => mouvement(l.id, "Entrée", l.qte, { motif: "Réception " + c.id })); c.statut = "Reçue"; sauver(); toast("Réception enregistrée."); rendre(); });
   const fc = $('[data-form="code"]'); if (fc) fc.onsubmit = e => { e.preventDefault(); const v = fc.code.value; const id = code(v) || code("ART-" + v.replace(/\D/g, "").padStart(4, "0")); if (id) ouvrir(id); else toast("Code non reconnu, exemple : ART-0003."); };
-  const fq = $('[data-form="cherche"]'); if (fq) fq.onsubmit = e => { e.preventDefault(); aller("chercher", fq.q.value.trim()); };
+  // Recherche dans une liste : on filtre les lignes en place. « Entrée » ouvre l'objet s'il n'en reste qu'un.
+  $$("[data-filtre]").forEach(c => {
+    c.oninput = () => { filtreTexte = c.value; filtrerListe(c); };
+    c.onkeydown = e => { if (e.key !== "Enter") return; e.preventDefault(); const l = [...$(c.dataset.filtre).querySelectorAll("[data-cherche]:not([hidden]) button")]; if (l.length === 1) l[0].click(); else if (!l.length) toast("Aucun objet ne correspond."); };
+    if (filtreTexte) filtrerListe(c);
+  });
+  const fq = $('[data-form="cherche"]'); if (fq) fq.onsubmit = e => e.preventDefault();
+  $$("[data-filtre-materiel]").forEach(b => b.onclick = () => { vue = { nom: "materiel", arg: b.dataset.filtreMateriel }; rendre(); });
+  $$("[data-journal-type]").forEach(b => b.onclick = () => { jr.type = b.dataset.journalType; jr.n = 60; rendre(); });
+  $$("[data-journal-q]").forEach(c => c.oninput = () => { jr.q = c.value; jr.n = 60; $("[data-journal]").innerHTML = corpsJournal(); brancherJournal(); });
+  brancherJournal();
+  // Sur ordinateur, la recherche de l'en-tête : un code ouvre l'objet, un mot filtre la liste.
+  const fra = $('[data-form="rapide"]'); if (fra) fra.onsubmit = e => {
+    e.preventDefault(); const q = fra.q.value.trim(); if (!q) return;
+    const id = code(q) || (/^\d{1,4}$/.test(q) ? code("ART-" + q.padStart(4, "0")) : null);
+    if (id && art(id)) return ouvrir(id);
+    const m = sansAccent(q).split(/\s+/), l = S.articles.filter(a => m.every(x => sansAccent(a.nom + " " + a.id + " " + zoneDe(a)).includes(x)));
+    if (l.length === 1) return aller(permis("materiel") ? "fiche" : "objet", l[0].id);
+    const vers = permis("materiel") ? "materiel" : "chercher";
+    aller(vers, vers === "materiel" ? "tous" : null); filtreTexte = q; rendre();
+  };
   const fr = $('[data-form="retourEv"]'); if (fr) fr.onsubmit = e => {
     e.preventDefault(); const ev = vue.arg, rendus = [], manque = [];
     dehors().filter(d => d.evenement === ev).forEach(d => {
@@ -894,7 +991,7 @@ const ACTIONS = {
   verrouiller: () => { verrouille = true; msgConnexion = ""; clearTimeout(minuteur); rendre(); },
   reglages: () => feuilleReglages(),
   ajouterPersonne: () => feuilleCode(null),
-  installateur: () => feuilleInstallateur(),
+  installateur: () => { if (ESPACE) feuilleInstallateur(); },
   quitterInstallateur: () => { installateur = false; rendre(); },
   revenirConfig: () => { session = null; verrouille = false; clearTimeout(minuteur); installateur = true; vueE = { nom: "reglages", arg: null }; rendre(); window.scrollTo(0, 0); },
   plusE: () => feuillePlusE(),
@@ -917,13 +1014,13 @@ function lienProfond() { const id = code(location.hash); if (id && art(id)) vue 
 // Liens directs pour la démo : ?profil=terrain|bureau|direction&vue=…&arg=…, ?installateur=1
 (function () {
   const q = new URLSearchParams(location.search);
-  if (METIERS[q.get("metier")] && (S.metier || "loueur") !== q.get("metier")) { const garder = { monnaie: S.monnaie }; S = construireDemo(q.get("metier")); Object.assign(S, garder); sauver(); }
+  if (METIERS[q.get("metier")] && (S.variante || S.metier || "loueur") !== q.get("metier")) { const garder = { monnaie: S.monnaie }; S = construireDemo(q.get("metier")); Object.assign(S, garder); sauver(); }
   if (q.get("monnaie") === "XOF" || q.get("monnaie") === "EUR") { S.monnaie = q.get("monnaie"); sauver(); }
   // En démo, un lien direct ouvre la session de la première personne active du profil, sans mot de passe.
   // En production, ces liens n'existent pas : chacun se connecte avec son identifiant et son mot de passe.
   const u = PROFILS[q.get("profil")] && S.equipe.find(x => x.role === q.get("profil") && x.actif);
   if (u) { session = { uid: u.id, nom: u.nom, profil: u.role, admin: !!u.admin }; vue = { nom: q.get("vue") || "accueil", arg: q.get("arg") }; lienProfond(); activite(); }
-  else if (q.get("installateur") === "1") {
+  else if (q.get("installateur") === "1" && ESPACE) {
     installateur = true;
     if (["terrain", "chauffeur", "bureau", "direction"].includes(q.get("role"))) { roleConf = q.get("role"); vueE = { nom: "reglages", arg: null }; }
     else if (VUES_E[q.get("vue")] || ["client", "installation"].includes(q.get("vue"))) vueE = { nom: q.get("vue"), arg: q.get("arg") };
