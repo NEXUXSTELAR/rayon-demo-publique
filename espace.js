@@ -12,7 +12,7 @@ const PHASES = ["Avant", "Sur place", "Après"];
 const ETAPES_ORIGINE = [
   { id: "devis", phase: "Avant", t: "Devis signé" },
   { id: "acompte", phase: "Avant", t: "Acompte de 40 % reçu" },
-  { id: "articles", phase: "Avant", t: "Liste des articles reçue : noms, quantités, emplacements" },
+  { id: "articles", phase: "Avant", t: "Liste des articles reçue et importée (modèle à envoyer : modeles/07)" },
   { id: "google", phase: "Avant", t: "Compte Google du client prêt" },
   { id: "classeur", phase: "Avant", t: "Classeur créé et script installé" },
   { id: "reglage", phase: "Avant", t: "Appli réglée : taille de l'équipe, détail, rôles, blocs" },
@@ -92,6 +92,7 @@ function normaliserP(s) {
     if (!Array.isArray(c.interventions)) c.interventions = [];
     if (!c.etapes || typeof c.etapes !== "object") c.etapes = {};
     c.heuresPassees = +c.heuresPassees || 0; c.heuresEstimees = +c.heuresEstimees || 0;
+    if (c.liste && !(Array.isArray(c.liste.articles) && c.liste.articles.length && c.liste.articles.every(a => a && a.nom && Array.isArray(a.lots)))) delete c.liste;
     return c;
   });
   return s;
@@ -186,10 +187,10 @@ const iconePlus = () => P('<path d="M24 8v32M8 24h32"/>');
 const VUES_E = { tableau: { t: "Tableau", i: "maison" }, clients: { t: "Clients", i: "equipe" }, installations: { t: "Installations", i: "compter" }, chiffres: { t: "Chiffres", i: "releve" }, reglages: { t: "Régler une appli", i: "grille" }, mesreglages: { t: "Mes réglages", i: "reglages" } };
 
 function coqueEspace() {
-  const nom = vueE.nom, parent = { client: "clients", installation: "installations" }[nom] || nom, moi = moiP();
-  const corps = ({ tableau: eTableau, clients: eClients, client: eClient, installations: eInstallations, installation: eInstallation, chiffres: eChiffres, reglages: eReglageAppli, mesreglages: eMesReglages })[nom] || eTableau;
+  const nom = vueE.nom, parent = { client: "clients", installation: "installations", liste: "clients", etiquettes: "clients" }[nom] || nom, moi = moiP();
+  const corps = ({ tableau: eTableau, clients: eClients, client: eClient, installations: eInstallations, installation: eInstallation, chiffres: eChiffres, reglages: eReglageAppli, mesreglages: eMesReglages, liste: eListeP, etiquettes: eEtiquettesP })[nom] || eTableau;
   const courant = k => k === parent ? 'aria-current="page"' : "";
-  const titre = { client: "Client", installation: "Installation guidée" }[nom] || (VUES_E[nom] || VUES_E.tableau).t;
+  const titre = { client: "Client", installation: "Installation guidée", liste: "Liste d'articles", etiquettes: "Étiquettes" }[nom] || (VUES_E[nom] || VUES_E.tableau).t;
   const nav = Object.entries(VUES_E).map(([k, v]) => `<button data-e="${k}" data-racine-e ${courant(k)}>${I[v.i]}<span>${v.t}</span></button>`).join("");
   return `<div class="app espace">${DEMO}
     <aside class="cote" aria-label="Menu">
@@ -306,6 +307,7 @@ function eClient(id) {
       <div class="lignes-p"><div><span>Prévues dans le prix</span><b>${hTexte(c.heuresEstimees)} h</b></div><div class="fort"><span>Passées</span><b class="${c.heuresPassees > c.heuresEstimees ? "rouge" : ""}">${hTexte(c.heuresPassees)} h</b></div>
       <div><span>Gain net estimé de l'heure</span><b>${c.heuresPassees && e.total ? fmtEur(gainHeure(c)) : "—"}</b></div></div>
       <div class="boutons" style="margin-top:10px"><button class="btn petit" data-heures-p="${c.id}|0.5">+ 30 min</button><button class="btn petit" data-heures-p="${c.id}|1">+ 1 h</button><button class="btn petit" data-heures-p="${c.id}|-0.5">− 30 min</button></div></section>
+    ${blocFicheListeP(c)}
     <section class="w w-m"><h3 class="w-titre">${I.equipe}Contact</h3><p style="margin:0"><b>${esc(c.contact || "—")}</b>${c.tel ? "<br>" + esc(c.tel) : ""}${c.email ? `<br><span class="mel-p">${esc(c.email)}</span>` : ""}</p>${c.notes ? `<p class="msg" style="margin-top:10px">${esc(c.notes)}</p>` : ""}</section>
   </div>`;
 }
@@ -388,13 +390,19 @@ function reglerAppliP(id) {
   const autre = metierDemo() !== c.metier;
   if (autre && !confirm(`L'appli de démo passe en « ${METIERS[c.metier].nom} » pour régler ${c.nom}. Continuer ?`)) return rendre();
   if (autre) changerMetier(c.metier);
+  // Ses articles importés remplacent les objets de démonstration du métier ; sans liste, la démo du métier revient
+  const recharge = chargerListeP(c);
   Object.keys(CATALOGUE).forEach(k => { S.modules[k] = OFFRES[c.offre].inclus.includes(k) || c.modules.includes(k) || (k === "MO-PRET" && S.articles.some(a => logique(a) === "pret")); });
   if (c.appli && c.appli.metier === c.metier && c.appli.config) appliquerAppliP(c.appli);
-  else if (P_.enReglage && P_.enReglage !== c.id) S.config = configParDefaut(S.metier, S.taille); // pas le réglage du client précédent
+  else if (recharge || (P_.enReglage && P_.enReglage !== c.id)) S.config = configParDefaut(S.metier, S.taille); // pas le réglage du client précédent
   S.entreprise = Object.assign({}, S.entreprise, { nom: c.nom }); S.monnaie = c.pays === "SN" ? "XOF" : "EUR"; // les montants de son appli et de son devis, dans sa monnaie
   devisOffre = c.offre; devisMode = c.pays === "SN" ? "distance" : (c.mode || "place"); sauver();
+  // Des articles à date limite : le bloc « Dates limites proches » s'ajoute à l'accueil du bureau et de la direction
+  if (S.suiviLots) ["bureau", "direction"].forEach(r => { const cf = config()[r]; if (cf && !cf.accueil.some(([k]) => k === "peremption")) cf.accueil.push(["peremption", "m"]); });
+  sauver();
   P_.enReglage = c.id; sauverP();
   allerE("reglages");
+  if (recharge && c.liste) toast(`La démo est chargée avec les ${c.liste.articles.length} articles de ${c.nom}.`);
 }
 function eReglageAppli() {
   const c = clientEnReglage();
@@ -702,8 +710,9 @@ function brancherEspace() {
   $$("[data-import-p]").forEach(i => i.onchange = () => { if (i.files[0]) importerP(i.files[0]); i.value = ""; });
   $$("[data-zero-p]").forEach(b => b.onclick = () => {
     if (!confirm(`Retirer les ${P_.clients.length} clients de Mon espace ? Vos réglages sont gardés. Enregistrez une sauvegarde avant pour pouvoir revenir en arrière.`)) return;
-    P_.clients = []; delete P_.enReglage; sauverP(); rendre(); toast("Mon espace est vide. Le bouton « + » crée le premier client.");
+    P_.clients = []; delete P_.enReglage; relectureP = null; sauverP(); rendre(); toast("Mon espace est vide. Le bouton « + » crée le premier client.");
   });
+  brancherListeP();
   $$("[data-demo-p]").forEach(b => b.onclick = () => {
     if (!confirm(`Remplacer les ${P_.clients.length} clients actuels par les cinq clients de démonstration ? Vos réglages sont gardés.`)) return;
     P_.clients = normaliserP({ clients: pilotageDemo().clients, reglages: reglP() }).clients; delete P_.enReglage; sauverP(); rendre(); toast("Clients de démonstration remis.");

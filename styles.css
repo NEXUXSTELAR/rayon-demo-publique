@@ -1116,3 +1116,22 @@ body:has(.feuille) { overflow: hidden; }
 .mel-p { overflow-wrap: anywhere; }
 .saisie-p .champ textarea, .mes-reglages .champ textarea { width: 100%; min-width: 0; border-radius: 10px; border: 2px solid var(--trait-fort); background: var(--carte); color: var(--encre); padding: 10px 12px; font: inherit; font-weight: 600; line-height: 1.4; resize: vertical; }
 .saisie-p .champ textarea:focus, .mes-reglages .champ textarea:focus { border-color: var(--marque); outline: none; }
+/* Mon espace : liste d'articles d'un client, relecture de l'import, planche d'étiquettes */
+.relecture-p { margin: 0 0 22px; box-shadow: inset 0 0 0 2px var(--marque); }
+.relecture-p h3 { font-size: 16px; margin: 16px 0 6px; }
+.liste-controle { max-height: 320px; overflow-y: auto; }
+.ligne-liste { padding: 8px 0; }
+.ligne-liste b { display: block; overflow-wrap: anywhere; }
+.ligne-liste small { display: block; color: var(--gris); font-size: 14px; overflow-wrap: anywhere; }
+.remarques-p { margin-top: 12px; }
+.remarques-p summary { font-weight: 700; cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+.ecran-liste a.btn { text-decoration: none; }
+.planche-p .etiquette { grid-template-columns: 72px minmax(0, 1fr); padding: 8px; }
+.planche-p .etiquette svg { width: 72px; height: 72px; }
+.planche-p .etiquette b { font-size: 14px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.planche-p .etiq-emp { border-style: solid; border-width: 2px; border-color: #000; }
+@media print {
+  .planche-p { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; }
+  .planche-p .etiquette { height: 33mm; overflow: hidden; break-inside: avoid; }
+  .espace main.b-main { padding: 0; max-width: none; }
+}

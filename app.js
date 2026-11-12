@@ -100,7 +100,8 @@ function argent(eur) {
   return eur.toLocaleString("fr-FR", { maximumFractionDigits: eur >= 100 ? 0 : 2 }) + " €";
 }
 const quand = t => { const d = new Date(t); return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) + " · " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }); };
-const img = a => `<div class="vignette"><img src="img/${a.img}.webp" alt="" loading="lazy" width="360" height="360"></div>`;
+// Un article importé d'une liste n'a pas encore de photo : un pictogramme la remplace
+const img = a => a.img ? `<div class="vignette"><img src="img/${a.img}.webp" alt="" loading="lazy" width="360" height="360"></div>` : pic(I.materiel);
 const pic = ic => `<div class="vignette pic">${ic}</div>`;
 const initiales = n => n.split(/\s+/).map(x => x[0]).join("").slice(0, 2).toUpperCase();
 const avatar = (u, grand) => `<span class="avatar ${u.role === "direction" ? "direction" : ""} ${grand ? "grand" : ""}" aria-hidden="true">${esc(initiales(u.nom))}</span>`;

@@ -267,8 +267,9 @@ const METIERS = {
 
 const metier = () => {
   const s = typeof S !== "undefined" && S;
-  if (s && s.variante && METIERS[s.variante]) return Object.assign({}, METIERS.loueur, METIERS[s.variante]);
-  return METIERS[(s && s.metier) || "loueur"] || METIERS.loueur;
+  const m = s && s.variante && METIERS[s.variante] ? Object.assign({}, METIERS.loueur, METIERS[s.variante]) : METIERS[(s && s.metier) || "loueur"] || METIERS.loueur;
+  // Une liste importée dans Mon espace avec des dates limites allume le suivi par lots, quel que soit le métier (liste.js)
+  return s && s.suiviLots && !m.dlc ? Object.assign({}, m, { dlc: true }) : m;
 };
 const V = k => metier().v[k];
 // Vrai seulement pour la démo du loueur de matériel de réception (la brasserie part de la même base, avec ses mots à elle).
