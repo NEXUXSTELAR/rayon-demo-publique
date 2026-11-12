@@ -713,7 +713,6 @@ function dInstallation() {
   const inst = S.installation || { livreLe: Date.now(), heuresUtilisees: 0 };
   const fin = inst.livreLe + OFFRE.jours * 86400000, jours = Math.max(0, Math.ceil((fin - Date.now()) / 86400000));
   const restantes = Math.max(0, OFFRE.heures - inst.heuresUtilisees), enCours = jours > 0 && restantes > 0;
-  const google = S.equipe.filter(u => u.actif).length * (unite === "xof" ? 4460 : 6.8);
   // Les montants ne s'affichent que sur l'appareil de l'installateur : la démo publique ne montre aucun prix, comme le site.
   const prix = ESPACE;
   return `<h1>Votre installation</h1>
@@ -721,7 +720,7 @@ function dInstallation() {
   <div class="bloc"><div class="module"><b>Assistance incluse</b><span class="statut ${enCours ? "s-revenue" : "s-partie"}">${enCours ? "en cours" : "terminée"}</span>
     <p>${enCours ? `Encore ${jours} jour${jours > 1 ? "s" : ""} et ${String(restantes).replace(".", ",")} h sur ${OFFRE.heures} h. ` : `Terminée le ${new Date(fin).toLocaleDateString("fr-FR")}. `}Elle couvre les corrections de notre paramétrage et les questions d'utilisation, pas les nouvelles fonctions.</p></div>
   <div class="module"><b>Intervention ensuite</b><span>${prix ? fmt(TARIF_INTERVENTION[unite]) + " HT / h" : "sur devis"}</span><p>À distance, par quart d'heure, 30 minutes au minimum, toujours sur devis accepté.</p></div>
-  ${prix ? `<div class="module"><b>Payé chaque mois à Google, pas à Stockclair</b><span>${fmt(Math.round(google * 100) / 100)}</span><p>Comptes Google des ${S.equipe.filter(u => u.actif).length} personnes de l'équipe (environ 6,80 € HT par personne, avec la version à comptes Google ; rien avec la version à un seul compte, docs/19).</p></div>` : ""}</div>
+  <div class="module"><b>Chaque mois</b><span>rien à payer</span><p>Vos données sont gardées dans votre propre compte Google : un seul compte suffit, un compte gratuit convient. Rien n'est à payer par personne.</p></div></div>
   <p style="margin-top:12px"><button class="btn plein" data-act="demanderIntervention">Demander une intervention</button></p>
   ${(S.interventions || []).length ? `<h2>Vos demandes</h2><table class="t"><tbody>${S.interventions.slice().reverse().map(i => `<tr><td>${quand(i.date)}<br><small>${esc(i.texte)}</small></td><td class="n">${i.incluse ? "dans l'assistance" : "devis envoyé"}</td></tr>`).join("")}</tbody></table>` : ""}
   <h2>Ce qui est installé</h2>
