@@ -1080,3 +1080,39 @@ body:has(.feuille) { overflow: hidden; }
   .trio > div { padding: 14px 6px; }
   .trio b { font-size: 15px; }
 }
+
+/* =========================================================
+   Mon espace (12 novembre) : recherche de clients, saisie groupée avec le prix qui suit,
+   réglage gardé par client, écran « Mes réglages ».
+   ========================================================= */
+.espace .segments { display: flex; flex-wrap: wrap; border-radius: 26px; }
+.espace .outils-liste .segments { margin: 0; }
+.nb-p { margin-left: 4px; font-size: 13px; opacity: .7; font-variant-numeric: tabular-nums; }
+.client-p[hidden], .saisie-p [hidden] { display: none; }
+.saisie-p .champ small, .mes-reglages .champ small { font-weight: 600; font-size: 13px; color: var(--gris); }
+.saisie-p .case small { color: var(--gris); font-weight: 600; }
+.devis-vif { background: var(--carte2); border-radius: 12px; padding: 4px 14px; margin: 10px 0 4px; }
+.saisie-pied { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--trait); }
+.btn.rouge { color: var(--alerte); }
+.date-p input { height: 36px; border: 0; background: none; color: inherit; font: inherit; min-width: 0; }
+.phase-tete { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 30px 0 12px; }
+.phase-tete h2 { margin: 0; }
+.regl-client { background: var(--carte); border-radius: 16px; padding: 14px 16px; margin: 0 0 22px; max-width: 820px; }
+.regl-client p { margin: 0; }
+.regl-choix, .regl-deux { display: grid; gap: 0 12px; }
+.regl-choix .champ { margin-bottom: 0; min-width: 0; }
+.regl-choix select, .mes-reglages .champ input { width: 100%; min-width: 0; }
+.regl-bloc { padding: 4px 16px 12px; }
+.regl-bloc .w-note { margin: 0 0 6px; }
+.regl-trois { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.regl-etape input[type=text], .regl-ajout input[type=text] { flex: 1 1 100%; min-width: 0; height: 48px; border-radius: 10px; border: 2px solid var(--trait-fort); background: var(--carte); color: var(--encre); padding: 0 12px; font: inherit; font-weight: 600; }
+.regl-etape input[type=text]:focus, .regl-ajout input[type=text]:focus { border-color: var(--marque); outline: none; }
+.regl-etape small { flex: 1 1 120px; color: var(--gris); font-size: 13px; }
+.regl-ajout input[type=text] { flex: 1 1 180px; }
+@media (min-width: 720px) { .regl-choix, .regl-deux { grid-template-columns: 1fr 1fr; align-items: start; } }
+/* Mon espace : relance d'un devis, e-mail du client, zones de texte */
+.tache-double { display: grid; gap: 6px; justify-items: end; }
+.tache-double .tache { justify-self: stretch; }
+.mel-p { overflow-wrap: anywhere; }
+.saisie-p .champ textarea, .mes-reglages .champ textarea { width: 100%; min-width: 0; border-radius: 10px; border: 2px solid var(--trait-fort); background: var(--carte); color: var(--encre); padding: 10px 12px; font: inherit; font-weight: 600; line-height: 1.4; resize: vertical; }
+.saisie-p .champ textarea:focus, .mes-reglages .champ textarea:focus { border-color: var(--marque); outline: none; }
