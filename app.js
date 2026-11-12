@@ -73,7 +73,7 @@ let nonEnregistre = false;
 function sauver() { try { localStorage.setItem(CLE, JSON.stringify(S)); nonEnregistre = false; } catch (e) { nonEnregistre = true; } }
 
 /* ---------------- Calculs ---------------- */
-const SIGNE = { "Inventaire initial": 1, "Entrée": 1, "Retour": 1, "Prêt": -1, "Perte": -1, "Sortie": -1, "Ajustement": 1, "Réparation": -1, "Retour réparation": 1, "Contrôle": 0, "Transfert": 0 };
+const SIGNE = { "Inventaire initial": 1, "Entrée": 1, "Retour": 1, "Prêt": -1, "Perte": -1, "Sortie": -1, "Ajustement": 1, "Réparation": -1, "Retour réparation": 1, "Contrôle": 0, "Transfert": 0, "Envoi": -1 };
 const art = id => S.articles.find(a => a.id === id);
 const actif = c => !!S.modules[c];
 const stock = id => S.mouvements.filter(m => m.article === id).reduce((t, m) => t + SIGNE[m.type] * m.qte, 0);
@@ -87,6 +87,7 @@ function dehors(id) {
 }
 function etat(a) {
   const q = stock(a.id);
+  if (a.chezEtab) return { c: "sorti", t: "Envoyé : " + a.chezEtab }; // objet unique parti dans un autre établissement (groupe.js)
   if (a.type === "equip") return q >= 1 ? { c: "", t: "Au dépôt" } : { c: "sorti", t: (!estLoueur() && V("chez")) || "Chez un client" };
   if (q <= 0) return { c: "zero", t: "Plus aucun" };
   if (q <= a.seuil) return { c: "bas", t: "Bientôt à commander" };
@@ -243,9 +244,9 @@ function vConnexion() {
       <p class="message" role="alert">${esc(msgConnexion)}</p>
       <button class="btn plein">Se connecter</button>
     </form>
-    <details class="c-demo" open><summary><span><b>Comptes de démonstration</b><small>Entrer d'un geste, sans rien taper</small></span></summary>
+    ${blocEtabConnexion()}<details class="c-demo" open><summary><span><b>Comptes de démonstration</b><small>Entrer d'un geste, sans rien taper</small></span></summary>
       <p class="sous">Touchez un compte pour entrer. Chacun voit un écran différent, réglé pour son travail. Dans l'appli livrée, cette liste n'existe pas : chacun reçoit son identifiant.</p>
-      <div class="c-comptes">${EQUIPE_DEMO.filter(d => S.equipe.some(x => x.id === d.id)).map(d => { const u = S.equipe.find(x => x.id === d.id) || d; return `<button type="button" data-remplir="${d.identifiant}|${d.mdp}">${avatar(u)}<span><b>${esc(u.poste)}</b><small>${esc(u.nom)} · <span class="code">${d.identifiant}</span> · <span class="code">${d.mdp}</span></small></span>${I.fleche}</button>`; }).join("")}</div>
+      <div class="c-comptes">${EQUIPE_DEMO.filter(d => S.equipe.some(x => x.id === d.id)).map(d => { const u = S.equipe.find(x => x.id === d.id) || d; return `<button type="button" data-remplir="${S.etab ? u.identifiant : d.identifiant}|${d.mdp}">${avatar(u)}<span><b>${esc(u.poste)}</b><small>${esc(u.nom)} · <span class="code">${S.etab ? u.identifiant : d.identifiant}</span> · <span class="code">${d.mdp}</span></small></span>${I.fleche}</button>`; }).join("")}</div>
     </details>
     <div class="c-pied">
       <button class="btn plein visite" data-act="tour">${I.fleche}Visite guidée en 2 minutes</button>
@@ -304,7 +305,7 @@ const moi = () => (session && S.equipe.find(x => x.id === session.uid)) || { id:
 function ouvrirSession(u) {
   session = { uid: u.id, nom: u.nom, profil: u.role, admin: !!u.admin };
   verrouille = false; pile = []; entree = true; toutVoir = false;
-  vue = { nom: "accueil" }; lienProfond(); activite(); rendre(); window.scrollTo(0, 0);
+  vue = { nom: vueDepart(u.role) }; lienProfond(); activite(); rendre(); window.scrollTo(0, 0);
 }
 /* Verrouillage automatique après un temps sans toucher l'écran (réglé par le gérant) */
 let minuteur = null;
@@ -343,12 +344,12 @@ const VUES = () => ({
   materiel: bMateriel, fiche: bFiche, commandes: bCommandes, journal: bJournal, docs: bDocs, etiquettes: bEtiquettes,
   inventairePapier: bInventairePapier, refacturer: bRefacturer, rapport: dRapport, installation: dInstallation, equipe: dEquipe,
   reservations: bReservations, reservation: bReservation, clients: bClients, client: vClient, devisLoc: vDevisLocation,
-  controles: vRegistreControles, lieux: vLieux, lieu: vLieu, ficheLieu: vFicheLieu,
+  controles: vRegistreControles, lieux: vLieux, lieu: vLieu, ficheLieu: vFicheLieu, groupe: vGroupe,
 });
 // Les écrans du dépôt restent sur une colonne étroite, même sur ordinateur.
 const ETROITS = new Set(["tournee", "depot", "objet", "kits", "recuperer", "retourEv", "chercher", "jour", "bon", "preparer", "preparation", "reception", "receptionCmd", "zones", "zone", "lieux", "lieu"]);
 const PARENT = { client: "clients", devisLoc: "reservations", fiche: "materiel", reservation: "reservations", etiquettes: "docs", inventairePapier: "docs", refacturer: "docs", rapport: "docs", controles: "docs", lieu: "lieux", ficheLieu: "lieux", retourEv: "recuperer", preparation: "preparer", receptionCmd: "reception", zone: "zones" };
-const TITRES = { client: "Client", devisLoc: "Devis de location", objet: "Objet", fiche: "Fiche de l'objet", bon: "Bon", facture: "Facture de casse", reservation: "Réservation", retourEv: "Retour", preparation: "Préparation", receptionCmd: "Réception", zone: "Comptage", etiquettes: "Étiquettes", inventairePapier: "Inventaire", refacturer: "À refacturer", rapport: "Rapport", controles: "Contrôles", lieu: "Contenu du lieu", ficheLieu: "Fiche du lieu" };
+const TITRES = { client: "Client", devisLoc: "Devis de location", objet: "Objet", fiche: "Fiche de l'objet", bon: "Bon", facture: "Facture de casse", reservation: "Réservation", retourEv: "Retour", preparation: "Préparation", receptionCmd: "Réception", zone: "Comptage", etiquettes: "Étiquettes", inventairePapier: "Inventaire", refacturer: "À refacturer", rapport: "Rapport", controles: "Contrôles", lieu: "Contenu du lieu", ficheLieu: "Fiche du lieu", groupe: "Groupe" };
 const sectionsPermises = () => Object.keys(SECTIONS).filter(k => k !== "accueil" && permis(k));
 
 function coque() {
@@ -368,7 +369,7 @@ function coque() {
     <aside class="cote" aria-label="Menu">
       <div class="marque">${e.logo ? `<img src="${e.logo}" alt="" class="logo-client">` : I.logo}<span>${esc(e.nom || "Stock démo")}</span></div>
       <button class="btn plein" data-act="camera">${I.scan}Scanner</button>
-      <nav><button data-racine="accueil" ${courant("accueil")}>${I.maison}<span>Accueil</span></button>${groupes}</nav>
+      <nav>${navGroupe(courant)}<button data-racine="accueil" ${courant("accueil")}>${I.maison}<span>Accueil</span></button>${groupes}</nav>
       <div class="cote-pied"><div class="moi">${avatar(u)}<span><b>${esc(u.nom)}</b><small>${esc(u.poste || "")}</small></span></div>
         <div class="cote-outils"><button class="rond" data-act="verrouiller" aria-label="Verrouiller l'écran">${I.cadenas}</button>${boutonReglages}<button class="rond" data-act="sortir" aria-label="Se déconnecter">${I.sortir}</button></div></div>
     </aside>
@@ -378,10 +379,10 @@ function coque() {
       <form class="haut-cherche" data-form="rapide" role="search"><label class="recherche">${I.loupe}<span class="cache">Chercher un objet ou taper le code d'une étiquette</span><input type="search" name="q" placeholder="Chercher un objet, ou taper un code" autocomplete="off" autocapitalize="none" spellcheck="false"></label></form>${nonEnregistre ? `<span class="hors-ligne non-enregistre" role="status" title="Ce téléphone refuse d'enregistrer : mémoire pleine ou navigation privée. Ce que vous faites sera perdu à la fermeture.">Non enregistré</span>` : navigator.onLine === false ? `<span class="hors-ligne" role="status" title="L'appli continue sans réseau. Vos gestes sont gardés sur ce téléphone.">Hors ligne</span>` : ""}
       <div class="outils"><button class="rond" data-act="verrouiller" aria-label="Verrouiller l'écran">${I.cadenas}</button><button class="avatar-btn" data-act="plus" aria-label="Mon compte et tous les écrans">${avatar(u)}</button></div>
     </header>
-    <main class="${ETROITS.has(nom) ? "t-main" : "b-main"}">${corps}</main>
+    <main class="${ETROITS.has(nom) ? "t-main" : "b-main"}">${bandeauEtab()}${corps}</main>
     <nav class="barre-bas verre" aria-label="Navigation">${bouton(barre[0])}${bouton(barre[1])}
       <button class="bb-scan" data-act="camera" aria-label="Scanner une étiquette">${I.scan}</button>
-      ${bouton(barre[2])}<button data-act="plus" ${dansBarre || sec === "accueil" ? "" : 'aria-current="page"'}>${I.grille}<span>Plus</span></button></nav>
+      ${bouton(barre[2])}<button data-act="plus" ${dansBarre || sec === "accueil" || sec === "groupe" ? "" : 'aria-current="page"'}>${I.grille}<span>Plus</span></button></nav>
   </div>`;
 }
 
@@ -422,7 +423,7 @@ function tObjet(id) {
     ${lots.length ? `<p class="lot-premier">À sortir en premier : ${lots[0].qte} avec date limite au <b>${dateFr(lots[0].dlc)}</b></p>` : ""}</div>
   <div class="t-actions">${actions}
     <button class="t-action compter" data-mvt="Compter">${I.compter}<span>Compter<small>Je vérifie combien il y en a</small></span></button>
-    ${boutonControleFait(a)}${boutonTransfert(a)}
+    ${boutonControleFait(a)}${boutonTransfert(a)}${boutonEnvoiEtab(a)}
     ${pret ? `<button class="btn" data-atelier="${a.id}">À réparer ou à nettoyer${totalAtelier(id) ? ` (${totalAtelier(id)} déjà à l'atelier)` : ""}</button>` : ""}
     <button class="t-action perte" data-mvt="Perte">${I.perte}<span>${metier().dlc ? "Périmé, cassé ou perdu" : "Cassé ou perdu"}</span></button>
     ${permis("materiel") ? `<button class="btn" data-fiche="${a.id}">${I.materiel}Fiche complète : ${droit("prix") ? "prix, " : ""}historique, entrée en stock</button>` : ""}
@@ -525,7 +526,7 @@ function bFiche(id) {
       <div><dt>Seuil d'alerte</dt><dd>${a.seuil}</dd></div><div><dt>Niveau normal</dt><dd>${a.cible}</dd></div>
       ${droit("prix") ? `<div><dt>Prix unitaire</dt><dd>${argent(a.prix)}</dd></div><div><dt>Valeur au dépôt</dt><dd>${argent(Math.max(0, q) * a.prix)}</dd></div>` : ""}
       ${a.serie ? `<div><dt>N° de série</dt><dd class="code">${a.serie}</dd></div>` : ""}${detailsControle(a)}</dl>
-    <div class="boutons">${totalAtelier(id) ? `<p class="sous" style="width:100%;margin:0 0 6px">À l'atelier : ${aLAtelier(id).map(x => x.qte + " " + (x.motif === "Au nettoyage" ? "au nettoyage" : "en réparation")).join(", ")}</p>` : ""}<button class="btn petit" data-atelier="${a.id}">Envoyer à l'atelier</button><button class="btn petit" data-mvt="Entrée">Entrée en stock</button><button class="btn petit" data-mvt="Compter">Compter</button><button class="btn petit" data-mvt="Perte">Perte</button>${boutonTransfert(a, true)}${boutonsControle(a)}</div>
+    <div class="boutons">${totalAtelier(id) ? `<p class="sous" style="width:100%;margin:0 0 6px">À l'atelier : ${aLAtelier(id).map(x => x.qte + " " + (x.motif === "Au nettoyage" ? "au nettoyage" : "en réparation")).join(", ")}</p>` : ""}<button class="btn petit" data-atelier="${a.id}">Envoyer à l'atelier</button><button class="btn petit" data-mvt="Entrée">Entrée en stock</button><button class="btn petit" data-mvt="Compter">Compter</button><button class="btn petit" data-mvt="Perte">Perte</button>${boutonTransfert(a, true)}${boutonEnvoiEtab(a, true)}${boutonsControle(a)}</div>
   </div></div>
   ${blocLieuxFiche(a)}
   ${blocRentabilite(a)}
@@ -1008,6 +1009,7 @@ function brancher() {
   brancherOutils();
   brancherControles();
   brancherLieux();
+  brancherGroupe();
   brancherConfig();
   brancherBlocs();
   brancherDocuments();
@@ -1040,7 +1042,7 @@ const ACTIONS = {
   nouveauClientP: () => feuilleClientP(null),
   voirDemoClient: () => { installateur = false; session = null; rendre(); window.scrollTo(0, 0); },
   configDefaut: () => { if (!confirm("Remettre les blocs, la barre et les droits de tous les rôles comme le prévoit le métier ?")) return; S.config = configParDefaut(S.metier); sauver(); rendre(); toast("Réglages du métier remis."); },
-  reinit: () => { if (confirm("Effacer ce qui a été fait pendant la démo ?")) { S = construireDemo(S.metier || "loueur"); sauver(); session = null; verrouille = false; vue = { nom: "accueil" }; rendre(); toast("Démo remise à zéro."); } },
+  reinit: () => { if (confirm("Effacer ce qui a été fait pendant la démo ?")) { if (groupeActif()) reinitGroupe(); else S = construireDemo(S.metier || "loueur"); sauver(); session = null; verrouille = false; vue = { nom: "accueil" }; rendre(); toast("Démo remise à zéro."); } },
   imprimer: () => window.print(),
   csv: () => exporterJournal(),
   exportClients: () => exporterClients(),
@@ -1055,13 +1057,15 @@ function lienProfond() { const id = code(location.hash); if (id && art(id)) vue 
 // Liens directs pour la démo : ?profil=terrain|bureau|direction&vue=…&arg=…, ?installateur=1
 (function () {
   const q = new URLSearchParams(location.search);
+  // Démo de groupe (groupe.js) : ?groupe=… ouvre plusieurs établissements ; ?metier=… seul revient à une démo simple
+  adresseGroupe(q);
   // Une démo d'essai ouverte (essai.js) n'est pas remplacée ici : essai.js la met de côté avec ses gestes avant de changer de métier
   if (METIERS[q.get("metier")] && !S.monEssai && (S.variante || S.metier || "loueur") !== q.get("metier")) { const garder = { monnaie: S.monnaie }; S = construireDemo(q.get("metier")); Object.assign(S, garder); sauver(); }
   if (q.get("monnaie") === "XOF" || q.get("monnaie") === "EUR") { S.monnaie = q.get("monnaie"); sauver(); }
   // En démo, un lien direct ouvre la session de la première personne active du profil, sans mot de passe.
   // En production, ces liens n'existent pas : chacun se connecte avec son identifiant et son mot de passe.
   const u = PROFILS[q.get("profil")] && S.equipe.find(x => x.role === q.get("profil") && x.actif);
-  if (u) { session = { uid: u.id, nom: u.nom, profil: u.role, admin: !!u.admin }; vue = { nom: q.get("vue") || "accueil", arg: q.get("arg") }; lienProfond(); activite(); }
+  if (u) { session = { uid: u.id, nom: u.nom, profil: u.role, admin: !!u.admin }; vue = { nom: q.get("vue") || vueDepart(u.role), arg: q.get("arg") }; lienProfond(); activite(); }
   else if (q.get("installateur") === "1" && ESPACE) {
     installateur = true;
     if (["terrain", "chauffeur", "bureau", "direction"].includes(q.get("role"))) { roleConf = q.get("role"); vueE = { nom: "reglages", arg: null }; }

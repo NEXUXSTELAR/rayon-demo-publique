@@ -23,13 +23,15 @@ function feuilleMetiers() {
     <p class="sous">Mêmes gestes, mots et blocs adaptés. Le lien ouvre directement la démo du métier : c'est celui à envoyer au prospect.</p>
     <div class="metiers">${Object.entries(METIERS).map(([k, m]) => {
       const a = (k === "loueur" ? SEED().articles : m.articles ? m.articles.filter(x => x[2]).map(x => ({ img: x[2] })) : [{ img: m.vignette }])[0];
-      return `<div class="metier ${(S.variante || S.metier || "loueur") === k ? "actuel" : ""}"><div class="vignette"><img src="img/${a.img}.webp" alt="" loading="lazy"></div>
+      return `<div class="metier ${!S.etab && (S.variante || S.metier || "loueur") === k ? "actuel" : ""}"><div class="vignette"><img src="img/${a.img}.webp" alt="" loading="lazy"></div>
         <div><b>${esc(m.nom)}</b><small>${esc(PRESENTATION_METIERS[k] || "")}</small>
-        <div class="metier-boutons"><button class="btn petit plein" data-m="${k}">${(S.variante || S.metier || "loueur") === k ? "Démo actuelle" : "Voir cette démo"}</button><button class="btn petit" data-lien="${k}">Copier le lien</button></div></div></div>`;
+        <div class="metier-boutons"><button class="btn petit plein" data-m="${k}">${!S.etab && (S.variante || S.metier || "loueur") === k ? "Démo actuelle" : "Voir cette démo"}</button><button class="btn petit" data-lien="${k}">Copier le lien</button></div></div></div>`;
     }).join("")}</div>
+    ${blocDemosGroupe()}
     <div class="valider" style="grid-template-columns:1fr"><button class="btn" data-x>Fermer</button></div></div>`);
+  brancherDemosGroupe(f);
   f.querySelector("[data-x]").onclick = () => f.remove();
-  f.querySelectorAll("[data-m]").forEach(b => b.onclick = () => { f.remove(); if ((S.variante || S.metier || "loueur") !== b.dataset.m) { session = null; installateur = false; changerMetier(b.dataset.m); history.replaceState(null, "", "?metier=" + b.dataset.m); } });
+  f.querySelectorAll("[data-m]").forEach(b => b.onclick = () => { f.remove(); if (S.etab || (S.variante || S.metier || "loueur") !== b.dataset.m) { session = null; installateur = false; changerMetier(b.dataset.m); history.replaceState(null, "", "?metier=" + b.dataset.m); } });
   f.querySelectorAll("[data-lien]").forEach(b => b.onclick = async () => {
     const l = lienDemo(b.dataset.lien);
     try { await navigator.clipboard.writeText(l); toast("Lien copié : " + l); } catch (e) { prompt("Lien de la démo :", l); }

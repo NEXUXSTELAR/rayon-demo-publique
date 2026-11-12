@@ -159,7 +159,7 @@ const SEED = () => ({
 // Historique de démonstration : huit semaines d'événements, puis quelques sorties en cours.
 // Générateur pseudo-aléatoire à graine fixe : la démo est identique à chaque remise à zéro.
 function seedMouvements(state) {
-  let graine = 7;
+  let graine = state.graine || 7; // un établissement d'un groupe a sa propre graine (groupe.js)
   const alea = () => (graine = (graine * 16807) % 2147483647) / 2147483647;
   const entre = (a, b) => Math.round(a + alea() * (b - a));
   const jour = 86400000, maintenant = Date.now();

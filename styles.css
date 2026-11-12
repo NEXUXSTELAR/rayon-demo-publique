@@ -1246,3 +1246,83 @@ label.btn:focus-within { outline: 3px solid var(--marque); outline-offset: 2px; 
   .pl-page { margin: 0; outline: 0; }
   .pl-page .pl-e { outline: 0; }
 }
+
+/* =========================================================
+   PLUSIEURS ÉTABLISSEMENTS (groupe.js) : écran « Groupe », bandeau de la direction, envois entre établissements.
+   Rien de tout cela n'existe à l'écran pour une entreprise à un seul établissement.
+   ========================================================= */
+.etab-bandeau { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; margin: 0 0 16px; }
+.etab-bandeau button { display: flex; align-items: center; gap: 10px; min-height: 56px; border: 2px solid var(--trait); background: var(--carte); color: var(--encre); border-radius: 16px; padding: 6px 14px; font: inherit; font-weight: 700; text-align: left; }
+.etab-bandeau button svg { width: 22px; height: 22px; flex: none; color: var(--gris); }
+.etab-bandeau .eb-groupe[aria-current="page"] { background: var(--marque); border-color: var(--marque); color: var(--sur-marque); }
+.etab-bandeau .eb-groupe[aria-current="page"] svg { color: var(--sur-marque); }
+.etab-bandeau .eb-choix { justify-content: space-between; }
+.etab-bandeau .eb-choix span { min-width: 0; display: grid; }
+.etab-bandeau .eb-choix small { color: var(--gris); font-size: 13px; font-weight: 600; }
+.etab-bandeau .eb-choix b { line-height: 1.2; overflow-wrap: anywhere; }
+.etab-bandeau button:hover { border-color: var(--trait-fort); }
+.g-titre { margin: 0; }
+.g-totaux { margin-bottom: 6px; }
+.g-totaux .voyant { min-height: 0; }
+.g-totaux .voyant-n { font-size: 28px; }
+.etabs { display: grid; gap: 12px; }
+@media (min-width: 760px) { .etabs.n2, .etabs.n4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 760px) and (max-width: 1099px) { .etabs.n3, .etabs.n5 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1100px) { .etabs.n3, .etabs.n5 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.etab-carte { background: var(--carte); border-radius: 22px; padding: 16px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.etab-carte.ouvert { box-shadow: inset 0 0 0 2px var(--marque); }
+.etab-carte header { display: flex; justify-content: space-between; align-items: start; gap: 10px; }
+.etab-carte h3 { margin: 0; font-size: 18px; line-height: 1.2; overflow-wrap: anywhere; }
+.etab-carte header small { color: var(--gris); font-size: 14px; }
+.etab-voyants { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.etab-voyants div { background: var(--carte2); border-radius: 14px; padding: 10px 12px; min-width: 0; }
+.etab-voyants .large { grid-column: 1 / -1; }
+.etab-voyants dt { color: var(--gris); font-size: 13px; font-weight: 600; line-height: 1.25; }
+.etab-voyants dd { margin: 2px 0 0; font-size: 22px; font-weight: 800; letter-spacing: -.01em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.etab-voyants .large dd { font-size: 30px; }
+.etab-voyants .alerte dd { color: var(--alerte); }
+.etab-remarques { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 15px; font-weight: 600; }
+.etab-remarques li { display: grid; grid-template-columns: 12px minmax(0, 1fr); gap: 8px; align-items: baseline; }
+.etab-remarques i { width: 12px; height: 12px; border-radius: 50%; background: var(--attention); transform: translateY(1px); }
+.etab-remarques .alerte i { background: var(--alerte); }
+.etab-rien { margin: 0; color: var(--gris); font-size: 15px; }
+table.t.comparer { table-layout: fixed; }
+table.t.comparer th, table.t.comparer td { padding: 6px 10px; vertical-align: middle; }
+table.t.comparer thead th { padding: 12px 10px; overflow-wrap: anywhere; }
+table.t.comparer thead th:first-child { width: 42%; }
+table.t.comparer tbody th { padding: 0; font-size: 15px; }
+table.t.comparer tbody th button { width: 100%; min-height: 48px; border: 0; background: none; color: var(--encre); font: inherit; font-weight: 600; text-align: left; padding: 6px 10px 6px 14px; overflow-wrap: anywhere; }
+table.t.comparer tbody th button:hover, table.t.comparer tbody th button[aria-pressed="true"] { background: var(--carte2); }
+table.t.comparer tbody th button[aria-pressed="true"] { font-weight: 800; }
+table.t.comparer td.n { font-variant-numeric: tabular-nums; white-space: normal; }
+table.t.comparer td.pire { color: var(--alerte); }
+table.t.comparer td.pire i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--alerte); margin-right: 5px; vertical-align: middle; }
+.g-graphes { display: grid; gap: 14px; }
+.g-graphes .graphe { margin: 0; }
+@media (min-width: 1100px) { .g-graphes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.b-liste.g-transferts button.l { grid-template-columns: minmax(0, 1fr) auto; min-height: 60px; }
+.b-liste.g-transferts small { display: block; color: var(--gris); font-size: 14px; overflow-wrap: anywhere; }
+.etab-choix { display: grid; gap: 8px; }
+.etab-choix button { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; align-items: center; min-height: 64px; border: 0; background: var(--carte2); color: var(--encre); border-radius: 14px; padding: 10px 14px; font: inherit; text-align: left; }
+.etab-choix button[aria-current="true"] { box-shadow: inset 0 0 0 2px var(--marque); }
+.etab-choix button svg { width: 26px; height: 26px; color: var(--gris); }
+.etab-choix b { display: block; overflow-wrap: anywhere; } .etab-choix small { color: var(--gris); font-size: 14px; }
+.etab-connexion { margin-top: 16px; background: var(--carte); border-radius: 18px; padding: 4px 16px 12px; }
+.etab-connexion select { width: 100%; min-width: 0; }
+.etab-connexion .sous { margin: 0; font-size: 14px; }
+@media (max-width: 400px) {
+  table.t.comparer { font-size: 14px; }
+  table.t.comparer thead th { font-size: 12px; padding: 10px 4px; }
+  table.t.comparer thead th:first-child { width: 36%; padding-left: 10px; }
+  table.t.comparer td { padding: 6px 4px; }
+  table.t.comparer tbody th button { padding: 6px 4px 6px 10px; font-size: 14px; }
+  table.t.comparer td.pire i { margin-right: 3px; }
+  .etab-voyants dd { font-size: 20px; } .etab-voyants .large dd { font-size: 26px; }
+}
+@media (max-width: 360px) {
+  .g-totaux .voyant-n { font-size: 23px; white-space: nowrap; }
+  table.t.comparer td { font-size: 13px; padding: 6px 2px; white-space: nowrap; }
+  table.t.comparer td:last-child { padding-right: 8px; }
+  table.t.comparer thead th:first-child { width: 33%; }
+}
+@media print { .etab-bandeau { display: none !important; } }

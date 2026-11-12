@@ -387,8 +387,9 @@ function semerComptages(st) {
   st.emplacements.forEach((e, i) => { st.comptages[e.id] = Date.now() - ((n - i) * 7 + 2) * 86400000; });
   return st;
 }
-function construireDemo(m) {
-  if (!METIERS[m] || m === "loueur") { const s = seedMouvements(SEED()); s.metier = "loueur"; return semerComptages(s); }
+// regler (facultatif) : ajuste l'état avant que son historique soit fabriqué. Sert aux établissements d'un groupe (groupe.js).
+function construireDemo(m, regler) {
+  if (!METIERS[m] || m === "loueur") { const s0 = SEED(); if (regler) regler(s0); const s = seedMouvements(s0); s.metier = "loueur"; return semerComptages(s); }
   if (METIERS[m].base === "loueur") return semerComptages(habiller(seedMouvements(SEED()), METIERS[m], m));
   const d = METIERS[m], st = SEED();
   st.metier = m;
@@ -404,6 +405,7 @@ function construireDemo(m) {
   st.equipe = st.equipe.filter(u => u.role !== "chauffeur"); // la tournée du chauffeur sert aux loueurs
   const postes = { terrain: d.v.terrain, bureau: d.v.bureau, direction: d.v.direction };
   st.equipe.forEach(u => { u.poste = postes[u.role]; });
+  if (regler) regler(st);
   seedAutre(st, d);
   // Les objets à contrôler : la date tombe toujours au même écart d'aujourd'hui, le dernier contrôle un rythme plus tôt
   Object.entries(d.controles || {}).forEach(([id, [nom, jours, mois]]) => {
@@ -442,7 +444,7 @@ function habiller(st, d, m) {
 
 // Huit semaines de vie : sorties quotidiennes, livraisons quand le stock baisse, quelques pertes, quelques prêts.
 function seedAutre(st, d) {
-  let graine = 11;
+  let graine = st.graine || 11;
   const alea = () => (graine = (graine * 16807) % 2147483647) / 2147483647;
   const J = 86400000, maintenant = Date.now(), debut = maintenant - 57 * J;
   const minuit = new Date(maintenant).setHours(0, 0, 0, 0); // les gestes tombent aux heures de travail, pas la nuit
