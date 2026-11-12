@@ -714,17 +714,19 @@ function dInstallation() {
   const fin = inst.livreLe + OFFRE.jours * 86400000, jours = Math.max(0, Math.ceil((fin - Date.now()) / 86400000));
   const restantes = Math.max(0, OFFRE.heures - inst.heuresUtilisees), enCours = jours > 0 && restantes > 0;
   const google = S.equipe.filter(u => u.actif).length * (unite === "xof" ? 4460 : 6.8);
+  // Les montants ne s'affichent que sur l'appareil de l'installateur : la démo publique ne montre aucun prix, comme le site.
+  const prix = ESPACE;
   return `<h1>Votre installation</h1>
-  <p class="sous">Offre ${OFFRE.nom}, payée une fois : ${fmt(OFFRE[unite])} HT, livrée le ${new Date(inst.livreLe).toLocaleDateString("fr-FR")}. L'appli et les données vous appartiennent. Rien n'est dû chaque mois à Stockclair.</p>
+  <p class="sous">Offre ${OFFRE.nom}, payée une fois${prix ? ` : ${fmt(OFFRE[unite])} HT` : ""}, livrée le ${new Date(inst.livreLe).toLocaleDateString("fr-FR")}. L'appli et les données vous appartiennent. Rien n'est dû chaque mois à Stockclair.</p>
   <div class="bloc"><div class="module"><b>Assistance incluse</b><span class="statut ${enCours ? "s-revenue" : "s-partie"}">${enCours ? "en cours" : "terminée"}</span>
     <p>${enCours ? `Encore ${jours} jour${jours > 1 ? "s" : ""} et ${String(restantes).replace(".", ",")} h sur ${OFFRE.heures} h. ` : `Terminée le ${new Date(fin).toLocaleDateString("fr-FR")}. `}Elle couvre les corrections de notre paramétrage et les questions d'utilisation, pas les nouvelles fonctions.</p></div>
-  <div class="module"><b>Intervention ensuite</b><span>${fmt(TARIF_INTERVENTION[unite])} HT / h</span><p>À distance, par quart d'heure, 30 minutes au minimum, toujours sur devis accepté.</p></div>
-  <div class="module"><b>Payé chaque mois à Google, pas à Stockclair</b><span>${fmt(Math.round(google * 100) / 100)}</span><p>Comptes Google des ${S.equipe.filter(u => u.actif).length} personnes de l'équipe (environ 6,80 € HT par personne).</p></div></div>
+  <div class="module"><b>Intervention ensuite</b><span>${prix ? fmt(TARIF_INTERVENTION[unite]) + " HT / h" : "sur devis"}</span><p>À distance, par quart d'heure, 30 minutes au minimum, toujours sur devis accepté.</p></div>
+  ${prix ? `<div class="module"><b>Payé chaque mois à Google, pas à Stockclair</b><span>${fmt(Math.round(google * 100) / 100)}</span><p>Comptes Google des ${S.equipe.filter(u => u.actif).length} personnes de l'équipe (environ 6,80 € HT par personne, avec la version à comptes Google ; rien avec la version à un seul compte, docs/19).</p></div>` : ""}</div>
   <p style="margin-top:12px"><button class="btn plein" data-act="demanderIntervention">Demander une intervention</button></p>
   ${(S.interventions || []).length ? `<h2>Vos demandes</h2><table class="t"><tbody>${S.interventions.slice().reverse().map(i => `<tr><td>${quand(i.date)}<br><small>${esc(i.texte)}</small></td><td class="n">${i.incluse ? "dans l'assistance" : "devis envoyé"}</td></tr>`).join("")}</tbody></table>` : ""}
   <h2>Ce qui est installé</h2>
   <p class="sous">Réglé à l'installation, d'après votre devis. Pour ajouter une fonction, demandez un devis : elle se paie une fois et reste à vous.</p>
-  <div class="bloc">${Object.entries(CATALOGUE).map(([k, m]) => `<div class="module"><b>${m.nom}</b>${actif(k) ? `<span class="statut s-revenue">installé</span>` : `<button class="btn petit" data-devis="${k}">Demander un devis</button>`}<p>${m.detail}.${actif(k) ? "" : ` Environ ${fmt(m[unite])} HT, une fois.`}</p></div>`).join("")}</div>
+  <div class="bloc">${Object.entries(CATALOGUE).map(([k, m]) => `<div class="module"><b>${m.nom}</b>${actif(k) ? `<span class="statut s-revenue">installé</span>` : `<button class="btn petit" data-devis="${k}">Demander un devis</button>`}<p>${m.detail}.${actif(k) ? "" : prix ? ` Environ ${fmt(m[unite])} HT, une fois.` : " Payée une fois, sur devis."}</p></div>`).join("")}</div>
   <h2>Réglages</h2>
   <div class="module"><b>Vos coordonnées sur les documents</b><button class="btn petit" data-act="coordonnees">Modifier</button><p>${S.entreprise && S.entreprise.nom ? esc(S.entreprise.nom) : "Nom, adresse, téléphone et logo en haut des bons et des factures."}</p></div>
   <div class="module"><label for="monnaie"><b>Monnaie des montants</b></label><select id="monnaie" data-monnaie><option value="EUR" ${S.monnaie === "EUR" ? "selected" : ""}>Euro</option><option value="XOF" ${S.monnaie === "XOF" ? "selected" : ""}>Franc CFA</option></select><p>Pour les prix, les pertes et les factures.</p></div>`;
