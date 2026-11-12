@@ -80,7 +80,12 @@ function tacheComptage() {
   return [{ c: "compter", i: I.compter, t: "Compter · " + z.e.nom, s: "Zone de la semaine · " + texteDepuis(depuisComptage(z.e.id)), a: `data-zone="${z.e.id}"` }];
 }
 const tachesSansControles = taches;
-taches = function () { const c = tachesControles(); return c.retard.concat(tachesSansControles(), tachesLieux(), c.bientot, tacheComptage()); };
+taches = function () {
+  const c = tachesControles(), base = tachesSansControles();
+  // Avec plusieurs lieux de stock, « À utiliser en premier » dit où se trouve ce qui périme, sans répéter le même objet
+  if (lieuxActifs()) base.forEach(x => { if (x.t !== "À utiliser en premier") return; const b = bientotPerimes(2), vus = [...new Set(b.map(k => `${k.a.nom} (${nomLieu(k.lieu || "")})`))]; x.s = vus.slice(0, 2).join(", ") + (vus.length > 2 ? "…" : ""); });
+  return c.retard.concat(base, tachesLieux(), c.bientot, tacheComptage());
+};
 
 /* Accueil : un bloc « Contrôles à faire », seulement s'il y en a. Il se place seul sur l'accueil d'un rôle
    qui voit le stock et n'a pas déjà la liste « À faire » (le gérant, le plus souvent). */

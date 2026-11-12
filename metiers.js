@@ -174,6 +174,73 @@ const METIERS = {
     kits: [{ id: "KIT-01", nom: "Kit pose de fenêtres", lignes: [["ART-0006", 1], ["ART-0009", 2], ["ART-0010", 1], ["ART-0012", 1]] },
            { id: "KIT-02", nom: "Kit produits de pose", lignes: [["ART-0001", 6], ["ART-0002", 4], ["ART-0003", 1]] }],
   },
+  // Ambulances : la dotation de chaque véhicule, ce qui manque, ce qui périme. Le matériel unique (défibrillateur, brancard) se suit par le prêt et le contrôle.
+  ambulance: {
+    entreprise: "Ambulances du Canal (démo)", nom: "Ambulances et transport sanitaire", logique: "conso", dlc: true, alerteDlc: 30,
+    v: { imp: "Service", imps: "services", retourTitre: "Rentrer le matériel", retourSous: "matériel sorti", chez: "En service",
+         pretSortie: "Je le prends", pretSortieSous: "Pour un service", pretRetour: "Je le rends", pretRetourSous: "Il revient au dépôt",
+         prendre: "J'en utilise", prendreSous: "Pendant un service", remettre: "Je remets le surplus", remettreSous: "Pas utilisé",
+         terrain: "Ambulancier", bureau: "Régulateur ou responsable", direction: "Gérant", parc: "Relevé du dépôt", sortiesMot: "Utilisé" },
+    imputations: ["Service de jour", "Garde de nuit", "Transports programmés", "Garde départementale"],
+    fournisseurs: [{ id: "FOU-01", nom: "Fournisseur de matériel médical (démo)", delai: 3 }, { id: "FOU-02", nom: "Fournisseur de gaz médicaux (démo)", delai: 2 }],
+    emplacements: [{ id: "EMP-A1", nom: "Dépôt · consommables" }, { id: "EMP-A2", nom: "Dépôt · oxygène" }, { id: "EMP-B1", nom: "Dépôt · matériel" }],
+    articles: [
+      ["ART-0001", "Compresses stériles · boîte de 50", "", "conso", 8, 30, 4.5, 1, "EMP-A1", "FOU-01", .8, null, 400],
+      ["ART-0002", "Pansements absorbants · boîte de 20", "", "conso", 6, 20, 6, 1, "EMP-A1", "FOU-01", .4, null, 500],
+      ["ART-0003", "Gants d'examen · boîte de 100", "gants", "conso", 8, 30, 7.5, 1, "EMP-A1", "FOU-01", 1],
+      ["ART-0004", "Draps à usage unique · rouleau", "draps_examen", "conso", 8, 28, 9, 1, "EMP-A1", "FOU-01", .8],
+      ["ART-0005", "Masque à oxygène adulte", "", "conso", 8, 30, 3.2, 1, "EMP-A1", "FOU-01", .6, null, 700],
+      ["ART-0006", "Solution désinfectante · flacon 500 mL", "ethanol", "conso", 6, 20, 5.5, 1, "EMP-A1", "FOU-01", .5, null, 365],
+      ["ART-0007", "Couverture de survie", "couverture", "conso", 12, 50, 1.8, 1, "EMP-A1", "FOU-01", .8],
+      ["ART-0008", "Bouteille d'oxygène 5 L", "", "conso", 4, 14, 95, 1, "EMP-A2", "FOU-02", .3],
+      ["ART-0009", "Kit de désinfection du véhicule", "kit_hygiene", "conso", 4, 14, 14, 1, "EMP-A1", "FOU-01", .3, null, 365],
+      ["ART-0010", "Défibrillateur n°1", "", "pret", 0, 1, 1450, 1, "EMP-B1", "FOU-01", 0, "SN-DEF-0101"],
+      ["ART-0011", "Aspirateur de mucosités n°1", "", "pret", 0, 1, 420, 1, "EMP-B1", "FOU-01", 0, "SN-ASP-0201"],
+      ["ART-0012", "Brancard n°1", "", "pret", 0, 1, 2800, 1, "EMP-B1", "FOU-01", 0, "SN-BRA-0301"],
+      ["ART-0013", "Matelas à dépression n°1", "", "pret", 0, 1, 390, 1, "EMP-B1", "FOU-01", 0, "SN-MAD-0401"],
+      ["ART-0014", "Attelles à dépression · jeu n°1", "attelles", "pret", 0, 1, 260, 1, "EMP-B1", "FOU-01", 0, "SN-ATT-0501"],
+    ],
+    lotsCourts: [["ART-0001", 6, 2], ["ART-0005", 4, 20]],
+    controles: { "ART-0010": ["Vérification annuelle", 20, 12], "ART-0011": ["Maintenance", -5, 12], "ART-0012": ["Vérification annuelle", 120, 12] },
+    lieux: { mot: "Véhicules", geste: "Charger un véhicule", liste: [
+      ["LIEU-01", "Ambulance 1", { "ART-0001": [4, 4], "ART-0002": [3, 2], "ART-0003": [2, 2], "ART-0004": [3, 3], "ART-0005": [4, 4], "ART-0006": [1, 1], "ART-0007": [5, 5], "ART-0008": [2, 2], "ART-0009": [1, 1] }],
+      ["LIEU-02", "Ambulance 2", { "ART-0001": [4, 4], "ART-0002": [3, 3], "ART-0003": [2, 2], "ART-0004": [3, 3], "ART-0005": [4, 4], "ART-0006": [1, 1], "ART-0007": [5, 5], "ART-0008": [2, 1], "ART-0009": [1, 1] }],
+      ["LIEU-03", "VSL 1", { "ART-0003": [1, 1], "ART-0004": [2, 2], "ART-0006": [1, 1], "ART-0007": [2, 2] }]] },
+    kits: [],
+  },
+  // Propreté : les produits dans le local de chaque site client, les machines prêtées à un site.
+  proprete: {
+    entreprise: "Clair Net Services (démo)", nom: "Propreté et nettoyage", logique: "conso", dlc: false,
+    v: { imp: "Site", imps: "sites", retourTitre: "Rentrer une machine", retourSous: "machines sur les sites", chez: "Sur les sites",
+         pretSortie: "Part sur un site", pretSortieSous: "Je l'y laisse", pretRetour: "Revient", pretRetourSous: "Elle revient au dépôt",
+         prendre: "J'en utilise", prendreSous: "Sur un site", remettre: "Je remets le surplus", remettreSous: "Pas utilisé",
+         terrain: "Agent", bureau: "Chef de secteur", direction: "Gérant", parc: "Relevé du dépôt", sortiesMot: "Utilisé" },
+    imputations: ["Bureaux Canal Sud", "Clinique des Tilleuls", "Résidence Le Parc", "Remise en état · ponctuel"],
+    fournisseurs: [{ id: "FOU-01", nom: "Fournisseur de produits d'entretien (démo)", delai: 3 }, { id: "FOU-02", nom: "Fournisseur de machines de nettoyage (démo)", delai: 7 }],
+    emplacements: [{ id: "EMP-A1", nom: "Dépôt · produits" }, { id: "EMP-A2", nom: "Dépôt · papier et sacs" }, { id: "EMP-B1", nom: "Dépôt · machines" }],
+    articles: [
+      ["ART-0001", "Détergent multi-usages · bidon 5 L", "jerrican", "conso", 6, 24, 11, 1, "EMP-A1", "FOU-01", .8],
+      ["ART-0002", "Désinfectant de surfaces · bidon 5 L", "desinfectant", "conso", 5, 20, 16, 1, "EMP-A1", "FOU-01", .6],
+      ["ART-0003", "Savon pour les mains · bidon 5 L", "savon", "conso", 4, 16, 13, 1, "EMP-A1", "FOU-01", .4],
+      ["ART-0004", "Sacs-poubelle 110 L · rouleau", "", "conso", 10, 40, 4.5, 1, "EMP-A2", "FOU-01", 2],
+      ["ART-0005", "Papier toilette · colis", "", "conso", 6, 24, 18, 1, "EMP-A2", "FOU-01", 1],
+      ["ART-0006", "Essuie-mains · colis", "", "conso", 6, 24, 21, 1, "EMP-A2", "FOU-01", .8],
+      ["ART-0007", "Lavettes microfibre · lot de 10", "", "conso", 4, 16, 8, 1, "EMP-A1", "FOU-01", .4],
+      ["ART-0008", "Franges de lavage", "", "conso", 8, 30, 3.5, 1, "EMP-A1", "FOU-01", .8],
+      ["ART-0009", "Gants de ménage · paire", "gants", "conso", 10, 40, 1.6, 5, "EMP-A1", "FOU-01", 1.5],
+      ["ART-0010", "Autolaveuse n°1", "", "pret", 0, 1, 3900, 1, "EMP-B1", "FOU-02", 0, "SN-AUT-0101"],
+      ["ART-0011", "Monobrosse n°1", "", "pret", 0, 1, 1250, 1, "EMP-B1", "FOU-02", 0, "SN-MON-0201"],
+      ["ART-0012", "Aspirateur dorsal n°1", "", "pret", 0, 1, 480, 1, "EMP-B1", "FOU-02", 0, "SN-ASD-0301"],
+      ["ART-0013", "Aspirateur dorsal n°2", "", "pret", 0, 1, 480, 1, "EMP-B1", "FOU-02", 0, "SN-ASD-0302"],
+      ["ART-0014", "Injecteur-extracteur n°1", "", "pret", 0, 1, 1650, 1, "EMP-B1", "FOU-02", 0, "SN-INJ-0401"],
+    ],
+    controles: { "ART-0010": ["Entretien", 15, 6], "ART-0011": ["Entretien", -6, 12], "ART-0014": ["Contrôle électrique", 140, 12] },
+    lieux: { mot: "Sites", geste: "Approvisionner un site", liste: [
+      ["LIEU-01", "Bureaux Canal Sud", { "ART-0001": [2, 2], "ART-0002": [1, 1], "ART-0003": [1, 1], "ART-0004": [6, 3], "ART-0005": [3, 3], "ART-0006": [3, 2], "ART-0007": [2, 2], "ART-0008": [4, 4] }],
+      ["LIEU-02", "Clinique des Tilleuls", { "ART-0001": [2, 2], "ART-0002": [3, 3], "ART-0003": [2, 2], "ART-0004": [8, 8], "ART-0005": [4, 4], "ART-0006": [4, 4], "ART-0008": [6, 6], "ART-0009": [10, 5] }],
+      ["LIEU-03", "Résidence Le Parc", { "ART-0001": [1, 1], "ART-0004": [4, 4], "ART-0007": [1, 1], "ART-0008": [2, 2] }]] },
+    kits: [],
+  },
   restaurant: {
     entreprise: "Le Comptoir (démo)", nom: "Restaurant et traiteur", logique: "conso", dlc: true,
     v: { imp: "Service", imps: "services", retourTitre: "Retour d'une prestation", retourSous: "matériel dehors", chez: "En prestation",
@@ -301,13 +368,15 @@ const aDesPrets = () => S.articles.some(a => logique(a) === "pret") && actif("MO
 function semerLieux(st, d) {
   const plus = ["Inventaire initial", "Entrée", "Retour", "Ajustement", "Retour réparation"], moins = ["Prêt", "Perte", "Sortie", "Réparation"];
   const reste = {}; st.articles.forEach(a => { reste[a.id] = st.mouvements.filter(m => m.article === a.id).reduce((t, m) => t + (plus.includes(m.type) ? m.qte : moins.includes(m.type) ? -m.qte : 0), 0); });
+  const total = Object.assign({}, reste);
   st.motLieux = d.mot; st.gesteLieu = d.geste;
   st.lieux = d.liste.map(([id, nom, dot]) => ({ id, nom, dot: Object.fromEntries(Object.entries(dot).map(([k, v]) => [k, v[0]])) }));
   const quand = new Date(Date.now() - 3 * 86400000).setHours(7, 30, 0, 0); let n = 0;
   d.liste.forEach(([id, nom, dot], i) => Object.entries(dot).forEach(([aid, [, charge]]) => {
     const q = Math.min(charge, Math.floor(Math.max(0, reste[aid] || 0) / 2)); if (q <= 0) return;
     reste[aid] -= q; n += 1;
-    st.mouvements.push({ id: "MV-T" + String(n).padStart(4, "0"), date: quand + i * 600000 + n * 20000, profil: "terrain", qui: i ? "Léa" : "Ousmane", article: aid, type: "Transfert", qte: q, evenement: "", motif: `Dépôt → ${nom}`, de: "", vers: id });
+    const lots = prendreLots(lotsDepotDe(st.mouvements, st.lieux, aid, lotsTotaux(st.mouvements, aid, total[aid])), q);
+    st.mouvements.push(Object.assign({ id: "MV-T" + String(n).padStart(4, "0"), date: quand + i * 600000 + n * 20000, profil: "terrain", qui: i % 2 ? "Léa" : "Ousmane", article: aid, type: "Transfert", qte: q, evenement: "", motif: `Dépôt → ${nom}`, de: "", vers: id }, lots.length ? { lots } : {}));
   }));
   st.lieuDe = { "U-01": d.liste[0][0], "U-02": (d.liste[1] || d.liste[0])[0] };
   st.mouvements.sort((a, b) => a.date - b.date);
@@ -434,19 +503,56 @@ function seedAutre(st, d) {
 
 /* ---------------- Lots et dates limites ---------------- */
 // Les entrées les plus récentes sont celles qui restent en stock (on sort les plus anciennes d'abord).
-function lotsEnStock(id) {
-  let reste = Math.max(0, stock(id));
+function lotsTotaux(mvts, id, total) {
+  let reste = Math.max(0, total);
   const lots = [];
-  S.mouvements.filter(m => m.article === id && m.dlc && ["Entrée", "Inventaire initial"].includes(m.type)).sort((a, b) => b.date - a.date).forEach(m => {
+  mvts.filter(m => m.article === id && m.dlc && ["Entrée", "Inventaire initial"].includes(m.type)).sort((a, b) => b.date - a.date).forEach(m => {
     if (reste <= 0) return;
     const qte = Math.min(reste, m.qte); reste -= qte; lots.push({ dlc: m.dlc, qte });
   });
   return lots.sort((a, b) => a.dlc.localeCompare(b.dlc));
 }
+const lotsEnStock = id => lotsTotaux(S.mouvements, id, stock(id));
+
+/* Lots par lieu (stock par lieu, lieux.js). Un transfert emporte les lots les plus proches de leur date (m.lots),
+   et ce qui sort d'un lieu est pris sur ses lots les plus proches. Le total, lui, garde le calcul ci-dessus. */
+const signeLot = t => ["Inventaire initial", "Entrée", "Retour", "Ajustement", "Retour réparation"].includes(t) ? 1 : ["Prêt", "Perte", "Sortie", "Réparation"].includes(t) ? -1 : 0;
+function lotsDuLieu(mvts, id, lieu) {
+  const lots = {}; let sorti = 0;
+  mvts.forEach(m => {
+    if (m.article !== id) return;
+    if (m.type === "Transfert") {
+      const s = m.qte < 0 ? -1 : 1; // une annulation reprend les mêmes lots, en sens inverse
+      if (m.vers === lieu) (m.lots || []).forEach(x => { lots[x.dlc] = (lots[x.dlc] || 0) + s * x.qte; });
+      if (m.de === lieu) (m.lots || []).forEach(x => { lots[x.dlc] = (lots[x.dlc] || 0) - s * x.qte; });
+    } else if (m.lieu === lieu) sorti -= signeLot(m.type) * m.qte;
+  });
+  let reste = Math.max(0, sorti);
+  return Object.keys(lots).sort().map(dlc => { const q = Math.max(0, lots[dlc]), k = Math.min(q, reste); reste -= k; return { dlc, qte: q - k }; }).filter(x => x.qte > 0);
+}
+// Les n premières pièces d'une liste de lots triée par date
+function prendreLots(lots, n) { const r = []; lots.forEach(x => { const k = Math.min(x.qte, n); if (k > 0) { r.push({ dlc: x.dlc, qte: k }); n -= k; } }); return r; }
+// Les lots restés au dépôt : ceux de tout le stock, moins ceux que portent les autres lieux
+function lotsDepotDe(mvts, lieux, id, totaux) {
+  const t = totaux.map(x => ({ dlc: x.dlc, qte: x.qte }));
+  lieux.forEach(l => lotsDuLieu(mvts, id, l.id).forEach(p => {
+    let r = p.qte;
+    t.forEach(x => { if (x.dlc === p.dlc) { const k = Math.min(x.qte, r); x.qte -= k; r -= k; } });
+    t.forEach(x => { const k = Math.min(x.qte, r); x.qte -= k; r -= k; });
+  }));
+  return t.filter(x => x.qte > 0);
+}
+const lotsAuDepot = id => (S.lieux || []).length ? lotsDepotDe(S.mouvements, S.lieux, id, lotsEnStock(id)) : lotsEnStock(id);
 function bientotPerimes(jours) {
   const limite = new Date(Date.now() + jours * 86400000).toISOString().slice(0, 10);
   const l = [];
-  S.articles.forEach(a => lotsEnStock(a.id).filter(x => x.dlc <= limite).forEach(x => l.push({ a, dlc: x.dlc, qte: x.qte })));
+  // Avec plusieurs lieux de stock, chaque ligne dit où se trouve le lot (lieu : "" pour le dépôt)
+  const lieux = (S.lieux || []).length > 0;
+  S.articles.forEach(a => {
+    if (!lieux) return lotsEnStock(a.id).filter(x => x.dlc <= limite).forEach(x => l.push({ a, dlc: x.dlc, qte: x.qte }));
+    lotsAuDepot(a.id).filter(x => x.dlc <= limite).forEach(x => l.push({ a, dlc: x.dlc, qte: x.qte, lieu: "" }));
+    S.lieux.forEach(k => lotsDuLieu(S.mouvements, a.id, k.id).filter(x => x.dlc <= limite).forEach(x => l.push({ a, dlc: x.dlc, qte: x.qte, lieu: k.id })));
+  });
   return l.sort((x, y) => x.dlc.localeCompare(y.dlc));
 }
 const dateFr = iso => new Date(iso + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" });

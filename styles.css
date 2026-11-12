@@ -1196,3 +1196,15 @@ label.btn:focus-within { outline: 3px solid var(--marque); outline-offset: 2px; 
   .feuille .valider > .btn svg { width: 20px; height: 20px; }
   .feuille .valider.trois > .btn { padding: 0 4px; gap: 4px; font-size: 14px; }
 }
+.lot-lieu { display: block; }
+.lot-lieu.bientot { color: var(--encre) !important; font-weight: 700; }
+.lot-lieu.perime { color: var(--alerte) !important; font-weight: 700; }
+.feuille-doc h2 + p { margin-top: 4px; }
+/* Mon espace : lieux de stock et dotation d'un client (liste.js) */
+.lieux-p .lieux-mot { max-width: 340px; }
+.lieux-p .lieux-mot select { width: 100%; }
+.lieux-p .regl-etape .boutons { flex: none; }
+.dot-p { display: grid; max-height: 46vh; overflow-y: auto; margin: 6px 0; }
+.dot-p label { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--trait); }
+.dot-p span { min-width: 0; overflow-wrap: anywhere; }
+.dot-p input { flex: none; width: 92px; height: 44px; border-radius: 10px; border: 2px solid var(--trait-fort); background: var(--carte); color: var(--encre); padding: 0 10px; font: inherit; font-weight: 700; text-align: right; }

@@ -11,6 +11,10 @@ const LISTE_MAX = 5000; // lignes lues au plus ; les codes vont de ART-0001 à A
 // Titres reconnus, dans l'ordre où on les essaie (le premier qui convient gagne). Les titres sont comparés sans accents ni majuscules.
 // Ils couvrent le modèle à remplir, l'onglet ARTICLES du classeur livré, et les mots courants d'un tableau de patron.
 const COLONNES_LISTE = [
+  ["ctrlLe", /prochain controle|echeance|date d[ue] controle|controle avant/, "Prochain contrôle (date)"],
+  ["ctrlMois", /controle tous|tous les|periodicite|rythme/, "Contrôle tous les (mois)"],
+  ["ctrlNom", /controle|etalonnage|verification/, "Nom du contrôle"],
+  ["lieu", /dans quel lieu|fourgon|vehicule|\bsite\b/, "Dans quel lieu (fourgon, véhicule, site)"],
   ["suivi", /suivi|par lots/, "Suivi par lots et dates limites"],
   ["dlc", /date limite|peremption|\bdlc\b|\bdluo\b|\bddm\b|expir/, "Date limite"],
   ["cond", /conditionnement|colisage|par carton|par paquet/, "Conditionnement"],
@@ -29,7 +33,9 @@ const COLONNES_LISTE = [
   ["nom", /^nom|designation|article|produit|libelle|objet|materiel/, "Nom de l'article"],
 ];
 // Ordre des colonnes du modèle : sert quand on colle des cellules sans leur ligne de titres
-const ORDRE_MODELE = ["nom", "qte", "emp", "logique", "categorie", "unite", "prix", "fou", "seuil", "cible", "cond", "serie", "suivi", "lotNum", "dlc", "code"];
+const ORDRE_MODELE = ["nom", "qte", "emp", "logique", "categorie", "unite", "prix", "fou", "seuil", "cible", "cond", "serie", "suivi", "lotNum", "dlc", "code", "lieu", "ctrlNom", "ctrlLe", "ctrlMois"];
+// Stock par lieu (lieux.js) : le mot affiché dans l'appli du client, son singulier (étiquettes) et le nom du geste
+const MOTS_LIEUX = { "Fourgons": ["Fourgon", "Charger un fourgon"], "Véhicules": ["Véhicule", "Charger un véhicule"], "Sites": ["Site", "Approvisionner un site"], "Lieux de stock": ["Lieu de stock", "Déplacer vers un autre lieu"] };
 const EMP_DEFAUT = "À ranger", FOU_DEFAUT = "Fournisseur à préciser";
 
 const normP = t => String(t === null || t === undefined ? "" : t).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
@@ -140,7 +146,7 @@ function preparerLignesP(lignes) {
 }
 // Dans un classeur : l'onglet « Vos articles » s'il existe, sinon le premier onglet qui a une ligne de titres (hors mode d'emploi et exemples)
 function choisirFeuilleP(feuilles) {
-  const utiles = feuilles.filter(f => !/mode d emploi|exemple|lisez moi|dictionnaire|parametre/.test(normP(f.nom)));
+  const utiles = feuilles.filter(f => !/mode d emploi|exemple|lisez moi|dictionnaire|parametre|vos lieux/.test(normP(f.nom)));
   return utiles.find(f => normP(f.nom) === "vos articles") || utiles.find(f => !preparerLignesP(f.lignes).sansTitres) || utiles[0] || feuilles[0];
 }
 
@@ -171,7 +177,7 @@ const logiqueP = v => { const n = normP(v); return !n ? "" : /consomm|\bconso\b|
 function controlerListeP(brutes, c, existants) {
   const articles = (existants || []).map(a => JSON.parse(JSON.stringify(a))), erreurs = [], remarques = [];
   const noms = {}, series = {}, codes = {}, defautLogique = (METIERS[c.metier] || METIERS.loueur).logique || "conso";
-  articles.forEach(a => { if (a.serie) series[normP(a.serie)] = "liste"; else noms[normP(a.nom)] = { a, n: "liste" }; if (a.code) codes[normP(a.code)] = "liste"; });
+  articles.forEach(a => { a.lieux = a.lieux || []; if (a.serie) series[normP(a.serie)] = "liste"; else noms[normP(a.nom)] = { a, n: "liste" }; if (a.code) codes[normP(a.code)] = "liste"; });
   let bonnes = 0, exemples = 0, dejaLa = 0;
   const auj = new Date(); auj.setMinutes(auj.getMinutes() - auj.getTimezoneOffset()); const aujIso = auj.toISOString().slice(0, 10);
   brutes.slice(0, LISTE_MAX).forEach(({ n, v }) => {
@@ -206,6 +212,16 @@ function controlerListeP(brutes, c, existants) {
     const bonNombre = (cle, titre, entier) => { const b = texteP(v[cle]); if (b === "") return null; const x = nombreP(v[cle]); if (isNaN(x) || x < 0) { rem(`${titre} illisible (« ${b.slice(0, 20)} ») : valeur de départ retenue.`); return null; } return entier ? Math.round(x) : x; };
     const prix = bonNombre("prix", "Prix"), seuilLu = bonNombre("seuil", "Seuil d'alerte", true), cibleLue = bonNombre("cible", "Quantité à avoir", true);
     let cond = bonNombre("cond", "Conditionnement", true); if (cond !== null && cond < 1) cond = null;
+    // Contrôle périodique : la date suffit ; le nom et le rythme sont facultatifs
+    const brutCtrl = texteP(v.ctrlLe), brutMois = texteP(v.ctrlMois), ctrlNom = texteP(v.ctrlNom).slice(0, 40); let ctrlLe = "", ctrlMois = 0;
+    if (brutCtrl) { ctrlLe = dateP(v.ctrlLe) || ""; if (!ctrlLe) rem(`Date du prochain contrôle illisible (« ${brutCtrl.slice(0, 30)} ») : contrôle non repris. Forme attendue : 31/12/2027.`); else if (ctrlLe < aujIso) rem(`Contrôle déjà en retard (${dateCourteFr(ctrlLe)}).`); }
+    if (brutMois) { const m = nombreP(v.ctrlMois); if (isNaN(m) || m < 1 || m > 120 || !Number.isInteger(m)) rem(`Rythme de contrôle illisible (« ${brutMois.slice(0, 20)} ») : un nombre de mois est attendu. Aucun rythme retenu.`); else ctrlMois = m; }
+    if (!brutCtrl && (ctrlMois || ctrlNom)) rem("Contrôle sans date de prochain contrôle : non repris.");
+    // Stock par lieu : la quantité de la ligne est celle qui se trouve dans ce lieu ; sans lieu, elle est au dépôt
+    let lieu = texteP(v.lieu).slice(0, 40);
+    if (/^(au )?(depot|magasin|entrepot)$/.test(normP(lieu))) lieu = "";
+    if (lieu && serie) { rem("Lieu sur un objet à numéro de série : non repris (un objet unique se suit par le prêt)."); lieu = ""; }
+    if (lieu && dlc) { rem("Lieu et date limite sur la même ligne : la quantité est comptée, le lieu n'est pas repris."); lieu = ""; }
     // Doublons : deux objets uniques peuvent porter le même nom, deux lots du même produit s'ajoutent, le reste est un doublon
     const cle = normP(nom), deja = !serie && noms[cle];
     if (deja) {
@@ -213,6 +229,12 @@ function controlerListeP(brutes, c, existants) {
       if (memeLot && deja.n !== "liste") return err(`Doublon de la ligne ${deja.n} : même nom, même lot, même date limite.`);
       if (dlc && deja.a.suiviLots && !memeLot) { deja.a.lots.push({ num: lotNum, dlc, qte }); deja.a.qte += qte; bonnes++; return; }
       if (deja.n === "liste") { dejaLa++; return; }
+      // Le même article dans un autre lieu : une ligne par lieu, les quantités s'ajoutent
+      if (lieu && !deja.a.suiviLots) {
+        if (deja.a.lieux.some(l => normP(l.nom) === normP(lieu))) return err(`Doublon de la ligne ${deja.n} : même nom, même lieu.`);
+        deja.a.lieux.push({ nom: lieu, qte }); deja.a.qte += qte; bonnes++; return;
+      }
+      if (!lieu && !dlc && deja.a.lieux.length && !deja.depot) { deja.depot = true; deja.a.qte += qte; bonnes++; return; }
       return err(`Doublon de la ligne ${deja.n} : même nom. Garder une seule ligne${dlc || deja.a.suiviLots ? ", ou donner une date limite aux deux pour en faire deux lots" : ""}.`);
     }
     const code = texteP(v.code).slice(0, 30);
@@ -222,9 +244,10 @@ function controlerListeP(brutes, c, existants) {
     let seuil = seuilLu !== null ? seuilLu : serie || logique === "pret" ? 0 : Math.min(cible, Math.ceil(qte * .2));
     if (seuil > cible) { rem(`Seuil d'alerte (${seuil}) au-dessus de la quantité à avoir (${cible}) : seuil ramené à ${cible}.`); seuil = cible; }
     const a = { nom, qte, emp: texteP(v.emp).slice(0, 50) || EMP_DEFAUT, logique, categorie: texteP(v.categorie).slice(0, 40), unite: texteP(v.unite).slice(0, 20), prix: prix === null ? 0 : prix, fou: texteP(v.fou).slice(0, 60) || FOU_DEFAUT,
-      seuil, cible, lot: cond || 1, serie, suiviLots: !!dlc, lots: dlc ? [{ num: lotNum, dlc, qte }] : [], code };
+      seuil, cible, lot: cond || 1, serie, suiviLots: !!dlc, lots: dlc ? [{ num: lotNum, dlc, qte }] : [], code,
+      lieux: lieu ? [{ nom: lieu, qte }] : [], ctrlLe, ctrlMois: ctrlLe ? ctrlMois : 0, ctrlNom: ctrlLe ? ctrlNom : "" };
     articles.push(a); bonnes++;
-    if (serie) series[normP(serie)] = n; else noms[cle] = { a, n };
+    if (serie) series[normP(serie)] = n; else noms[cle] = { a, n, depot: !lieu };
     if (code) codes[normP(code)] = n;
   });
   return { articles: articles.slice(0, 9999), bonnes, erreurs, remarques, exemples, dejaLa, tropLong: Math.max(0, brutes.length - LISTE_MAX) };
@@ -237,18 +260,41 @@ function construireListeP(c) {
   const L = (c.liste && c.liste.articles) || [], emplacements = [], fournisseurs = [], sn = c.pays === "SN", le = (c.liste && c.liste.le) || Date.now();
   const idDe = (tab, nom, prefixe, extra) => { let x = tab.find(e => normP(e.nom) === normP(nom)); if (!x) { x = Object.assign({ id: prefixe + String(tab.length + 1).padStart(2, "0"), nom }, extra); tab.push(x); } return x.id; };
   const mouvements = []; let nMv = 0;
+  // Stock par lieu et contrôles : seulement si le client les a (fiche, bloc « Ses lieux et ses contrôles »)
+  const cl = c.lieux && c.lieux.actif && c.lieux.liste.length ? c.lieux : null, ctrl = controlesP(c);
+  const lieux = cl ? cl.liste.map((l, i) => ({ id: "LIEU-" + String(i + 1).padStart(2, "0"), nom: l.nom, dot: {} })) : [];
   const entree = (article, qte, extra) => { if (qte > 0) mouvements.push(Object.assign({ id: "MV-" + String(++nMv).padStart(5, "0"), date: le, profil: "bureau", qui: "Installation", article, type: "Inventaire initial", qte, evenement: "", motif: "Stock de départ", refac: false }, extra)); };
   const articles = L.map((x, i) => {
     const id = "ART-" + String(i + 1).padStart(4, "0"), premiere = x.lots.map(l => l.dlc).sort()[0];
     // L'appli sort d'abord ce qui est entré le plus tôt : le lot à la date limite la plus proche est écrit comme le plus ancien
     if (x.suiviLots) x.lots.slice().sort((p, q) => p.dlc.localeCompare(q.dlc)).forEach((l, k) => entree(id, l.qte, { date: le + k, dlc: l.dlc, lotNum: l.num, motif: "Stock de départ" + (l.num ? " · lot " + l.num : "") })); else entree(id, x.qte);
+    // Ce qui est dans un fourgon ou sur un site : le stock de départ entre au dépôt, puis un transfert le place dans son lieu
+    if (cl && !x.serie) {
+      (x.lieux || []).forEach(v => { const l = lieux.find(y => normP(y.nom) === normP(v.nom)); if (l && v.qte > 0) mouvements.push({ id: "MV-" + String(++nMv).padStart(5, "0"), date: le + 1000, profil: "bureau", qui: "Installation", article: id, type: "Transfert", qte: v.qte, evenement: "", motif: `Dépôt → ${l.nom}`, de: "", vers: l.id, refac: false }); });
+      cl.liste.forEach((l, k) => { const d = Math.round(+(l.dot || {})[normP(x.nom)] || 0); if (d > 0) lieux[k].dot[id] = d; });
+    }
     return Object.assign({ id, nom: x.nom + (x.code ? " · réf. " + x.code : ""), img: "", logique: x.logique, type: x.serie ? "equip" : "conso", unite: x.unite, emp: idDe(emplacements, x.emp, "EMP-"), seuil: x.seuil, cible: x.cible,
       prix: sn ? x.prix / EUR_XOF : x.prix, lot: x.lot, fou: idDe(fournisseurs, x.fou, "FOU-", { delai: 7 }), jour: 0, categorie: x.categorie },
       x.serie ? { serie: x.serie } : {},
+      ctrl && x.ctrlLe ? Object.assign({ ctrlLe: x.ctrlLe }, x.ctrlMois ? { ctrlMois: x.ctrlMois } : {}, x.ctrlNom ? { ctrlNom: x.ctrlNom } : {}) : {},
       // Date proposée à la prochaine réception : la durée qui restait au lot de départ, à corriger à chaque livraison
       x.suiviLots ? { dlcJours: Math.max(1, Math.round((new Date(premiere + "T12:00:00").getTime() - le) / 86400000)) } : {});
   });
-  return { articles, emplacements, fournisseurs, mouvements };
+  return { articles, emplacements, fournisseurs, mouvements, lieux, mot: cl ? (MOTS_LIEUX[cl.mot] ? cl.mot : "Lieux de stock") : "", controles: ctrl };
+}
+// Les contrôles périodiques sont suivis si la fiche le dit, ou, sans réglage, dès qu'un article porte une date de contrôle
+const controlesP = c => c.controles === true || (c.controles !== false && !!c.liste && c.liste.articles.some(a => a.ctrlLe));
+// Les lieux nommés dans la liste (et dans l'onglet « Vos lieux ») s'ajoutent à ceux de la fiche. Rend le nombre de lieux ajoutés.
+function synchroLieuxP(c, declares) {
+  const noms = [], voir = n => { if (n && !noms.some(x => normP(x) === normP(n))) noms.push(n); };
+  (declares || []).forEach(d => voir(d.nom)); c.liste.articles.forEach(a => (a.lieux || []).forEach(l => voir(l.nom)));
+  if (!noms.length) return 0;
+  const t = normP((declares || []).map(d => d.type).join(" ") + " " + noms.join(" "));
+  const mot = /fourgon|camion|utilitaire/.test(t) ? "Fourgons" : /vehicule|ambulance|voiture/.test(t) ? "Véhicules" : /site|chantier|antenne|agence/.test(t) ? "Sites" : "Lieux de stock";
+  const L = c.lieux = c.lieux || { actif: true, mot, liste: [] }; let n = 0;
+  noms.forEach(x => { if (!L.liste.some(l => normP(l.nom) === normP(x))) { L.liste.push({ nom: x, dot: {} }); n += 1; } });
+  if (n) L.actif = true;
+  return n;
 }
 // La démo avec les objets du client, à la place des objets de démonstration du métier. Pas d'historique inventé :
 // seul le stock de départ est écrit, à la date de l'import. etatListeP construit cet état (il sert aussi à la démo d'essai
@@ -257,6 +303,10 @@ function etatListeP(c) {
   const b = construireListeP(c), neuf = construireDemo(c.metier);
   Object.assign(neuf, { articles: b.articles, emplacements: b.emplacements, fournisseurs: b.fournisseurs, mouvements: b.mouvements, kits: [], reservations: [], commandes: [], bons: [], alertes: [], messages: [], clientsLoc: [], clientsEv: {}, infosEv: {}, interventions: [] });
   neuf.suiviLots = b.articles.some(a => a.dlcJours); // au moins un article à date limite : le suivi par lots s'allume pour ce client
+  // Les lieux et les contrôles sont ceux du client, jamais ceux de la démo du métier
+  neuf.lieux = b.lieux; delete neuf.lieuDe; delete neuf.motLieux; delete neuf.gesteLieu;
+  if (b.lieux.length) { neuf.motLieux = b.mot; neuf.gesteLieu = MOTS_LIEUX[b.mot][1]; }
+  neuf.suiviControles = b.controles;
   return neuf;
 }
 function chargerListeP(c) {
@@ -265,7 +315,7 @@ function chargerListeP(c) {
     if (!S.listeDe) return false;
     S = Object.assign(construireDemo(c.metier), garder); return true; // la démo portait la liste d'un autre client
   }
-  const marque = [c.id, c.liste.le, c.liste.articles.length].join("|");
+  const marque = [c.id, c.liste.le, c.liste.articles.length, empreinteEssai(JSON.stringify([c.lieux || 0, controlesP(c)]))].join("|");
   if (S.listeDe === marque) return false;
   const neuf = Object.assign(etatListeP(c), garder);
   neuf.listeDe = marque;
@@ -273,7 +323,7 @@ function chargerListeP(c) {
 }
 function resumeListeP(c) {
   const L = c.liste.articles, b = construireListeP(c);
-  return { n: L.length, emp: b.emplacements.length, fou: b.fournisseurs.filter(f => f.nom !== FOU_DEFAUT).length, prets: L.filter(a => a.logique === "pret").length, series: L.filter(a => a.serie).length, consos: L.filter(a => a.logique !== "pret").length, lots: L.filter(a => a.suiviLots).length, cond: L.filter(a => a.lot > 1).length };
+  return { n: L.length, emp: b.emplacements.length, fou: b.fournisseurs.filter(f => f.nom !== FOU_DEFAUT).length, prets: L.filter(a => a.logique === "pret").length, series: L.filter(a => a.serie).length, consos: L.filter(a => a.logique !== "pret").length, lots: L.filter(a => a.suiviLots).length, cond: L.filter(a => a.lot > 1).length, lieux: b.lieux.length, ctrl: b.controles ? L.filter(a => a.ctrlLe).length : 0 };
 }
 
 /* ---------------- Étiquettes : la planche du client ---------------- */
@@ -289,6 +339,7 @@ const ETIQ_MAX = 60, ETIQ_PAR_PAGE = 24; // exemplaires au plus pour un même ar
 function etiquettesListeP(c) {
   const b = construireListeP(c), L = c.liste.articles, l = [];
   const emps = b.emplacements.slice().sort((x, y) => x.nom.localeCompare(y.nom, "fr", { numeric: true }));
+  b.lieux.forEach(x => l.push({ type: "emp", id: x.id, nom: x.nom, sous: MOTS_LIEUX[b.mot][0], n: 1 })); // une étiquette par fourgon, véhicule ou site
   emps.forEach(e => {
     l.push({ type: "emp", id: e.id, nom: e.nom, sous: "Emplacement", n: 1 });
     b.articles.forEach((a, i) => {
@@ -303,7 +354,7 @@ function eEtiquettesP(id) {
   const c = clientP(id); if (!c || !c.liste) return eClient(id);
   const l = etiquettesListeP(c), total = l.reduce((t, x) => t + x.n, 0), compte = k => l.filter(x => x.type === k).reduce((t, x) => t + x.n, 0), coupes = l.filter(x => x.coupe);
   return `<div class="pas-imprimer"><h1>Étiquettes · ${esc(c.nom)}</h1>
-    <p class="sous">${pluriel(total, "étiquette")}, rangées par emplacement : ${[[compte("emp"), "d'emplacement"], [compte("objet"), "à poser sur l'objet"], [compte("contenant"), "sur le chariot, le casier ou le carton"], [compte("emplacement"), "sur le bac ou l'étagère"]].filter(x => x[0]).map(x => x.join(" ")).join(", ")}. Environ ${pluriel(Math.ceil(total / ETIQ_PAR_PAGE), "page")} A4, ${ETIQ_PAR_PAGE} étiquettes par page.</p>
+    <p class="sous">${pluriel(total, "étiquette")}, rangées par emplacement : ${[[compte("emp"), l.some(x => /^LIEU-/.test(x.id)) ? "d'emplacement ou de lieu" : "d'emplacement"], [compte("objet"), "à poser sur l'objet"], [compte("contenant"), "sur le chariot, le casier ou le carton"], [compte("emplacement"), "sur le bac ou l'étagère"]].filter(x => x[0]).map(x => x.join(" ")).join(", ")}. Environ ${pluriel(Math.ceil(total / ETIQ_PAR_PAGE), "page")} A4, ${ETIQ_PAR_PAGE} étiquettes par page.</p>
     <div class="boutons" style="margin-bottom:12px"><button class="btn petit plein" data-act="imprimer">${I.imprimer}Imprimer ou enregistrer en PDF</button><button class="btn petit" data-e="liste" data-earg="${c.id}">Sa liste</button><button class="btn petit" data-e="client" data-earg="${c.id}">Fiche du client</button></div>
     <p class="w-note">Le QR contient le code seul (ART-0001, EMP-01), comme dans le classeur du client : il se lit avec le bouton Scanner de l'appli. Un objet unique a une étiquette ; un objet prêté en plusieurs exemplaires en a une par exemplaire ou par contenant ; un consommable en a une, pour son bac ou son étagère.${coupes.length ? ` Au plus ${ETIQ_MAX} exemplaires par article : ${coupes.length > 1 ? coupes.length + " articles en demandent" : esc(coupes[0].nom) + " en demande"} davantage, à réimprimer au besoin.` : ""} Support de chaque étiquette : docs/21.</p></div>
   <div class="planche planche-p">${l.map(x => { const une = `<div class="etiquette ${x.type === "emp" ? "etiq-emp" : ""}"><div data-qr-p="${x.id}"></div><div><b>${esc(x.nom)}</b><span class="code">${x.id}</span>${x.sous ? `<small class="proprio">${esc(x.sous)}</small>` : ""}<small class="proprio">Propriété de ${esc(c.nom)}</small></div></div>`; return x.n > 1 ? une.repeat(x.n) : une; }).join("")}</div>`;
@@ -368,10 +419,10 @@ function exporterClasseurP(c) {
 
 /* ---------------- Écran : la liste d'un client ---------------- */
 let relectureP = null; // { id, source, colonnes, inconnues, sansTitres, remplacer, ajouter }
-function lancerRelectureP(id, lignes, source) {
+function lancerRelectureP(id, lignes, source, lieux) {
   const c = clientP(id), p = preparerLignesP(lignes);
   if (!p.brutes.length) return toast("Aucune ligne à lire : le fichier ou le collage est vide.");
-  relectureP = { id, source, colonnes: p.colonnes, inconnues: p.inconnues, sansTitres: p.sansTitres, remplacer: controlerListeP(p.brutes, c, []), ajouter: c.liste ? controlerListeP(p.brutes, c, c.liste.articles) : null };
+  relectureP = { id, source, lieux: lieux || [], colonnes: p.colonnes, inconnues: p.inconnues, sansTitres: p.sansTitres, remplacer: controlerListeP(p.brutes, c, []), ajouter: c.liste ? controlerListeP(p.brutes, c, c.liste.articles) : null };
   rendre();
   const z = $("[data-relecture-p]"); if (z) z.scrollIntoView({ block: "start" });
 }
@@ -379,7 +430,7 @@ function blocListeP(c) {
   if (!c.liste) return `<p class="vide" style="padding:6px 0 12px">Pas encore de liste. Le client remplit le modèle, ou envoie son propre tableau.</p>`;
   const r = resumeListeP(c);
   return `<p style="margin:0 0 4px"><b>${pluriel(r.n, "article")}</b> dans ${pluriel(r.emp, "emplacement")}${r.fou ? `, ${pluriel(r.fou, "fournisseur")}` : ""}. Importée le ${new Date(c.liste.le).toLocaleDateString("fr-FR")}.</p>
-    <p class="w-note" style="margin-bottom:12px">${[[r.prets, "prêté", "prêtés"], [r.series, "avec numéro de série", "avec numéro de série"], [r.consos, "consommé", "consommés"], [r.lots, "suivi par lots et dates limites", "suivis par lots et dates limites"], [r.cond, "avec un conditionnement", "avec un conditionnement"]].filter(x => x[0]).map(([n, a, b]) => `${n} ${n > 1 ? b : a}`).join(" · ")}</p>`;
+    <p class="w-note" style="margin-bottom:12px">${[[r.prets, "prêté", "prêtés"], [r.series, "avec numéro de série", "avec numéro de série"], [r.consos, "consommé", "consommés"], [r.lots, "suivi par lots et dates limites", "suivis par lots et dates limites"], [r.cond, "avec un conditionnement", "avec un conditionnement"], [r.ctrl, "avec un contrôle à échéance", "avec un contrôle à échéance"], [r.lieux, "lieu de stock en plus du dépôt", "lieux de stock en plus du dépôt"]].filter(x => x[0]).map(([n, a, b]) => `${n} ${n > 1 ? b : a}`).join(" · ")}</p>`;
 }
 const boutonsListeP = c => `<button class="btn petit plein" data-e="etiquettes" data-earg="${c.id}">${I.etiquette}Générer ses étiquettes</button><button class="btn petit" data-classeur-p="${c.id}">${I.excel}Exporter pour le classeur</button>`;
 function eListeP(id) {
@@ -395,7 +446,7 @@ function eListeP(id) {
       <div class="trio"><div><small>Lignes bonnes</small><b class="vert">${r.bonnes}</b></div><div><small>À corriger</small><b class="${r.erreurs.length ? "rouge" : ""}">${r.erreurs.length}</b></div><div><small>Remarques</small><b>${r.remarques.length}</b></div></div>
       <p class="w-note" style="margin-top:10px">${R.sansTitres ? "Aucune ligne de titres trouvée : les colonnes sont lues dans l'ordre du modèle (nom, quantité, emplacement…)." : `Colonnes reconnues : ${R.colonnes.map(esc).join(", ")}.${R.inconnues.length ? ` Laissées de côté : ${R.inconnues.map(esc).join(", ")}.` : ""}`}
         ${r.exemples ? ` ${pluriel(r.exemples, "ligne")} d'exemple écartée${r.exemples > 1 ? "s" : ""}.` : ""}${r.tropLong ? ` Au-delà de ${LISTE_MAX} lignes, ${pluriel(r.tropLong, "ligne")} non lue${r.tropLong > 1 ? "s" : ""}.` : ""}</p>
-      <p class="w-note">Ce qui sera créé : ${pluriel(crees.articles.length, "article")} (${r.articles.filter(x => x.logique === "pret").length} prêtés dont ${r.articles.filter(x => x.serie).length} avec numéro de série, ${r.articles.filter(x => x.logique !== "pret").length} consommés dont ${r.articles.filter(x => x.suiviLots).length} suivis par lots), ${pluriel(nEmp, "emplacement")}, ${pluriel(nFou, "fournisseur")}.</p>
+      <p class="w-note">Ce qui sera créé : ${pluriel(crees.articles.length, "article")} (${r.articles.filter(x => x.logique === "pret").length} prêtés dont ${r.articles.filter(x => x.serie).length} avec numéro de série, ${r.articles.filter(x => x.logique !== "pret").length} consommés dont ${r.articles.filter(x => x.suiviLots).length} suivis par lots), ${pluriel(nEmp, "emplacement")}, ${pluriel(nFou, "fournisseur")}${(() => { const nl = new Set(r.articles.flatMap(x => (x.lieux || []).map(y => normP(y.nom))).concat((R.lieux || []).map(y => normP(y.nom)))).size, nc = r.articles.filter(x => x.ctrlLe).length; return (nl ? `, ${pluriel(nl, "lieu de stock", "lieux de stock")} en plus du dépôt` : "") + (nc ? `, ${pluriel(nc, "contrôle")} à échéance` : ""); })()}.</p>
       ${r.erreurs.length ? `<h3>À corriger : ces ${pluriel(r.erreurs.length, "ligne")} ne ser${r.erreurs.length > 1 ? "ont" : "a"} pas importée${r.erreurs.length > 1 ? "s" : ""}</h3><ul class="b-liste liste-controle">${r.erreurs.slice(0, 200).map(ligne).join("")}</ul>${r.erreurs.length > 200 ? `<p class="w-note">Et ${r.erreurs.length - 200} autres.</p>` : ""}` : ""}
       ${r.remarques.length ? `<details class="remarques-p"><summary>${pluriel(r.remarques.length, "remarque")} : lignes importées avec une valeur de départ</summary><ul class="b-liste liste-controle">${r.remarques.slice(0, 200).map(ligne).join("")}</ul>${r.remarques.length > 200 ? `<p class="w-note">Et ${r.remarques.length - 200} autres.</p>` : ""}</details>` : ""}
       ${a && a.dejaLa ? `<p class="w-note">${pluriel(a.dejaLa, "ligne")} port${a.dejaLa > 1 ? "ent" : "e"} le nom d'un article déjà dans la liste : « Ajouter à la liste » ne ${a.dejaLa > 1 ? "les" : "la"} reprend pas.</p>` : ""}
@@ -422,7 +473,71 @@ function eListeP(id) {
 // Sur la fiche du client
 function blocFicheListeP(c) {
   return `<section class="w w-l"><div class="w-entete"><h3 class="w-titre">${I.materiel}Ses articles</h3></div>
-    ${blocListeP(c)}<div class="boutons"><button class="btn petit ${c.liste ? "" : "plein"}" data-e="liste" data-earg="${c.id}">${I.excel}Importer sa liste</button>${c.liste ? boutonsListeP(c) : ""}</div></section>${blocEssaiP(c)}`;
+    ${blocListeP(c)}<div class="boutons"><button class="btn petit ${c.liste ? "" : "plein"}" data-e="liste" data-earg="${c.id}">${I.excel}Importer sa liste</button>${c.liste ? boutonsListeP(c) : ""}</div></section>${blocLieuxP(c)}${blocEssaiP(c)}`;
+}
+
+/* ---------------- Ses lieux et ses contrôles : le réglage du client ---------------- */
+// Gardé dans la fiche : c.lieux = { actif, mot, liste: [{ nom, dot: { nom de l'article : quantité } }] } et c.controles (oui, non, ou selon la liste).
+// La dotation est rangée par nom d'article : elle survit à un nouvel import de la liste.
+function blocLieuxP(c) {
+  if (!c.liste) return "";
+  const L = c.lieux || { actif: false, mot: "Lieux de stock", liste: [] }, nCtrl = c.liste.articles.filter(a => a.ctrlLe).length;
+  const dans = l => c.liste.articles.reduce((t, a) => t + ((a.lieux || []).find(x => normP(x.nom) === normP(l.nom)) || { qte: 0 }).qte, 0);
+  return `<section class="w w-l lieux-p"><div class="w-entete"><h3 class="w-titre">${I.camion}Ses lieux et ses contrôles</h3></div>
+    <label class="case"><input type="checkbox" data-lieux-actif="${c.id}" ${L.actif ? "checked" : ""}>Stock par lieu : le dépôt, plus des fourgons, des véhicules ou des sites</label>
+    ${L.actif ? `<label class="champ lieux-mot">Mot affiché dans son appli<select data-lieux-mot="${c.id}">${Object.keys(MOTS_LIEUX).map(k => `<option ${k === L.mot ? "selected" : ""}>${k}</option>`).join("")}</select></label>
+    <div class="bloc">${L.liste.map((l, i) => { const nd = Object.keys(l.dot || {}).length; return `<div class="w-edit regl-etape"><input type="text" data-lieu-nom="${c.id}|${i}" value="${esc(l.nom)}" maxlength="40" aria-label="Nom du lieu">
+      <small>${dans(l).toLocaleString("fr-FR")} en stock d'après sa liste · ${nd ? "dotation : " + pluriel(nd, "article") : "pas de dotation"}</small>
+      <span class="boutons"><button class="btn petit" data-lieu-dot="${c.id}|${i}">Dotation</button><button class="btn petit rouge" data-lieu-retirer="${c.id}|${i}">Retirer</button></span></div>`; }).join("") || `<p class="vide">Aucun lieu en plus du dépôt.</p>`}
+      <div class="w-edit regl-ajout"><input type="text" data-lieu-nouveau="${c.id}" maxlength="40" placeholder="Nouveau lieu : Fourgon 3" aria-label="Nouveau lieu"><button class="btn petit" data-lieu-ajouter="${c.id}">${iconePlus()}Ajouter</button></div></div>`
+      : L.liste.length ? `<p class="w-note">${pluriel(L.liste.length, "lieu gardé", "lieux gardés")} dans sa fiche, non affiché${L.liste.length > 1 ? "s" : ""} dans son appli : tout son stock est compté au dépôt.</p>` : ""}
+    <label class="case" style="margin-top:14px"><input type="checkbox" data-controles-p="${c.id}" ${controlesP(c) ? "checked" : ""}>Contrôles périodiques : une échéance par objet (étalonnage, vérification)</label>
+    <p class="w-note">${nCtrl ? `${pluriel(nCtrl, "objet")} de sa liste port${nCtrl > 1 ? "ent" : "e"} une date de prochain contrôle.` : "Aucun objet de sa liste ne porte de date de contrôle : son équipe en ajoutera dans l'appli."} Ces réglages se gardent dans sa fiche ; ils partent avec « Régler son appli » et « Envoyer sa démo ».</p></section>`;
+}
+// La dotation d'un lieu : ce qu'il doit contenir, article par article (les objets à numéro de série se suivent par le prêt)
+function feuilleDotationP(id, i) {
+  const c = clientP(id), l = c.lieux.liste[i], vus = new Set(), arts = c.liste.articles.filter(a => !a.serie && !vus.has(normP(a.nom)) && vus.add(normP(a.nom)));
+  const autres = c.lieux.liste.map((x, k) => [x, k]).filter(([x, k]) => k !== i && Object.keys(x.dot || {}).length);
+  const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="tdo" class="saisie-p"><h1 id="tdo" style="font-size:26px">Dotation · ${esc(l.nom)}</h1>
+    <p class="sous">Ce que ce lieu doit contenir. L'appli du client dit ce qui manque et propose de le recharger depuis le dépôt. Laissez vide ce qui n'en fait pas partie.</p>
+    ${autres.length ? `<label class="champ">Reprendre la dotation de<select data-reprendre><option value="">Choisir un lieu…</option>${autres.map(([x, k]) => `<option value="${k}">${esc(x.nom)}</option>`).join("")}</select></label>` : ""}
+    <div class="dot-p">${arts.map(a => `<label><span>${esc(a.nom)}</span><input type="number" inputmode="numeric" min="0" step="1" data-dot="${esc(normP(a.nom))}" value="${(l.dot || {})[normP(a.nom)] || ""}" placeholder="0"></label>`).join("")}</div>
+    <div class="valider"><button class="btn" data-x>Annuler</button><button class="btn plein" data-ok>Enregistrer</button></div></div>`);
+  f.querySelector("[data-x]").onclick = () => f.remove();
+  const rep = f.querySelector("[data-reprendre]"); if (rep) rep.onchange = () => { if (rep.value === "") return; const d = c.lieux.liste[+rep.value].dot || {}; f.querySelectorAll("[data-dot]").forEach(x => { x.value = d[x.dataset.dot] || ""; }); toast(`Dotation de ${c.lieux.liste[+rep.value].nom} reprise : vérifiez, puis enregistrez.`); };
+  f.querySelector("[data-ok]").onclick = () => {
+    l.dot = {}; f.querySelectorAll("[data-dot]").forEach(x => { const n = Math.floor(+x.value); if (n > 0) l.dot[x.dataset.dot] = Math.min(n, 100000); });
+    sauverP(); f.remove(); rendre(); toast(`Dotation de ${l.nom} enregistrée : ${pluriel(Object.keys(l.dot).length, "article")}.`);
+  };
+}
+function brancherLieuxP() {
+  const lire = b => { const [id, i] = String(b).split("|"), c = clientP(id); return { c, i: +i, L: c.lieux = c.lieux || { actif: false, mot: "Lieux de stock", liste: [] } }; };
+  const pris = (L, nom, sauf) => L.liste.some((l, k) => k !== sauf && normP(l.nom) === normP(nom));
+  $$("[data-lieux-actif]").forEach(x => x.onchange = () => { const { c, L } = lire(x.dataset.lieuxActif); L.actif = x.checked; if (x.checked) synchroLieuxP(c); sauverP(); rendre(); toast(x.checked ? "Stock par lieu activé pour ce client." : "Stock par lieu retiré de son appli. Ses lieux restent dans sa fiche."); });
+  $$("[data-lieux-mot]").forEach(x => x.onchange = () => { lire(x.dataset.lieuxMot).L.mot = x.value; sauverP(); toast(`Son appli dira « ${x.value} ».`); });
+  $$("[data-lieu-nom]").forEach(x => x.onchange = () => {
+    const { c, i, L } = lire(x.dataset.lieuNom), l = L.liste[i], t = texteP(x.value).slice(0, 40);
+    if (!t || pris(L, t, i)) { x.value = l.nom; return toast(t ? "Un autre lieu porte déjà ce nom." : "Un lieu porte un nom. Pour l'enlever, touchez « Retirer »."); }
+    c.liste.articles.forEach(a => (a.lieux || []).forEach(y => { if (normP(y.nom) === normP(l.nom)) y.nom = t; }));
+    l.nom = t; sauverP(); toast("Lieu renommé.");
+  });
+  $$("[data-lieu-retirer]").forEach(x => x.onclick = () => {
+    const { c, i, L } = lire(x.dataset.lieuRetirer), l = L.liste[i];
+    if (!confirm(`Retirer « ${l.nom} » ? Ce qui s'y trouvait est compté au dépôt ; sa dotation est perdue.`)) return;
+    c.liste.articles.forEach(a => { a.lieux = (a.lieux || []).filter(y => normP(y.nom) !== normP(l.nom)); });
+    L.liste.splice(i, 1); sauverP(); rendre(); toast("Lieu retiré.");
+  });
+  const ajouter = id => {
+    const { L } = lire(id), champ = $(`[data-lieu-nouveau="${id}"]`), t = texteP(champ.value).slice(0, 40);
+    if (!t) { champ.focus(); return toast("Écrivez le nom du lieu."); }
+    if (pris(L, t, -1)) return toast("Ce lieu existe déjà.");
+    if (L.liste.length >= 60) return toast("60 lieux au plus.");
+    L.liste.push({ nom: t, dot: {} }); sauverP(); rendre(); toast("Lieu ajouté.");
+  };
+  $$("[data-lieu-ajouter]").forEach(x => x.onclick = () => ajouter(x.dataset.lieuAjouter));
+  $$("[data-lieu-nouveau]").forEach(x => x.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); ajouter(x.dataset.lieuNouveau); } });
+  $$("[data-lieu-dot]").forEach(x => x.onclick = () => { const [id, i] = x.dataset.lieuDot.split("|"); feuilleDotationP(id, +i); });
+  $$("[data-controles-p]").forEach(x => x.onchange = () => { clientP(x.dataset.controlesP).controles = x.checked; sauverP(); rendre(); toast(x.checked ? "Contrôles périodiques activés pour ce client." : "Contrôles périodiques retirés de son appli."); });
 }
 
 /* ---------------- Envoyer sa démo au prospect, puis relire son essai ---------------- */
@@ -430,7 +545,7 @@ function blocFicheListeP(c) {
 // ses articles et son stock de départ, la date de fin de l'essai, et de quoi nous écrire. Jamais le devis, l'offre, le contact
 // du client, les notes, ni rien d'un autre client. Le numéro d'essai est l'empreinte du contenu : la même liste donne le même numéro.
 // Colonnes d'un article dans la démo envoyée, et empreinte du contenu. Définies ici, avant essai.js : la fiche d'un client s'en sert dès le premier affichage.
-const COLONNES_ESSAI = ["nom", "qte", "emp", "logique", "categorie", "unite", "prix", "fou", "seuil", "cible", "lot", "serie", "lots", "code"];
+const COLONNES_ESSAI = ["nom", "qte", "emp", "logique", "categorie", "unite", "prix", "fou", "seuil", "cible", "lot", "serie", "lots", "code", "ctrlLe", "ctrlMois", "ctrlNom", "lieux"];
 function empreinteEssai(t) {
   let a = 0x811c9dc5, b = 0x1b873593;
   for (let i = 0; i < t.length; i++) { const c = t.charCodeAt(i); a = Math.imul(a ^ c, 0x01000193) >>> 0; b = Math.imul(b ^ c, 0x5bd1e995) >>> 0; b ^= b >>> 13; }
@@ -439,12 +554,16 @@ function empreinteEssai(t) {
 function paquetEssaiP(c, fin) {
   const L = c.liste.articles, base = METIERS[c.metier].base || c.metier, o = OFFRES[c.offre], r = reglP();
   const a = c.appli && c.appli.metier === c.metier && c.appli.config ? c.appli : null;
+  const cl = c.lieux && c.lieux.actif && c.lieux.liste.length ? c.lieux : null, ctrl = controlesP(c);
   const p = { type: "stockclair-essai", version: 1, id: "", entreprise: c.nom, metier: c.metier, monnaie: c.pays === "SN" ? "XOF" : "EUR",
     modules: Object.keys(CATALOGUE).filter(k => o.inclus.includes(k) || c.modules.includes(k) || (k === "MO-PRET" && L.some(x => x.logique === "pret"))),
     // Le réglage ne part que s'il diffère de celui du métier : le lien reste court
     appli: a ? Object.assign({ taille: a.taille, detail: a.detail }, JSON.stringify(a.config) === JSON.stringify(configParDefaut(base, a.taille)) ? {} : { config: a.config }) : null,
-    importeLe: c.liste.le, colonnes: COLONNES_ESSAI,
-    articles: L.map(x => { const l = [x.nom, x.qte, x.emp, x.logique, x.categorie, x.unite, x.prix, x.fou, x.seuil, x.cible, x.lot, x.serie, x.lots.map(t => [t.num, t.dlc, t.qte]), x.code]; while (l.length && (l[l.length - 1] === "" || (Array.isArray(l[l.length - 1]) && !l[l.length - 1].length))) l.pop(); return l; }) };
+    // Sans lieu ni contrôle, la démo garde sa forme (et son numéro) d'avant
+    importeLe: c.liste.le, colonnes: cl || ctrl ? COLONNES_ESSAI : COLONNES_ESSAI.slice(0, 14),
+    articles: L.map(x => { const l = [x.nom, x.qte, x.emp, x.logique, x.categorie, x.unite, x.prix, x.fou, x.seuil, x.cible, x.lot, x.serie, x.lots.map(t => [t.num, t.dlc, t.qte]), x.code, ctrl ? x.ctrlLe || "" : "", ctrl && x.ctrlLe ? x.ctrlMois || "" : "", ctrl && x.ctrlLe ? x.ctrlNom || "" : "", cl ? (x.lieux || []).map(t => [t.nom, t.qte]) : []]; while (l.length && (l[l.length - 1] === "" || (Array.isArray(l[l.length - 1]) && !l[l.length - 1].length))) l.pop(); return l; }) };
+  if (cl) p.lieux = { mot: cl.mot, liste: cl.liste.map(l => [l.nom, l.dot || {}]) };
+  if (ctrl) p.controles = true;
   p.id = empreinteEssai(JSON.stringify(p));
   p.fin = fin || ""; p.contact = r.nom || r.compte ? { nom: r.nom, email: r.compte } : null; p.prepareLe = Date.now();
   return p;
@@ -500,7 +619,7 @@ function feuilleEnvoiP(id) {
 // L'essai renvoyé par le prospect (« Envoyer mon essai », essai.js) : ses gestes, nettoyés et bornés comme tout ce qui vient d'un fichier
 function lireRetourP(o) {
   if (!o || o.type !== "stockclair-essai-retour" || o.version !== 1 || !Array.isArray(o.gestes)) throw new Error("forme");
-  const gestes = o.gestes.slice(0, 20000).filter(l => Array.isArray(l) && SIGNE[l[5]] && isFinite(+l[1]) && isFinite(+l[6]))
+  const gestes = o.gestes.slice(0, 20000).filter(l => Array.isArray(l) && l[5] in SIGNE && isFinite(+l[1]) && isFinite(+l[6]))
     .map(l => ({ id: texteSur(l[0], 12), date: +l[1], qui: texteSur(l[2], 40), role: texteSur(l[3], 12), article: texteSur(l[4], 12), type: l[5], qte: Math.round(+l[6]), lieu: texteSur(l[7], 60), motif: texteSur(l[8], 60), annule: texteSur(l[9], 12) }));
   const noms = {}; Object.entries(o.noms && typeof o.noms === "object" ? o.noms : {}).slice(0, 10000).forEach(([k, v]) => { noms[texteSur(k, 12)] = texteSur(v, 120); });
   return { id: texteSur(o.id, 20), entreprise: texteSur(o.entreprise, 60), ouvertLe: +o.ouvertLe || 0, envoyeLe: +o.envoyeLe || 0, articles: entierSur(o.articles, 0, 9999), gestes, noms, recuLe: Date.now() };
@@ -523,7 +642,7 @@ function bilanEssaiP(c) {
   const annules = new Set(r.gestes.map(g => g.annule).filter(Boolean)), G = r.gestes.filter(g => !g.annule && !annules.has(g.id));
   const compter = cle => { const m = new Map(); G.forEach(g => { const k = cle(g); m.set(k, (m.get(k) || 0) + 1); }); return [...m].sort((x, y) => y[1] - x[1]); };
   const v = METIERS[c.metier].v || {}, role = g => g.role === "chauffeur" ? "Chauffeur-livreur" : v[g.role] || "";
-  const genre = g => ["Prêt", "Sortie"].includes(g.type) ? "Sorties" : g.type === "Retour" ? "Retours" : g.type === "Entrée" ? (g.motif === "Surplus remis" ? "Surplus remis en stock" : "Entrées en stock") : g.type === "Ajustement" ? "Comptages avec écart" : g.type === "Perte" ? "Pertes et casse" : "Atelier";
+  const genre = g => ["Prêt", "Sortie"].includes(g.type) ? "Sorties" : g.type === "Retour" ? "Retours" : g.type === "Entrée" ? (g.motif === "Surplus remis" ? "Surplus remis en stock" : "Entrées en stock") : g.type === "Ajustement" ? "Comptages avec écart" : g.type === "Perte" ? "Pertes et casse" : g.type === "Transfert" ? "Déplacements entre lieux" : g.type === "Contrôle" ? "Contrôles faits" : "Atelier";
   const sortis = new Map(); G.filter(g => ["Prêt", "Sortie"].includes(g.type)).forEach(g => { const x = sortis.get(g.article) || { qte: 0, fois: 0 }; x.qte += g.qte; x.fois += 1; sortis.set(g.article, x); });
   const dates = G.map(g => g.date).sort((x, y) => x - y);
   return { n: G.length, annules: annules.size, du: dates[0], au: dates[dates.length - 1], jours: new Set(dates.map(isoJour)).size,
@@ -562,7 +681,9 @@ function brancherListeP() {
       if (/\.xlsx$/i.test(f.name)) {
         const feuilles = await lireXlsxP(await f.arrayBuffer()), fe = choisirFeuilleP(feuilles);
         if (!fe) return toast("Ce classeur n'a aucun onglet lisible.");
-        lancerRelectureP(id, fe.lignes, `Fichier ${f.name}, onglet « ${fe.nom} »`);
+        // L'onglet facultatif « Vos lieux » : nom et type, à partir de la ligne 3
+        const fl = feuilles.find(x => normP(x.nom) === "vos lieux");
+        lancerRelectureP(id, fe.lignes, `Fichier ${f.name}, onglet « ${fe.nom} »`, fl ? fl.lignes.slice(1).filter(l => l && texteP(l[0]) && !/^\((obligatoire|facultatif)\)/i.test(texteP(l[0]))).slice(0, 200).map(l => ({ nom: texteP(l[0]).slice(0, 40), type: texteP(l[1]).slice(0, 20) })) : []);
       } else lancerRelectureP(id, lireCollageP(await f.text()), `Fichier ${f.name}`);
     } catch (e) {
       toast(e && e.message === "deflate" ? "Ce navigateur ne sait pas ouvrir ce fichier : collez plutôt les cellules." : /\.xls$/i.test(f.name) ? "Ancien format .xls : enregistrez-le en .xlsx, ou collez les cellules." : "Ce fichier ne se lit pas : collez plutôt les cellules.");
@@ -576,7 +697,7 @@ function brancherListeP() {
   $$("[data-liste-annuler]").forEach(b => b.onclick = () => { relectureP = null; rendre(); toast("Rien n'a été enregistré."); });
   $$("[data-liste-valider]").forEach(b => b.onclick = () => {
     const c = clientP(relectureP.id), r = relectureP[b.dataset.listeValider], avant = c.liste ? c.liste.articles.length : 0;
-    c.liste = { le: Date.now(), articles: r.articles }; relectureP = null; sauverP(); rendre(); window.scrollTo(0, 0);
+    c.liste = { le: Date.now(), articles: r.articles }; synchroLieuxP(c, relectureP.lieux); relectureP = null; sauverP(); rendre(); window.scrollTo(0, 0);
     toast(b.dataset.listeValider === "ajouter" ? `${pluriel(r.articles.length - avant, "article")} ajouté${r.articles.length - avant > 1 ? "s" : ""} : la liste en compte ${r.articles.length}.` : `Liste enregistrée : ${pluriel(r.articles.length, "article")}.`);
   });
   $$("[data-liste-retirer]").forEach(b => b.onclick = () => {
@@ -585,6 +706,7 @@ function brancherListeP() {
     delete c.liste; sauverP(); rendre(); toast("Liste retirée.");
   });
   $$("[data-classeur-p]").forEach(b => b.onclick = () => exporterClasseurP(clientP(b.dataset.classeurP)));
+  brancherLieuxP();
   // Envoyer sa démo au prospect, ouvrir l'essai qu'il renvoie
   $$("[data-envoi-p]").forEach(b => b.onclick = () => feuilleEnvoiP(b.dataset.envoiP));
   $$("[data-retour-p]").forEach(i => i.onchange = () => {

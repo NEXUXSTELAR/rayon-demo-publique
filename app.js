@@ -497,8 +497,8 @@ function cycle() {
     <button data-aller="refacturer"><span class="rondv" style="--c:var(--alerte)">${f(perdu)}</span><span>Perdus en 7 jours</span></button></div>`;
 }
 function blocPeremption() {
-  const l = bientotPerimes(4);
-  return `<h2>À utiliser en premier</h2>${l.length ? `<ul class="b-liste">${l.slice(0, 6).map(x => `<li><button class="l" data-objet="${x.a.id}">${img(x.a)}<span><b>${esc(x.a.nom)}</b><small>${x.qte} avec date limite au ${dateFr(x.dlc)}</small></span><span class="statut s-partie">${x.dlc <= new Date().toISOString().slice(0, 10) ? "Périmé" : "Bientôt"}</span></button></li>`).join("")}</ul>` : `<p class="vide">Rien ne périme dans les 4 prochains jours.</p>`}`;
+  const j = metier().alerteDlc || 4, l = bientotPerimes(j);
+  return `<h2>À utiliser en premier</h2>${l.length ? `<ul class="b-liste">${l.slice(0, 6).map(x => `<li><button class="l" data-objet="${x.a.id}">${img(x.a)}<span><b>${esc(x.a.nom)}</b><small>${x.qte} avec date limite au ${dateFr(x.dlc)}${x.lieu !== undefined ? " · " + esc(nomLieu(x.lieu)) : ""}</small></span><span class="statut s-partie">${x.dlc <= new Date().toISOString().slice(0, 10) ? "Périmé" : "Bientôt"}</span></button></li>`).join("")}</ul>` : `<p class="vide">Rien ne périme dans les ${j} prochains jours.</p>`}`;
 }
 function bMateriel(f) {
   f = f || "tous";

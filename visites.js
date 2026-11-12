@@ -13,6 +13,8 @@ const PRESENTATION_METIERS = {
   labo: "Consommables, appareils prêtés, lots et dates limites",
   distribution: "Magasin et cour : ventes, retours de clients, réassort",
   ong: "Entrepôt et distributions : kits, lieux, rapport par projet",
+  ambulance: "Véhicules : dotation de chaque ambulance, manquants, dates limites, matériel à contrôler",
+  proprete: "Sites clients : produits par site, machines laissées sur place, entretiens à faire",
 };
 const lienDemo = m => location.href.split("#")[0].split("?")[0] + "?metier=" + m;
 
@@ -20,7 +22,7 @@ function feuilleMetiers() {
   const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="tm"><h1 id="tm" style="font-size:26px">Une démo par métier</h1>
     <p class="sous">Mêmes gestes, mots et blocs adaptés. Le lien ouvre directement la démo du métier : c'est celui à envoyer au prospect.</p>
     <div class="metiers">${Object.entries(METIERS).map(([k, m]) => {
-      const a = (k === "loueur" ? SEED().articles : m.articles ? m.articles.map(x => ({ img: x[2] })) : [{ img: m.vignette }])[0];
+      const a = (k === "loueur" ? SEED().articles : m.articles ? m.articles.filter(x => x[2]).map(x => ({ img: x[2] })) : [{ img: m.vignette }])[0];
       return `<div class="metier ${(S.variante || S.metier || "loueur") === k ? "actuel" : ""}"><div class="vignette"><img src="img/${a.img}.webp" alt="" loading="lazy"></div>
         <div><b>${esc(m.nom)}</b><small>${esc(PRESENTATION_METIERS[k] || "")}</small>
         <div class="metier-boutons"><button class="btn petit plein" data-m="${k}">${(S.variante || S.metier || "loueur") === k ? "Démo actuelle" : "Voir cette démo"}</button><button class="btn petit" data-lien="${k}">Copier le lien</button></div></div></div>`;

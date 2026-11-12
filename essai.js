@@ -93,26 +93,33 @@ function lirePaquetEssai(o) {
   if (!o || o.type !== "stockclair-essai" || o.version !== 1 || !Array.isArray(o.articles)) throw new Error("forme");
   const metier = METIERS[o.metier] ? o.metier : "loueur", base = METIERS[metier].base || metier;
   const articles = o.articles.slice(0, 9999).filter(l => Array.isArray(l)).map(l => {
-    const [nom, qte, emp, lg, categorie, unite, prix, fou, seuil, cible, lot, serie, lots, code] = l;
+    const [nom, qte, emp, lg, categorie, unite, prix, fou, seuil, cible, lot, serie, lots, code, ctrlLe, ctrlMois, ctrlNom, lieux] = l;
     const a = { nom: texteSur(nom, 80), qte: entierSur(qte, 0, 1e7), emp: texteSur(emp, 50) || EMP_DEFAUT, logique: lg === "pret" ? "pret" : "conso", categorie: texteSur(categorie, 40), unite: texteSur(unite, 20),
       prix: isFinite(+prix) && +prix > 0 ? Math.min(+prix, 1e9) : 0, fou: texteSur(fou, 60) || FOU_DEFAUT, seuil: entierSur(seuil, 0, 1e7), cible: entierSur(cible, 1, 1e7), lot: entierSur(lot, 1, 1e6), serie: texteSur(serie, 40),
       lots: (Array.isArray(lots) ? lots : []).filter(x => Array.isArray(x) && /^\d{4}-\d{2}-\d{2}$/.test(x[1])).slice(0, 50).map(x => ({ num: texteSur(x[0], 30), dlc: x[1], qte: entierSur(x[2], 0, 1e7) })), code: texteSur(code, 30) };
     if (a.serie) { a.logique = "pret"; a.qte = Math.min(1, a.qte); a.lots = []; }
     if (a.logique === "pret") a.lots = [];
+    // Contrôle périodique et stock par lieu, s'ils sont dans la démo
+    if (/^\d{4}-\d{2}-\d{2}$/.test(ctrlLe || "")) Object.assign(a, { ctrlLe, ctrlMois: entierSur(ctrlMois, 0, 120), ctrlNom: texteSur(ctrlNom, 40) });
+    a.lieux = a.serie || a.lots.length ? [] : (Array.isArray(lieux) ? lieux : []).filter(x => Array.isArray(x) && texteSur(x[0], 40)).slice(0, 60).map(x => ({ nom: texteSur(x[0], 40), qte: entierSur(x[1], 0, 1e7) }));
+    if (a.lieux.length) a.qte = Math.max(a.qte, a.lieux.reduce((t, x) => t + x.qte, 0));
     a.suiviLots = a.lots.length > 0; if (a.suiviLots) a.qte = a.lots.reduce((t, x) => t + x.qte, 0);
     return a;
   }).filter(a => a.nom);
   if (!articles.length) throw new Error("vide");
   const ap = o.appli && typeof o.appli === "object" ? o.appli : {}, taille = TAILLES_EQUIPE[ap.taille] ? ap.taille : "bureau";
   const c = o.contact && typeof o.contact === "object" ? { nom: texteSur(o.contact.nom, 60), email: /^[^\s<>"']+@[^\s<>"']+\.[^\s<>"']+$/.test(String(o.contact.email || "")) ? String(o.contact.email).slice(0, 80) : "" } : null;
-  return { id: texteSur(o.id, 20).replace(/[^a-z0-9]/gi, "") || empreinteEssai(JSON.stringify(o.articles)), entreprise: texteSur(o.entreprise, 60) || "Votre entreprise", metier, monnaie: o.monnaie === "XOF" ? "XOF" : "EUR",
+  const ol = o.lieux && typeof o.lieux === "object" && Array.isArray(o.lieux.liste) ? o.lieux : null;
+  const lieux = ol ? { actif: true, mot: MOTS_LIEUX[ol.mot] ? ol.mot : "Lieux de stock", liste: ol.liste.filter(x => Array.isArray(x) && texteSur(x[0], 40)).slice(0, 60).map(x => ({ nom: texteSur(x[0], 40),
+    dot: Object.fromEntries(Object.entries(x[1] && typeof x[1] === "object" ? x[1] : {}).slice(0, 10000).map(([k, v]) => [texteSur(k, 80), entierSur(v, 0, 100000)]).filter(([k, v]) => k && v > 0)) })) } : null;
+  return { lieux, controles: o.controles === true, id: texteSur(o.id, 20).replace(/[^a-z0-9]/gi, "") || empreinteEssai(JSON.stringify(o.articles)), entreprise: texteSur(o.entreprise, 60) || "Votre entreprise", metier, monnaie: o.monnaie === "XOF" ? "XOF" : "EUR",
     modules: Object.keys(CATALOGUE).filter(k => Array.isArray(o.modules) && o.modules.includes(k)), taille, detail: ap.detail === "simple" ? "simple" : "complet", config: configSure(ap.config, base, taille),
     importeLe: isFinite(+o.importeLe) && +o.importeLe > 1e12 ? Math.min(+o.importeLe, Date.now()) : Date.now(), articles,
     fin: /^\d{4}-\d{2}-\d{2}$/.test(o.fin || "") ? o.fin : "", contact: c && (c.nom || c.email) ? c : null };
 }
 // L'état de départ de la démo d'essai : les objets du prospect, son stock de départ, son réglage. Aucun historique inventé.
 function etatEssai(p) {
-  const st = etatListeP({ id: "essai", nom: p.entreprise, metier: p.metier, pays: p.monnaie === "XOF" ? "SN" : "FR", liste: { le: p.importeLe, articles: p.articles } });
+  const st = etatListeP({ id: "essai", nom: p.entreprise, metier: p.metier, pays: p.monnaie === "XOF" ? "SN" : "FR", liste: { le: p.importeLe, articles: p.articles }, lieux: p.lieux, controles: p.controles });
   Object.keys(CATALOGUE).forEach(k => { st.modules[k] = p.modules.includes(k); });
   st.taille = p.taille; st.detail = p.detail; st.config = p.config ? JSON.parse(JSON.stringify(p.config)) : configParDefaut(st.metier, st.taille);
   if (st.suiviLots) ["bureau", "direction"].forEach(r => { const cf = st.config[r]; if (cf && !cf.accueil.some(([k]) => k === "peremption")) cf.accueil.push(["peremption", "m"]); });
@@ -131,7 +138,7 @@ function ecrireEssai() {
   try { if (E_) localStorage.setItem(CLE_ESSAI, JSON.stringify(E_)); else localStorage.removeItem(CLE_ESSAI); return true; } catch (e) { return false; }
 }
 // Les gestes faits pendant l'essai : tout sauf le stock de départ écrit à l'ouverture
-const gestesEssai = etat => ((etat || S).mouvements || []).filter(m => !(m.type === "Inventaire initial" && m.qui === "Installation"));
+const gestesEssai = etat => ((etat || S).mouvements || []).filter(m => !(["Inventaire initial", "Transfert"].includes(m.type) && m.qui === "Installation"));
 const versConnexion = () => { session = null; verrouille = false; installateur = false; clearTimeout(minuteur); msgConnexion = ""; vue = { nom: "accueil" }; pile = []; $$(".feuille").forEach(f => f.remove()); entree = true; rendre(); window.scrollTo(0, 0); };
 // L'adresse ne garde pas ?metier=… quand la démo d'essai est ouverte : un rechargement doit la retrouver
 function nettoyerAdresse() {

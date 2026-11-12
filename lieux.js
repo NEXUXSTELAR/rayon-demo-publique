@@ -40,6 +40,19 @@ const manquesLieu = lieu => S.articles.filter(reparti).map(a => ({ a, manque: do
 const monLieu = () => { const l = (S.lieuDe || {})[session ? session.uid : ""]; return l && lieuDe(l) ? l : ""; };
 function retenirLieu(lieu) { if (!session) return; (S.lieuDe = S.lieuDe || {})[session.uid] = lieu || ""; }
 
+/* ---------------- Dates limites dans un lieu ---------------- */
+const alerteDlc = () => metier().alerteDlc || 4; // jours : en dessous, un lot est « bientôt périmé »
+const isoDans = j => isoJour(Date.now() + j * JOUR_MS);
+// Le lot le plus proche de sa date dans un lieu : { dlc, qte, c } avec c = "perime", "bientot" ou ""
+function lotProche(a, lieu) {
+  if (!metier().dlc) return null;
+  const l = lieu ? lotsDuLieu(S.mouvements, a.id, lieu) : lotsAuDepot(a.id); if (!l.length) return null;
+  return Object.assign({ c: l[0].dlc < aujourdHui() ? "perime" : l[0].dlc <= isoDans(alerteDlc()) ? "bientot" : "" }, l[0]);
+}
+const texteLot = p => p ? `${p.qte} ${p.c === "perime" ? "périmé" + (p.qte > 1 ? "s" : "") + " depuis le" : "à utiliser avant le"} ${dateCtrl(p.dlc)}` : "";
+const perimesLieu = lieu => articlesDuLieu(lieu).map(a => ({ a, p: lotProche(a, lieu) })).filter(x => x.p && x.p.c);
+const pictoLieu = () => /site|local|magasin|antenne/i.test(motLieux()) ? I.materiel : I.camion;
+
 /* ---------------- Ce qui s'affiche sur un objet ---------------- */
 // Sous la jauge de l'objet scanné : où sont les pièces
 function ligneLieux(a) {
@@ -57,7 +70,7 @@ function blocLieuxFiche(a) {
   if (!lieuxActifs() || !reparti(a)) return "";
   const p = parLieu(a.id);
   return `<h2>Où il se trouve</h2><table class="t"><tbody><tr><td>${esc(nomDepot())}</td><td class="n">${Math.max(0, stockIci(a.id))}</td></tr>
-  ${S.lieux.filter(x => (p[x.id] || 0) > 0 || dotation(x.id, a.id) > 0).map(x => { const d = dotation(x.id, a.id), q = Math.max(0, p[x.id] || 0); return `<tr><td>${esc(x.nom)}${d ? `<br><small>dotation ${d}${q < d ? ` · il en manque ${d - q}` : ""}</small>` : ""}</td><td class="n">${q}</td></tr>`; }).join("")}</tbody></table>`;
+  ${S.lieux.filter(x => (p[x.id] || 0) > 0 || dotation(x.id, a.id) > 0).map(x => { const d = dotation(x.id, a.id), q = Math.max(0, p[x.id] || 0); const pl = lotProche(a, x.id); return `<tr><td>${esc(x.nom)}${d ? `<br><small>dotation ${d}${q < d ? ` · il en manque ${d - q}` : ""}</small>` : ""}${pl ? `<br><small>${texteLot(pl)}</small>` : ""}</td><td class="n">${q}</td></tr>`; }).join("")}</tbody></table>`;
 }
 
 /* ---------------- Le choix du lieu dans la feuille d'un geste (sortie, remise, perte, comptage) ---------------- */
@@ -91,7 +104,9 @@ const lieuMv = m => m.type === "Transfert" ? (/→/.test(m.motif || "") ? "" : `
 /* ---------------- Déplacer une quantité d'un lieu à un autre ---------------- */
 function noterTransfert(id, n, de, vers) {
   const mv = prochainMv();
-  S.mouvements.push({ id: mv, date: Date.now(), profil: session.profil, qui: session.nom, article: id, type: "Transfert", qte: n, evenement: "", motif: `${nomLieu(de)} → ${nomLieu(vers)}`, de: de || "", vers: vers || "" });
+  // Les lots à date limite suivent : on déplace d'abord ceux qui sont les plus proches de leur date
+  const lots = metier().dlc ? prendreLots(de ? lotsDuLieu(S.mouvements, id, de) : lotsAuDepot(id), n) : [];
+  S.mouvements.push(Object.assign({ id: mv, date: Date.now(), profil: session.profil, qui: session.nom, article: id, type: "Transfert", qte: n, evenement: "", motif: `${nomLieu(de)} → ${nomLieu(vers)}`, de: de || "", vers: vers || "" }, lots.length ? { lots } : {}));
   return mv;
 }
 function feuilleTransfert(id, de, vers) {
@@ -172,26 +187,30 @@ function vLieux() {
   const mien = monLieu();
   return `<h1>${esc(motLieux())}</h1><p class="sous">Ce que contient chaque lieu, et ce qui manque à sa dotation. Le reste est au ${esc(nomDepot().toLowerCase())}.</p>
   <ul class="t-liste">${S.lieux.map(x => { const l = articlesDuLieu(x.id), m = manquesLieu(x.id).length, pieces = l.reduce((t, a) => t + Math.max(0, stockLieu(a.id, x.id)), 0);
-    return `<li><button data-lieu="${x.id}">${pic(I.camion)}<span><b>${esc(x.nom)}</b><small>${pieces} pièce${pieces > 1 ? "s" : ""} · ${m ? `${m} objet${m > 1 ? "s" : ""} sous la dotation` : Object.keys(x.dot || {}).length ? "dotation complète" : "pas de dotation"}</small>${x.id === mien ? `<small class="zone-tour">Votre lieu habituel</small>` : ""}</span><span class="etat ${m ? "bas" : ""}"><i></i></span></button></li>`; }).join("")}</ul>`;
+    const np = perimesLieu(x.id).length;
+    return `<li><button data-lieu="${x.id}">${pic(pictoLieu())}<span><b>${esc(x.nom)}</b><small>${pieces} pièce${pieces > 1 ? "s" : ""} · ${m ? `${m} objet${m > 1 ? "s" : ""} sous la dotation` : Object.keys(x.dot || {}).length ? "dotation complète" : "pas de dotation"}${np ? ` · ${np} date${np > 1 ? "s" : ""} limite${np > 1 ? "s" : ""} proche${np > 1 ? "s" : ""}` : ""}</small>${x.id === mien ? `<small class="zone-tour">Votre lieu habituel</small>` : ""}</span><span class="etat ${np ? "zero" : m ? "bas" : ""}"><i></i></span></button></li>`; }).join("")}</ul>`;
 }
 function vLieu(id) {
   const L = lieuDe(id); if (!L) return vLieux();
-  const l = articlesDuLieu(id), m = manquesLieu(id), mien = monLieu() === id;
-  return `<h1>${esc(L.nom)}</h1><p class="sous">${m.length ? `${m.length} objet${m.length > 1 ? "s" : ""} sous la dotation.` : Object.keys(L.dot || {}).length ? "La dotation est complète." : "Pas de dotation réglée pour ce lieu."}${mien ? " C'est votre lieu habituel : vos sorties en partent." : ""}</p>
+  const l = articlesDuLieu(id), m = manquesLieu(id), mien = monLieu() === id, np = perimesLieu(id).length;
+  return `<h1>${esc(L.nom)}</h1><p class="sous">${m.length ? `${m.length} objet${m.length > 1 ? "s" : ""} sous la dotation.` : Object.keys(L.dot || {}).length ? "La dotation est complète." : "Pas de dotation réglée pour ce lieu."}${np ? ` ${np} objet${np > 1 ? "s" : ""} à date limite proche ou dépassée.` : ""}${mien ? " C'est votre lieu habituel : vos sorties en partent." : ""}</p>
   <div class="t-actions">${m.length ? `<button class="t-action retour conseil" data-reappro="${id}">${I.retour}<span>Réapprovisionner<small>${m.length} objet${m.length > 1 ? "s" : ""} à compléter depuis le ${esc(nomDepot().toLowerCase())}</small></span></button>` : ""}
     <button class="t-action compter" data-zone="${id}">${I.compter}<span>Compter ce lieu<small>Je vérifie ce qu'il contient</small></span></button></div>
   <ul class="t-liste" style="margin-top:14px">${l.map(a => { const q = Math.max(0, stockLieu(a.id, id)), d = dotation(id, a.id);
-    return `<li><button data-objet="${a.id}">${img(a)}<span><b>${esc(a.nom)}</b><small>${d ? `dotation ${d}${q < d ? ` · il en manque ${d - q}` : ""}` : "hors dotation"}</small></span><span class="n">${q}</span></button></li>`; }).join("") || `<li class="vide">Ce lieu est vide. Scannez un objet au ${esc(nomDepot().toLowerCase())}, puis « ${esc(S.gesteLieu || "Déplacer vers un autre lieu")} ».</li>`}</ul>
+    const p = lotProche(a, id);
+    return `<li><button data-objet="${a.id}">${img(a)}<span><b>${esc(a.nom)}</b><small>${d ? `dotation ${d}${q < d ? ` · il en manque ${d - q}` : ""}` : "hors dotation"}</small>${p ? `<small class="lot-lieu ${p.c}">${texteLot(p)}</small>` : ""}</span><span class="n">${q}</span></button></li>`; }).join("") || `<li class="vide">Ce lieu est vide. Scannez un objet au ${esc(nomDepot().toLowerCase())}, puis « ${esc(S.gesteLieu || "Déplacer vers un autre lieu")} ».</li>`}</ul>
   <div class="boutons" style="margin-top:14px">${mien ? "" : `<button class="btn petit" data-mon-lieu="${id}">C'est mon lieu habituel</button>`}${droit("stock") ? `<button class="btn petit" data-dotation="${id}">Régler la dotation</button>` : ""}<button class="btn petit" data-aller="ficheLieu" data-arg="${id}">Fiche à imprimer</button></div>`;
 }
 // Fiche d'un lieu, à imprimer et à laisser dans le véhicule : présent, dotation, manquant
 function vFicheLieu(id) {
   const L = lieuDe(id); if (!L) return vLieux();
-  const l = articlesDuLieu(id);
+  const l = articlesDuLieu(id), dlc = metier().dlc, per = perimesLieu(id), man = manquesLieu(id);
   return `<p class="pas-imprimer"><button class="lien" data-aller="lieu" data-arg="${id}">← ${esc(L.nom)}</button> · <button class="lien" data-act="imprimer">Imprimer ou enregistrer en PDF</button></p>
   <div class="feuille-doc">${enTeteDoc()}<h1>${esc(L.nom)} · contenu et dotation</h1><p>Édité le ${new Date().toLocaleDateString("fr-FR")} · d'après les gestes enregistrés dans l'appli</p>
-  <div class="defile"><table class="etroit"><thead><tr><th>Objet</th><th class="n">Dotation</th><th class="n">Présent</th><th class="n">Manque</th><th class="n">Compté</th></tr></thead><tbody>
-  ${l.map(a => { const q = Math.max(0, stockLieu(a.id, id)), d = dotation(id, a.id); return `<tr><td>${esc(a.nom)}<br><small>${a.id}</small></td><td class="n">${d || "—"}</td><td class="n">${q}</td><td class="n">${d > q ? d - q : "—"}</td><td style="width:70px"></td></tr>`; }).join("") || `<tr><td colspan="5">Ce lieu est vide.</td></tr>`}</tbody></table></div>
+  <div class="defile"><table class="etroit"><thead><tr><th>Objet</th><th class="n">Dotation</th><th class="n">Présent</th><th class="n">Manque</th><th class="n">${dlc ? "Date limite" : "Compté"}</th></tr></thead><tbody>
+  ${l.map(a => { const q = Math.max(0, stockLieu(a.id, id)), d = dotation(id, a.id), p = dlc ? lotProche(a, id) : null; return `<tr><td>${esc(a.nom)}<br><small>${a.id}</small></td><td class="n">${d || "—"}</td><td class="n">${q}</td><td class="n">${d > q ? d - q : "—"}</td>${dlc ? `<td class="n">${p ? new Date(p.dlc + "T12:00:00").toLocaleDateString("fr-FR") : "—"}</td>` : `<td style="width:70px"></td>`}</tr>`; }).join("") || `<tr><td colspan="5">Ce lieu est vide.</td></tr>`}</tbody></table></div>
+  ${man.length ? `<h2>Manquant</h2><p>${man.map(x => `${x.manque} × ${esc(x.a.nom)}`).join(" · ")}</p>` : ""}
+  ${dlc ? `<h2>Date limite dépassée ou dans les ${alerteDlc()} jours</h2><p>${per.map(x => `${esc(x.a.nom)} : ${texteLot(x.p)}`).join(" · ") || "Rien."}</p>` : ""}
   <p class="petit">Date : ____ / ____ / ________ · Vérifié par : ______________________</p></div>`;
 }
 // Fiche d'inventaire papier : une partie par lieu, après les zones du dépôt
@@ -216,10 +235,10 @@ function tachesLieux() {
   if (!lieuxActifs()) return [];
   const mien = monLieu();
   return S.lieux.map(x => ({ x, m: manquesLieu(x.id) })).filter(o => o.m.length).sort((a, b) => (b.x.id === mien) - (a.x.id === mien)).slice(0, 2)
-    .map(o => ({ c: "retour", i: I.camion, t: "Réapprovisionner · " + o.x.nom, s: `${o.m.length} objet${o.m.length > 1 ? "s" : ""} sous la dotation : ${o.m.slice(0, 2).map(k => k.a.nom).join(", ")}${o.m.length > 2 ? "…" : ""}`, a: `data-lieu="${o.x.id}"` }));
+    .map(o => ({ c: "retour", i: pictoLieu(), t: "Réapprovisionner · " + o.x.nom, s: `${o.m.length} objet${o.m.length > 1 ? "s" : ""} sous la dotation : ${o.m.slice(0, 2).map(k => k.a.nom).join(", ")}${o.m.length > 2 ? "…" : ""}`, a: `data-lieu="${o.x.id}"` }));
 }
 
-SECTIONS.lieux = { t: () => motLieux(), i: "camion", g: "depot", si: () => lieuxActifs(), s: "Ce que contient chaque lieu" };
+SECTIONS.lieux = { t: () => motLieux(), get i() { return /site|local|magasin|antenne/i.test(motLieux()) ? "materiel" : "camion"; }, g: "depot", si: () => lieuxActifs(), s: "Ce que contient chaque lieu" };
 
 function brancherLieux() {
   $$("[data-transfert]").forEach(b => b.onclick = () => feuilleTransfert(b.dataset.transfert));

@@ -93,6 +93,7 @@ function normaliserP(s) {
     if (!c.etapes || typeof c.etapes !== "object") c.etapes = {};
     c.heuresPassees = +c.heuresPassees || 0; c.heuresEstimees = +c.heuresEstimees || 0;
     if (c.liste && !(Array.isArray(c.liste.articles) && c.liste.articles.length && c.liste.articles.every(a => a && a.nom && Array.isArray(a.lots)))) delete c.liste;
+    if (c.lieux && !(typeof c.lieux === "object" && Array.isArray(c.lieux.liste) && c.lieux.liste.every(l => l && l.nom))) delete c.lieux;
     if (c.essai && (typeof c.essai !== "object" || (c.essai.retour && !Array.isArray(c.essai.retour.gestes)))) delete c.essai;
     return c;
   });
@@ -540,13 +541,13 @@ function feuilleClientP(id, modele) {
       Object.assign(c, d); sauverP(); f.remove(); rendre(); return toast("Client enregistré.");
     }
     const nid = nouvelIdP();
-    P_.clients.push(Object.assign({ id: nid, creeLe: Date.now(), etapes: {}, heuresPassees: 0, interventions: [] }, modele && modele.appli ? { appli: copieP(modele.appli) } : {}, d));
+    P_.clients.push(Object.assign({ id: nid, creeLe: Date.now(), etapes: {}, heuresPassees: 0, interventions: [] }, modele && modele.appli ? { appli: copieP(modele.appli) } : {}, modele && modele.lieux ? { lieux: modele.lieux } : {}, modele && typeof modele.controles === "boolean" ? { controles: modele.controles } : {}, d));
     f.remove(); sauverP(); allerE("client", nid); toast(d.devisLe ? "Client ajouté." : "Client ajouté. Le devis est prêt à envoyer.");
   };
   if (!id) return;
   f.querySelector("[data-dupliquer]").onclick = () => {
     f.remove();
-    feuilleClientP(null, { dapres: c.nom, metier: c.metier, pays: c.pays, ville: c.ville, offre: c.offre, mode: c.mode, relais: c.relais, apporteur: c.apporteur, utilisateurs: c.utilisateurs, prixEur: c.prixEur, modules: c.modules.slice(), heuresEstimees: c.heuresEstimees, appli: c.appli && c.appli.config ? c.appli : null });
+    feuilleClientP(null, { dapres: c.nom, metier: c.metier, pays: c.pays, ville: c.ville, offre: c.offre, mode: c.mode, relais: c.relais, apporteur: c.apporteur, utilisateurs: c.utilisateurs, prixEur: c.prixEur, modules: c.modules.slice(), heuresEstimees: c.heuresEstimees, appli: c.appli && c.appli.config ? c.appli : null, lieux: c.lieux ? copieP(c.lieux) : null, controles: c.controles });
   };
   f.querySelector("[data-supprimer]").onclick = () => {
     if (!confirm(`Supprimer ${c.nom} et tout son suivi (installation, interventions, heures) ?`)) return;
