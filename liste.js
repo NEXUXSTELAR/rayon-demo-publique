@@ -2,8 +2,10 @@
 /* Mon espace : la liste d'articles d'un client.
    Le client remplit un tableur (modeles/07_Liste_articles_a_remplir.xlsx) ; on l'importe ici d'un coup, par le fichier ou par un collage,
    après une relecture qui dit ce qui cloche. La liste vit dans la fiche du client (donc dans la sauvegarde de Mon espace).
-   Elle sert à trois choses : charger la démo avec ses objets (« Régler son appli »), sortir ses étiquettes, et produire
-   les onglets à coller dans son classeur. Rien n'est lu ni écrit ailleurs que dans le navigateur. Chargé après espace.js, avant app.js. */
+   Elle sert à quatre choses : charger la démo avec ses objets (« Régler son appli »), sortir ses étiquettes, produire
+   les onglets à coller dans son classeur, et envoyer au prospect sa démo d'essai (« Envoyer sa démo », puis « Ouvrir son essai »
+   pour relire ce qu'il en a fait ; le côté prospect est dans essai.js). Rien n'est lu ni écrit ailleurs que dans le navigateur.
+   Chargé après espace.js, avant app.js. */
 
 const LISTE_MAX = 5000; // lignes lues au plus ; les codes vont de ART-0001 à ART-9999
 // Titres reconnus, dans l'ordre où on les essaie (le premier qui convient gagne). Les titres sont comparés sans accents ni majuscules.
@@ -238,7 +240,8 @@ function construireListeP(c) {
   const entree = (article, qte, extra) => { if (qte > 0) mouvements.push(Object.assign({ id: "MV-" + String(++nMv).padStart(5, "0"), date: le, profil: "bureau", qui: "Installation", article, type: "Inventaire initial", qte, evenement: "", motif: "Stock de départ", refac: false }, extra)); };
   const articles = L.map((x, i) => {
     const id = "ART-" + String(i + 1).padStart(4, "0"), premiere = x.lots.map(l => l.dlc).sort()[0];
-    if (x.suiviLots) x.lots.forEach(l => entree(id, l.qte, { dlc: l.dlc, lotNum: l.num, motif: "Stock de départ" + (l.num ? " · lot " + l.num : "") })); else entree(id, x.qte);
+    // L'appli sort d'abord ce qui est entré le plus tôt : le lot à la date limite la plus proche est écrit comme le plus ancien
+    if (x.suiviLots) x.lots.slice().sort((p, q) => p.dlc.localeCompare(q.dlc)).forEach((l, k) => entree(id, l.qte, { date: le + k, dlc: l.dlc, lotNum: l.num, motif: "Stock de départ" + (l.num ? " · lot " + l.num : "") })); else entree(id, x.qte);
     return Object.assign({ id, nom: x.nom + (x.code ? " · réf. " + x.code : ""), img: "", logique: x.logique, type: x.serie ? "equip" : "conso", unite: x.unite, emp: idDe(emplacements, x.emp, "EMP-"), seuil: x.seuil, cible: x.cible,
       prix: sn ? x.prix / EUR_XOF : x.prix, lot: x.lot, fou: idDe(fournisseurs, x.fou, "FOU-", { delai: 7 }), jour: 0, categorie: x.categorie },
       x.serie ? { serie: x.serie } : {},
@@ -247,8 +250,15 @@ function construireListeP(c) {
   });
   return { articles, emplacements, fournisseurs, mouvements };
 }
-// Charge la démo avec les objets du client, à la place des objets de démonstration du métier. Pas d'historique inventé :
-// seul le stock de départ est écrit, à la date de l'import. Rend vrai si la démo a été rechargée.
+// La démo avec les objets du client, à la place des objets de démonstration du métier. Pas d'historique inventé :
+// seul le stock de départ est écrit, à la date de l'import. etatListeP construit cet état (il sert aussi à la démo d'essai
+// du prospect, essai.js) ; chargerListeP le met dans la démo de l'installateur et rend vrai si elle a été rechargée.
+function etatListeP(c) {
+  const b = construireListeP(c), neuf = construireDemo(c.metier);
+  Object.assign(neuf, { articles: b.articles, emplacements: b.emplacements, fournisseurs: b.fournisseurs, mouvements: b.mouvements, kits: [], reservations: [], commandes: [], bons: [], alertes: [], messages: [], clientsLoc: [], clientsEv: {}, infosEv: {}, interventions: [] });
+  neuf.suiviLots = b.articles.some(a => a.dlcJours); // au moins un article à date limite : le suivi par lots s'allume pour ce client
+  return neuf;
+}
 function chargerListeP(c) {
   const garder = { monnaie: S.monnaie, reglages: S.reglages };
   if (!c.liste || !c.liste.articles.length) {
@@ -257,9 +267,7 @@ function chargerListeP(c) {
   }
   const marque = [c.id, c.liste.le, c.liste.articles.length].join("|");
   if (S.listeDe === marque) return false;
-  const b = construireListeP(c), neuf = Object.assign(construireDemo(c.metier), garder);
-  Object.assign(neuf, { articles: b.articles, emplacements: b.emplacements, fournisseurs: b.fournisseurs, mouvements: b.mouvements, kits: [], reservations: [], commandes: [], bons: [], alertes: [], messages: [], clientsLoc: [], clientsEv: {}, infosEv: {}, interventions: [] });
-  neuf.suiviLots = b.articles.some(a => a.dlcJours); // au moins un article à date limite : le suivi par lots s'allume pour ce client
+  const neuf = Object.assign(etatListeP(c), garder);
   neuf.listeDe = marque;
   S = neuf; return true;
 }
@@ -399,7 +407,7 @@ function eListeP(id) {
   ${relecture}
   <h2>Sa liste</h2>
   <div class="bloc regl-bloc" style="padding-top:12px">${blocListeP(c)}
-    ${c.liste ? `<div class="boutons">${boutonsListeP(c)}<button class="btn petit" data-regler-p="${c.id}">${I.reglages}Régler son appli</button><button class="btn petit rouge" data-liste-retirer="${c.id}">Retirer la liste</button></div>` : ""}</div>
+    ${c.liste ? `<div class="boutons">${boutonsListeP(c)}<button class="btn petit" data-regler-p="${c.id}">${I.reglages}Régler son appli</button><button class="btn petit" data-envoi-p="${c.id}">${I.partager}Envoyer sa démo</button><button class="btn petit rouge" data-liste-retirer="${c.id}">Retirer la liste</button></div>` : ""}</div>
   <h2>1. Envoyer le modèle au client</h2>
   <div class="bloc regl-bloc" style="padding-top:12px"><p style="margin:0 0 10px">Deux colonnes obligatoires (le nom, la quantité en stock), le reste facultatif, une ligne d'aide sous chaque titre, un mode d'emploi et des exemples par métier.</p>
     <div class="boutons"><a class="btn petit" href="modele_liste_articles.xlsx" download="Liste_articles_a_remplir.xlsx">${I.excel}Télécharger le modèle à envoyer</a></div>
@@ -414,7 +422,136 @@ function eListeP(id) {
 // Sur la fiche du client
 function blocFicheListeP(c) {
   return `<section class="w w-l"><div class="w-entete"><h3 class="w-titre">${I.materiel}Ses articles</h3></div>
-    ${blocListeP(c)}<div class="boutons"><button class="btn petit ${c.liste ? "" : "plein"}" data-e="liste" data-earg="${c.id}">${I.excel}Importer sa liste</button>${c.liste ? boutonsListeP(c) : ""}</div></section>`;
+    ${blocListeP(c)}<div class="boutons"><button class="btn petit ${c.liste ? "" : "plein"}" data-e="liste" data-earg="${c.id}">${I.excel}Importer sa liste</button>${c.liste ? boutonsListeP(c) : ""}</div></section>${blocEssaiP(c)}`;
+}
+
+/* ---------------- Envoyer sa démo au prospect, puis relire son essai ---------------- */
+// La démo telle que le prospect la reçoit (essai.js la lit) : son métier, son nom, sa monnaie, ses modules, le réglage de son appli,
+// ses articles et son stock de départ, la date de fin de l'essai, et de quoi nous écrire. Jamais le devis, l'offre, le contact
+// du client, les notes, ni rien d'un autre client. Le numéro d'essai est l'empreinte du contenu : la même liste donne le même numéro.
+// Colonnes d'un article dans la démo envoyée, et empreinte du contenu. Définies ici, avant essai.js : la fiche d'un client s'en sert dès le premier affichage.
+const COLONNES_ESSAI = ["nom", "qte", "emp", "logique", "categorie", "unite", "prix", "fou", "seuil", "cible", "lot", "serie", "lots", "code"];
+function empreinteEssai(t) {
+  let a = 0x811c9dc5, b = 0x1b873593;
+  for (let i = 0; i < t.length; i++) { const c = t.charCodeAt(i); a = Math.imul(a ^ c, 0x01000193) >>> 0; b = Math.imul(b ^ c, 0x5bd1e995) >>> 0; b ^= b >>> 13; }
+  return a.toString(16).padStart(8, "0") + (b >>> 0).toString(16).padStart(8, "0").slice(0, 4);
+}
+function paquetEssaiP(c, fin) {
+  const L = c.liste.articles, base = METIERS[c.metier].base || c.metier, o = OFFRES[c.offre], r = reglP();
+  const a = c.appli && c.appli.metier === c.metier && c.appli.config ? c.appli : null;
+  const p = { type: "stockclair-essai", version: 1, id: "", entreprise: c.nom, metier: c.metier, monnaie: c.pays === "SN" ? "XOF" : "EUR",
+    modules: Object.keys(CATALOGUE).filter(k => o.inclus.includes(k) || c.modules.includes(k) || (k === "MO-PRET" && L.some(x => x.logique === "pret"))),
+    // Le réglage ne part que s'il diffère de celui du métier : le lien reste court
+    appli: a ? Object.assign({ taille: a.taille, detail: a.detail }, JSON.stringify(a.config) === JSON.stringify(configParDefaut(base, a.taille)) ? {} : { config: a.config }) : null,
+    importeLe: c.liste.le, colonnes: COLONNES_ESSAI,
+    articles: L.map(x => { const l = [x.nom, x.qte, x.emp, x.logique, x.categorie, x.unite, x.prix, x.fou, x.seuil, x.cible, x.lot, x.serie, x.lots.map(t => [t.num, t.dlc, t.qte]), x.code]; while (l.length && (l[l.length - 1] === "" || (Array.isArray(l[l.length - 1]) && !l[l.length - 1].length))) l.pop(); return l; }) };
+  p.id = empreinteEssai(JSON.stringify(p));
+  p.fin = fin || ""; p.contact = r.nom || r.compte ? { nom: r.nom, email: r.compte } : null; p.prepareLe = Date.now();
+  return p;
+}
+// Le message qui accompagne la démo : vouvoiement, pas de prix. « [lien] » est remplacé à l'envoi.
+function messageEnvoiP(c, p, avecLien) {
+  const fin = p.fin ? `\n\nL'essai est prévu jusqu'au ${new Date(p.fin + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}.` : "";
+  const debut = `Bonjour${c.contact ? " " + c.contact : ""},\n\nVoici votre démo Stockclair, préparée avec vos articles`;
+  const suite = `Il n'y a rien à installer et aucun compte à créer. Ce que vous y faites reste sur votre téléphone.${fin}\n\nJe reste à votre disposition pour toute question.\n\nBien cordialement,\n${moiP().complet}`;
+  return avecLien ? `${debut} :\n\n[lien]\n\nOuvrez ce lien sur votre téléphone, puis touchez un compte pour entrer. ${suite}`
+    : `${debut} : c'est le fichier joint, ${nomFichierEssai("ma-demo-stockclair", c.nom)}.\n\nPour l'ouvrir : enregistrez le fichier sur votre téléphone, allez sur ${adresseDemo()}, touchez « Ouvrir ma démo d'essai » en bas de l'écran et choisissez le fichier. Puis touchez un compte pour entrer. ${suite}`;
+}
+function feuilleEnvoiP(id) {
+  const c = clientP(id); if (!c || !c.liste) return;
+  const r = resumeListeP(c), tel = (c.tel || "").replace(/\D/g, "").replace(/^0/, "33"), fin0 = c.essai && c.essai.fin >= aujourdHui() ? c.essai.fin : "";
+  const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="ted" class="saisie-p"><h1 id="ted" style="font-size:26px">Envoyer sa démo</h1>
+    <p class="sous">${esc(c.nom)} · ${pluriel(r.n, "article")} dans ${pluriel(r.emp, "emplacement")}. Le prospect l'ouvre sur son téléphone, sans compte : son métier, ses articles, son stock de départ, le réglage de son appli. Rien ne passe par un serveur ; ni le devis ni vos notes ne partent.</p>
+    <label class="champ">Fin de l'essai (facultatif)<input type="date" name="fin" min="${aujourdHui()}" value="${fin0}"><small>Affichée dans sa démo comme un rappel, avec votre nom et votre e-mail de « Mes réglages ». Rien ne se bloque après cette date. <button type="button" class="lien" data-fin-essai>Dans ${ESSAI.jours} jours</button></small></label>
+    <p class="essai-etat" data-etat role="status">Préparation de sa démo…</p>
+    <label class="champ">Message<textarea name="m" rows="9" maxlength="1500"></textarea><small data-aide></small></label>
+    <div class="boutons essai-envois"><button class="btn petit plein" data-par="copier">Copier le lien</button>${navigator.share ? `<button class="btn petit" data-par="partager">${I.partager}Partager</button>` : ""}<button class="btn petit" data-par="wa">WhatsApp</button><button class="btn petit" data-par="mel">E-mail</button><button class="btn petit" data-par="fichier">Télécharger le fichier</button></div>
+    <div class="valider" style="grid-template-columns:1fr"><button class="btn" data-x>Fermer</button></div></div>`);
+  const q = n => f.querySelector(`[name=${n}]`), nb = n => n.toLocaleString("fr-FR");
+  let p = null, lien = "", fichier = null, modifie = false, tour = 0;
+  // La démo est préparée à l'ouverture, puis à chaque changement de la date de fin
+  const preparer = async () => {
+    const n = ++tour, neuf = paquetEssaiP(c, q("fin").value), code = await coderEssai(neuf).catch(() => null);
+    if (n !== tour || !f.isConnected) return;
+    const l = code ? lienEssai("essai", code) : "";
+    p = neuf; lien = l && l.length <= LIEN_ESSAI_MAX ? l : ""; fichier = { nom: nomFichierEssai("ma-demo-stockclair", c.nom), texte: JSON.stringify(p) };
+    f.querySelector("[data-etat]").textContent = lien ? `Lien prêt : ${nb(l.length)} caractères, pour ${nb(LIEN_ESSAI_MAX)} au plus. Le fichier reste possible.`
+      : l ? `Liste trop grande pour un lien (${nb(l.length)} caractères, ${nb(LIEN_ESSAI_MAX)} au plus) : sa démo part dans un fichier, à joindre au message.`
+        : "Ce navigateur ne sait pas préparer le lien : sa démo part dans un fichier, à joindre au message.";
+    if (!modifie) q("m").value = messageEnvoiP(c, p, !!lien);
+    f.querySelector("[data-aide]").textContent = lien ? "« [lien] » est remplacé par le lien de sa démo à l'envoi." : "Le fichier se télécharge au moment de l'envoi : joignez-le au message.";
+    f.querySelector('[data-par="copier"]').hidden = !lien;
+  };
+  q("m").oninput = () => { modifie = true; };
+  q("fin").onchange = preparer;
+  f.querySelector("[data-fin-essai]").onclick = () => { q("fin").value = isoJour(Date.now() + ESSAI.jours * JOUR_MS); preparer(); };
+  f.querySelector("[data-x]").onclick = () => f.remove();
+  f.querySelectorAll("[data-par]").forEach(b => b.onclick = async () => {
+    if (!p) return toast("Sa démo se prépare : un instant.");
+    const m = q("m").value.trim(), par = b.dataset.par;
+    if (!m && par !== "copier" && par !== "fichier") return toast("Le message est vide.");
+    const t = await envoyerEssai(par, { message: m, lien, fichier, tel, email: c.email, sujet: "Votre démo Stockclair" });
+    if (!t) return;
+    c.essai = Object.assign({}, c.essai, { id: p.id, envoyeLe: Date.now(), fin: p.fin, n: p.articles.length }); sauverP(); rendre();
+    toast(t + " Envoi noté dans sa fiche.");
+  });
+  preparer();
+}
+// L'essai renvoyé par le prospect (« Envoyer mon essai », essai.js) : ses gestes, nettoyés et bornés comme tout ce qui vient d'un fichier
+function lireRetourP(o) {
+  if (!o || o.type !== "stockclair-essai-retour" || o.version !== 1 || !Array.isArray(o.gestes)) throw new Error("forme");
+  const gestes = o.gestes.slice(0, 20000).filter(l => Array.isArray(l) && SIGNE[l[5]] && isFinite(+l[1]) && isFinite(+l[6]))
+    .map(l => ({ id: texteSur(l[0], 12), date: +l[1], qui: texteSur(l[2], 40), role: texteSur(l[3], 12), article: texteSur(l[4], 12), type: l[5], qte: Math.round(+l[6]), lieu: texteSur(l[7], 60), motif: texteSur(l[8], 60), annule: texteSur(l[9], 12) }));
+  const noms = {}; Object.entries(o.noms && typeof o.noms === "object" ? o.noms : {}).slice(0, 10000).forEach(([k, v]) => { noms[texteSur(k, 12)] = texteSur(v, 120); });
+  return { id: texteSur(o.id, 20), entreprise: texteSur(o.entreprise, 60), ouvertLe: +o.ouvertLe || 0, envoyeLe: +o.envoyeLe || 0, articles: entierSur(o.articles, 0, 9999), gestes, noms, recuLe: Date.now() };
+}
+// Range l'essai dans la fiche du client. Sans id (essai arrivé par un lien), le client est retrouvé par le numéro d'essai, sinon par son nom.
+function recevoirRetourP(o, id) {
+  let r; try { r = lireRetourP(o); } catch (e) { return toast(o && o.type === "stockclair-essai" ? "Ce fichier est la démo envoyée au prospect, pas son essai." : "Ce fichier n'est pas un essai Stockclair."); }
+  const c = id ? clientP(id) : P_.clients.find(x => x.essai && x.essai.id === r.id) || P_.clients.find(x => x.liste && x.nom === r.entreprise);
+  if (!c) return toast(`Aucun client ne correspond à l'essai de ${r.entreprise} : ouvrez sa fiche, puis « Ouvrir son essai ».`);
+  if (id && r.entreprise !== c.nom && !(c.essai && c.essai.id === r.id) && !confirm(`Cet essai porte le nom « ${r.entreprise} ». L'ouvrir dans la fiche de ${c.nom} ?`)) return;
+  const avant = c.essai && c.essai.retour ? c.essai.retour.gestes.length : 0;
+  if (avant > r.gestes.length && !confirm(`L'essai déjà ouvert compte ${pluriel(avant, "geste")}, celui-ci ${r.gestes.length}. Le remplacer ?`)) return;
+  c.essai = Object.assign({}, c.essai, { retour: r }); sauverP();
+  session = null; installateur = true; allerE("client", c.id);
+  toast(`Essai de ${c.nom} ouvert : ${pluriel(r.gestes.length, "geste")}.`);
+}
+// De quoi préparer le bilan : combien de gestes, par qui, ce qui sort le plus, les écarts de comptage. Un geste annulé ne compte pas.
+function bilanEssaiP(c) {
+  const r = c.essai.retour, b = construireListeP(c), nomDe = id => r.noms[id] || (b.articles.find(a => a.id === id) || {}).nom || id;
+  const annules = new Set(r.gestes.map(g => g.annule).filter(Boolean)), G = r.gestes.filter(g => !g.annule && !annules.has(g.id));
+  const compter = cle => { const m = new Map(); G.forEach(g => { const k = cle(g); m.set(k, (m.get(k) || 0) + 1); }); return [...m].sort((x, y) => y[1] - x[1]); };
+  const v = METIERS[c.metier].v || {}, role = g => g.role === "chauffeur" ? "Chauffeur-livreur" : v[g.role] || "";
+  const genre = g => ["Prêt", "Sortie"].includes(g.type) ? "Sorties" : g.type === "Retour" ? "Retours" : g.type === "Entrée" ? (g.motif === "Surplus remis" ? "Surplus remis en stock" : "Entrées en stock") : g.type === "Ajustement" ? "Comptages avec écart" : g.type === "Perte" ? "Pertes et casse" : "Atelier";
+  const sortis = new Map(); G.filter(g => ["Prêt", "Sortie"].includes(g.type)).forEach(g => { const x = sortis.get(g.article) || { qte: 0, fois: 0 }; x.qte += g.qte; x.fois += 1; sortis.set(g.article, x); });
+  const dates = G.map(g => g.date).sort((x, y) => x - y);
+  return { n: G.length, annules: annules.size, du: dates[0], au: dates[dates.length - 1], jours: new Set(dates.map(isoJour)).size,
+    personnes: compter(g => (g.qui || "?") + (role(g) ? " · " + role(g) : "")), genres: compter(genre),
+    sortis: [...sortis].sort((x, y) => y[1].qte - x[1].qte).slice(0, 5).map(([k, x]) => ({ nom: nomDe(k), qte: x.qte, fois: x.fois })),
+    ecarts: G.filter(g => g.type === "Ajustement").map(g => ({ nom: nomDe(g.article), ecart: g.qte, qui: g.qui, date: g.date })),
+    pertes: G.filter(g => g.type === "Perte").reduce((t, g) => t + g.qte, 0), touches: new Set(G.map(g => g.article)).size, total: r.articles || c.liste.articles.length };
+}
+function blocEssaiP(c) {
+  if (!c.liste) return "";
+  const e = c.essai || {}, r = e.retour, jour = t => new Date(t).toLocaleDateString("fr-FR"), jourMois = t => new Date(t).toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
+  const lignes = (l, vide) => l.length ? `<div class="lignes-p">${l.map(([t, n]) => `<div><span>${t}</span><b>${n}</b></div>`).join("")}</div>` : `<p class="vide" style="padding:6px 0">${vide}</p>`;
+  let bilan = "";
+  if (r) {
+    const B = bilanEssaiP(c);
+    bilan = `<p style="margin:16px 0 0"><b>${pluriel(B.n, "geste")}</b>${B.n ? ` en ${pluriel(B.jours, "jour")}, ${B.jours > 1 ? `du ${jourMois(B.du)} au ${jourMois(B.au)}` : `le ${jourMois(B.du)}`}` : ""}. Essai reçu le ${jour(r.recuLe)}.${B.annules ? ` ${pluriel(B.annules, "geste annulé", "gestes annulés")} par le prospect, non compté${B.annules > 1 ? "s" : ""}.` : ""}</p>
+    ${B.n ? `<div class="bilan-p">
+      <div><h4>Par personne</h4>${lignes(B.personnes.map(([k, n]) => [esc(k), n]), "")}</div>
+      <div><h4>Par geste</h4>${lignes(B.genres.map(([k, n]) => [esc(k), n]), "")}</div>
+      <div><h4>Objets les plus sortis</h4>${lignes(B.sortis.map(x => [esc(x.nom), `${x.qte.toLocaleString("fr-FR")} en ${x.fois} fois`]), "Aucune sortie.")}</div>
+      <div><h4>Écarts de comptage</h4>${lignes(B.ecarts.slice(0, 12).map(x => [`${esc(x.nom)} · ${esc(x.qui)}, ${jourMois(x.date)}`, (x.ecart > 0 ? "+" : "−") + Math.abs(x.ecart).toLocaleString("fr-FR")]), "Aucun écart relevé.")}${B.ecarts.length > 12 ? `<p class="w-note">Et ${B.ecarts.length - 12} autres.</p>` : ""}</div></div>
+    <p class="w-note" style="margin-top:10px">${pluriel(B.touches, "objet touché", "objets touchés")} sur ${B.total}${B.pertes ? ` · ${B.pertes.toLocaleString("fr-FR")} perdu${B.pertes > 1 ? "s" : ""} ou cassé${B.pertes > 1 ? "s" : ""}` : ""}. Un comptage juste ne laisse pas de ligne : seuls les écarts apparaissent.</p>` : `<p class="w-note" style="margin-top:6px">Le prospect n'a enregistré aucun geste.</p>`}`;
+  }
+  const change = e.envoyeLe && paquetEssaiP(c, "").id !== e.id;
+  return `<section class="w w-l"><div class="w-entete"><h3 class="w-titre">${I.partager}Son essai</h3></div>
+    <p style="margin:0 0 4px">${e.envoyeLe ? `Démo envoyée le ${jour(e.envoyeLe)} (${pluriel(e.n, "article")})${e.fin ? `, essai prévu jusqu'au ${dateCourteFr(e.fin)}` : ", sans date de fin"}.${change ? " <b>Sa liste ou le réglage de son appli a changé depuis : renvoyez-lui sa démo.</b>" : ""}` : "Sa démo n'a pas encore été envoyée."}</p>
+    <p class="w-note" style="margin-bottom:12px">Le prospect ouvre sa démo sur son téléphone, avec ses articles. À la fin de l'essai, il touche « Envoyer mon essai » sur l'écran de connexion de sa démo : ses gestes vous reviennent par un lien ou par un fichier.</p>
+    <div class="boutons"><button class="btn petit ${r ? "" : "plein"}" data-envoi-p="${c.id}">${I.partager}Envoyer sa démo</button><label class="btn petit">Ouvrir son essai<input type="file" class="cache" accept=".json,.txt,application/json,text/plain" data-retour-p="${c.id}"></label>${r ? `<button class="btn petit rouge" data-retour-retirer-p="${c.id}">Retirer cet essai</button>` : ""}</div>${bilan}</section>`;
 }
 
 function brancherListeP() {
@@ -448,4 +585,18 @@ function brancherListeP() {
     delete c.liste; sauverP(); rendre(); toast("Liste retirée.");
   });
   $$("[data-classeur-p]").forEach(b => b.onclick = () => exporterClasseurP(clientP(b.dataset.classeurP)));
+  // Envoyer sa démo au prospect, ouvrir l'essai qu'il renvoie
+  $$("[data-envoi-p]").forEach(b => b.onclick = () => feuilleEnvoiP(b.dataset.envoiP));
+  $$("[data-retour-p]").forEach(i => i.onchange = () => {
+    const f = i.files[0], id = i.dataset.retourP; i.value = ""; if (!f) return;
+    const l = new FileReader();
+    l.onerror = () => toast("Ce fichier ne se lit pas.");
+    l.onload = () => { let o; try { o = JSON.parse(l.result); } catch (e) { return toast("Ce fichier n'est pas un essai Stockclair."); } recevoirRetourP(o, id); };
+    l.readAsText(f);
+  });
+  $$("[data-retour-retirer-p]").forEach(b => b.onclick = () => {
+    const c = clientP(b.dataset.retourRetirerP);
+    if (!confirm(`Retirer de la fiche l'essai renvoyé par ${c.nom} ? La date d'envoi de sa démo est gardée.`)) return;
+    delete c.essai.retour; sauverP(); rendre(); toast("Essai retiré de la fiche.");
+  });
 }

@@ -1135,3 +1135,64 @@ body:has(.feuille) { overflow: hidden; }
   .planche-p .etiquette { height: 33mm; overflow: hidden; break-inside: avoid; }
   .espace main.b-main { padding: 0; max-width: none; }
 }
+
+/* ---------------- Contrôles périodiques (controles.js) ---------------- */
+.ctrl-etat { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 10px auto 0; max-width: 420px; padding: 10px 14px; border-radius: 12px; background: var(--carte); font-size: 15px; font-weight: 600; text-align: left; }
+.ctrl-etat i { flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--retour); }
+.ctrl-etat.bientot { background: color-mix(in srgb, var(--attention) 18%, var(--carte)); }
+.ctrl-etat.bientot i { background: var(--attention); }
+.ctrl-etat.retard { background: color-mix(in srgb, var(--alerte) 14%, var(--carte)); }
+.ctrl-etat.retard i { background: var(--alerte); }
+.fiche .ctrl-etat { justify-content: flex-start; max-width: none; margin: 14px 0 -4px; }
+.ctrl-pastille { display: flex; margin-top: 2px; }
+.ctrl-rythme { display: block; font-size: 13px; font-weight: 600; color: var(--gris); }
+.b-liste .l small .etat { font-size: 14px; }
+.btn[data-ctrl-fait] svg { width: 22px; height: 22px; flex: none; }
+.feuille .champ input[type="date"] { width: 100%; min-width: 0; }
+.feuille-doc table.registre td small { color: #5a626b; }
+/* Démo d'essai d'un prospect (essai.js) ; envoi de sa démo et bilan de son essai dans Mon espace (liste.js) */
+.essai-bandeau { margin: 18px 0 0; padding: 14px 16px; border-radius: 18px; background: var(--carte); box-shadow: inset 0 0 0 2px var(--marque); }
+.essai-bandeau h2 { font-size: 18px; margin: 0 0 6px; }
+.essai-bandeau p { margin: 0 0 8px; font-size: 15px; }
+.essai-bandeau a { color: inherit; font-weight: 700; overflow-wrap: anywhere; }
+.essai-bandeau .boutons { margin-top: 10px; }
+.connexion.en-essai .c-tete { margin-top: 24px; }
+.essai-etat { margin: 10px 0 0; font-weight: 700; font-size: 15px; }
+.essai-envois .btn { flex: 1 1 150px; }
+.essai-retirer { margin: 14px 0 0; text-align: center; font-size: 15px; }
+.essai-retirer .lien { min-height: 44px; color: var(--gris); }
+.bilan-p { display: grid; gap: 0 28px; margin-top: 6px; }
+.bilan-p > div { min-width: 0; }
+.bilan-p h4 { font-size: 15px; margin: 14px 0 0; }
+.bilan-p .lignes-p span { overflow-wrap: anywhere; }
+.bilan-p .lignes-p b { white-space: nowrap; }
+@media (min-width: 720px) { .bilan-p { grid-template-columns: 1fr 1fr; } }
+.zone-tour { display: block; margin-top: 2px; color: var(--compter) !important; font-weight: 700; }
+
+/* ---------------- Stock par lieu (lieux.js) ---------------- */
+.lieux-objet { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 10px auto 0; max-width: 420px; }
+.lieux-objet span { background: var(--carte); border-radius: 999px; padding: 6px 12px; font-size: 14px; font-weight: 600; color: var(--gris); }
+.lieux-objet b { color: var(--encre); font-variant-numeric: tabular-nums; }
+.deux-lieux { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.deux-lieux .champ select, .feuille .champ select[name="lieu"] { width: 100%; min-width: 0; }
+@media (max-width: 360px) { .deux-lieux { grid-template-columns: 1fr; gap: 0; } }
+.choix-lieu { flex: 0 1 auto; min-width: 0; }
+.choix-lieu select { height: 48px; max-width: 100%; border-radius: 999px; border: 2px solid var(--trait); background: var(--carte); color: var(--encre); padding: 0 14px; font: inherit; font-weight: 600; font-size: 16px; }
+.choix-lieu select:focus { border-color: var(--marque); outline: none; }
+.dot-liste { max-height: 46vh; overflow-y: auto; }
+@media print { .choix-lieu { display: none !important; } }
+.feuille-doc .defile { border-radius: 0; }
+@media screen and (max-width: 420px) { .feuille-doc table.etroit { font-size: 12.5px; } .feuille-doc table.etroit th { font-size: 11.5px; padding: 6px 4px; } }
+
+/* ---------------- Tour de qualité du 12 novembre ---------------- */
+/* Au clavier : un bouton qui cache un choix de fichier (photo, logo) montre le focus comme les autres boutons */
+label.btn:focus-within { outline: 3px solid var(--marque); outline-offset: 2px; }
+.hors-ligne.non-enregistre { background: var(--alerte); color: #fff; }
+@media print { .defile { overflow: visible !important; } .ctrl-etat, .lieux-objet { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+.feuille .champ select { width: 100%; min-width: 0; max-width: 100%; }
+/* À 320 px : les boutons du bas d'une feuille tiennent dans leur colonne (« Se déconnecter », « Sortir ») */
+@media (max-width: 360px) {
+  .feuille .valider > .btn { min-width: 0; padding: 0 8px; gap: 6px; font-size: 15px; line-height: 1.15; }
+  .feuille .valider > .btn svg { width: 20px; height: 20px; }
+  .feuille .valider.trois > .btn { padding: 0 4px; gap: 4px; font-size: 14px; }
+}

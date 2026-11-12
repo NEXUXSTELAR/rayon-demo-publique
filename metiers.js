@@ -73,6 +73,12 @@ const METIERS = {
       ["ART-0016", "Visseuse n°1", "visseuse", "pret", 0, 1, 189, 1, "EMP-B1", "FOU-02", 0, "SN-VS-31007"],
       ["ART-0017", "Tube cuivre 14 mm · barre de 2 m", "tube_cuivre", "conso", 10, 40, 16, 5, "EMP-A2", "FOU-03", 2],
     ],
+    // Contrôles périodiques : [nom du contrôle, jours avant l'échéance (négatif = en retard), rythme en mois]
+    controles: { "ART-0009": ["Vérification périodique", 18, 12], "ART-0011": ["Vérification annuelle", -4, 12], "ART-0012": ["Vérification périodique", 200, 12] },
+    // Stock par lieu : [identifiant, nom, { objet: [dotation, quantité chargée] }]
+    lieux: { mot: "Fourgons", geste: "Charger un fourgon", liste: [
+      ["LIEU-01", "Fourgon 1", { "ART-0001": [20, 14], "ART-0003": [2, 2], "ART-0005": [3, 3], "ART-0013": [4, 2], "ART-0014": [2, 2], "ART-0004": [1, 1] }],
+      ["LIEU-02", "Fourgon 2", { "ART-0001": [15, 15], "ART-0013": [5, 5], "ART-0017": [10, 10], "ART-0005": [2, 2] }]] },
     kits: [{ id: "KIT-01", nom: "Kit tableau électrique", lignes: [["ART-0001", 10], ["ART-0003", 1], ["ART-0005", 1]] },
            { id: "KIT-02", nom: "Kit EPI chantier", lignes: [["ART-0010", 1], ["ART-0015", 1], ["ART-0004", 1]] }],
   },
@@ -103,6 +109,7 @@ const METIERS = {
       ["ART-0015", "Gants anti-coupure · paire", "gants", "conso", 10, 40, 6.5, 5, "EMP-C1", "FOU-03", 1.5],
       ["ART-0016", "Lunettes de protection", "lunettes", "conso", 5, 20, 4.5, 1, "EMP-C1", "FOU-03", .3],
     ],
+    controles: { "ART-0005": ["Étalonnage", 150, 12], "ART-0007": ["Étalonnage", -9, 12], "ART-0008": ["Étalonnage", 12, 12], "ART-0009": ["Étalonnage", 26, 12] },
     kits: [{ id: "KIT-01", nom: "Kit de réglage série brides", lignes: [["ART-0002", 1], ["ART-0003", 1], ["ART-0004", 1]] },
            { id: "KIT-02", nom: "Kit EPI atelier", lignes: [["ART-0015", 1], ["ART-0016", 1]] }],
   },
@@ -130,6 +137,9 @@ const METIERS = {
       ["ART-0012", "Souffleur à dos", "souffleur", "pret", 0, 1, 540, 1, "EMP-A1", "FOU-01", 0, "SN-SF-0501"],
       ["ART-0013", "Tronçonneuse n°1", "tronconneuse", "pret", 0, 1, 610, 1, "EMP-A1", "FOU-01", 0, "SN-TR-0801"],
     ],
+    lieux: { mot: "Fourgons", geste: "Charger un fourgon", liste: [
+      ["LIEU-01", "Fourgon 1", { "ART-0001": [10, 5], "ART-0002": [2, 2], "ART-0003": [1, 1], "ART-0004": [5, 5] }],
+      ["LIEU-02", "Fourgon 2", { "ART-0002": [2, 1], "ART-0003": [1, 1], "ART-0004": [5, 5], "ART-0005": [2, 2] }]] },
     kits: [{ id: "KIT-01", nom: "Kit taille équipe", lignes: [["ART-0006", 1], ["ART-0008", 1], ["ART-0009", 1]] },
            { id: "KIT-02", nom: "Kit EPI débroussaillage", lignes: [["ART-0004", 1], ["ART-0005", 1]] }],
   },
@@ -157,6 +167,10 @@ const METIERS = {
       ["ART-0012", "Batterie 18 V n°1", "batterie", "pret", 0, 1, 110, 1, "EMP-A1", "FOU-01", 0, "SN-BT-1801"],
       ["ART-0013", "Batterie 18 V n°2", "batterie", "pret", 0, 1, 110, 1, "EMP-A1", "FOU-01", 0, "SN-BT-1802"],
     ],
+    controles: { "ART-0006": ["Étalonnage", 21, 12], "ART-0009": ["Vérification périodique", 95, 6] },
+    lieux: { mot: "Fourgons", geste: "Charger un fourgon", liste: [
+      ["LIEU-01", "Fourgon 1", { "ART-0001": [12, 8], "ART-0002": [12, 12], "ART-0003": [2, 2], "ART-0004": [3, 2], "ART-0005": [5, 5] }],
+      ["LIEU-02", "Fourgon 2", { "ART-0001": [6, 6], "ART-0002": [6, 6], "ART-0004": [2, 2] }]] },
     kits: [{ id: "KIT-01", nom: "Kit pose de fenêtres", lignes: [["ART-0006", 1], ["ART-0009", 2], ["ART-0010", 1], ["ART-0012", 1]] },
            { id: "KIT-02", nom: "Kit produits de pose", lignes: [["ART-0001", 6], ["ART-0002", 4], ["ART-0003", 1]] }],
   },
@@ -210,6 +224,7 @@ const METIERS = {
       ["ART-0011", "Balance de précision", "balance", "pret", 0, 1, 890, 1, "EMP-L3", "FOU-01", 0, "SN-BL-2081"],
     ],
     lotsCourts: [["ART-0007", 2, 12], ["ART-0001", 4, 25]],
+    controles: { "ART-0010": ["Vérification périodique", 21, 12], "ART-0011": ["Étalonnage", -4, 12] },
     kits: [],
   },
   distribution: {
@@ -281,9 +296,31 @@ const logique = a => a.logique || metier().logique;
 const aDesPrets = () => S.articles.some(a => logique(a) === "pret") && actif("MO-PRET");
 
 /* ---------------- Construire la démo d'un métier ---------------- */
+// Stock par lieu (lieux.js) : les fourgons de la démo, leur dotation, et ce qu'on y a chargé il y a trois jours.
+// Le stock total ne bouge pas : un transfert déplace, il ne consomme pas. Le dépôt garde toujours au moins la moitié.
+function semerLieux(st, d) {
+  const plus = ["Inventaire initial", "Entrée", "Retour", "Ajustement", "Retour réparation"], moins = ["Prêt", "Perte", "Sortie", "Réparation"];
+  const reste = {}; st.articles.forEach(a => { reste[a.id] = st.mouvements.filter(m => m.article === a.id).reduce((t, m) => t + (plus.includes(m.type) ? m.qte : moins.includes(m.type) ? -m.qte : 0), 0); });
+  st.motLieux = d.mot; st.gesteLieu = d.geste;
+  st.lieux = d.liste.map(([id, nom, dot]) => ({ id, nom, dot: Object.fromEntries(Object.entries(dot).map(([k, v]) => [k, v[0]])) }));
+  const quand = new Date(Date.now() - 3 * 86400000).setHours(7, 30, 0, 0); let n = 0;
+  d.liste.forEach(([id, nom, dot], i) => Object.entries(dot).forEach(([aid, [, charge]]) => {
+    const q = Math.min(charge, Math.floor(Math.max(0, reste[aid] || 0) / 2)); if (q <= 0) return;
+    reste[aid] -= q; n += 1;
+    st.mouvements.push({ id: "MV-T" + String(n).padStart(4, "0"), date: quand + i * 600000 + n * 20000, profil: "terrain", qui: i ? "Léa" : "Ousmane", article: aid, type: "Transfert", qte: q, evenement: "", motif: `Dépôt → ${nom}`, de: "", vers: id });
+  }));
+  st.lieuDe = { "U-01": d.liste[0][0], "U-02": (d.liste[1] || d.liste[0])[0] };
+  st.mouvements.sort((a, b) => a.date - b.date);
+}
+// Inventaire tournant : la démo part avec une zone comptée par semaine, la première étant la plus ancienne.
+function semerComptages(st) {
+  const n = st.emplacements.length; st.comptages = {};
+  st.emplacements.forEach((e, i) => { st.comptages[e.id] = Date.now() - ((n - i) * 7 + 2) * 86400000; });
+  return st;
+}
 function construireDemo(m) {
-  if (!METIERS[m] || m === "loueur") { const s = seedMouvements(SEED()); s.metier = "loueur"; return s; }
-  if (METIERS[m].base === "loueur") return habiller(seedMouvements(SEED()), METIERS[m], m);
+  if (!METIERS[m] || m === "loueur") { const s = seedMouvements(SEED()); s.metier = "loueur"; return semerComptages(s); }
+  if (METIERS[m].base === "loueur") return semerComptages(habiller(seedMouvements(SEED()), METIERS[m], m));
   const d = METIERS[m], st = SEED();
   st.metier = m;
   st.entreprise = Object.assign({}, st.entreprise, { nom: d.entreprise, adresse: "Adresse de l'entreprise" });
@@ -299,7 +336,15 @@ function construireDemo(m) {
   const postes = { terrain: d.v.terrain, bureau: d.v.bureau, direction: d.v.direction };
   st.equipe.forEach(u => { u.poste = postes[u.role]; });
   seedAutre(st, d);
-  return st;
+  // Les objets à contrôler : la date tombe toujours au même écart d'aujourd'hui, le dernier contrôle un rythme plus tôt
+  Object.entries(d.controles || {}).forEach(([id, [nom, jours, mois]]) => {
+    const a = st.articles.find(x => x.id === id); if (!a) return;
+    const le = new Date(Date.now() + jours * 86400000), fait = new Date(le); fait.setMonth(fait.getMonth() - mois);
+    const iso = t => { const x = new Date(t); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 10); };
+    Object.assign(a, { ctrlNom: nom, ctrlLe: iso(le), ctrlMois: mois, ctrlFait: iso(fait), ctrlQui: "Karim" });
+  });
+  if (d.lieux) semerLieux(st, d.lieux);
+  return semerComptages(st);
 }
 
 // Une variante du loueur : mêmes gestes et mêmes données, autres objets et autres mots. Les objets sans équivalent sont retirés.
@@ -422,7 +467,7 @@ function tReceptionCmd(id) {
   <form data-form="recep" data-cmd-id="${libre ? "" : c.id}">
   ${libre ? `<label class="champ">Fournisseur<select name="fou">${S.fournisseurs.map(f => `<option value="${f.id}">${esc(f.nom)}</option>`).join("")}</select></label>` : ""}
   <ul class="t-liste">${lignes.map(l => { const a = art(l.id), attendu = l.qte - (l.recu || 0);
-    return `<li><div class="t-retour recep">${img(a)}<span><b>${esc(a.nom)}</b><small>${libre ? "" : `attendu : ${attendu}`}</small>${dlc && a.dlcJours ? `<label class="dlc">Date limite <input type="date" name="dlc-${a.id}" value="${new Date(Date.now() + a.dlcJours * 86400000).toISOString().slice(0, 10)}"></label>` : ""}</span>
+    return `<li><div class="t-retour recep">${img(a)}<span><b>${esc(a.nom)}</b><small>${libre ? "" : `attendu : ${attendu}${parLots(a.id, attendu) ? ", soit " + parLots(a.id, attendu) : ""}`}</small>${dlc && a.dlcJours ? `<label class="dlc">Date limite <input type="date" name="dlc-${a.id}" value="${new Date(Date.now() + a.dlcJours * 86400000).toISOString().slice(0, 10)}"></label>` : ""}</span>
     <input type="number" inputmode="numeric" min="0" name="${a.id}" value="${libre ? 0 : attendu}" aria-label="Reçu : ${esc(a.nom)}"></div></li>`; }).join("")}</ul>
   <label class="btn" style="margin-top:12px">Photographier le bon de livraison<input type="file" accept="image/*" capture="environment" data-photo-bl class="cache"></label>
   <p class="sous" data-bl-etat style="margin-top:6px"></p>
@@ -471,4 +516,5 @@ function changerMetier(m) {
   S = construireDemo(m); Object.assign(S, garder); sauver();
   if (session) { const u = S.equipe.find(x => x.id === session.uid); if (u) session.nom = u.nom; }
   rendre(); toast(`Démo : ${METIERS[m].nom}.`);
+  if (typeof garderPhotos === "function") garderPhotos();
 }

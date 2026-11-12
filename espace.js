@@ -93,6 +93,7 @@ function normaliserP(s) {
     if (!c.etapes || typeof c.etapes !== "object") c.etapes = {};
     c.heuresPassees = +c.heuresPassees || 0; c.heuresEstimees = +c.heuresEstimees || 0;
     if (c.liste && !(Array.isArray(c.liste.articles) && c.liste.articles.length && c.liste.articles.every(a => a && a.nom && Array.isArray(a.lots)))) delete c.liste;
+    if (c.essai && (typeof c.essai !== "object" || (c.essai.retour && !Array.isArray(c.essai.retour.gestes)))) delete c.essai;
     return c;
   });
   return s;
@@ -627,6 +628,7 @@ function feuilleDevisP(id) {
 }
 
 function brancherEspace() {
+  if (typeof brancherEssai === "function") brancherEssai(); // la démo d'essai d'un prospect (essai.js), sur tous les écrans
   if (!installateur || session) return;
   $$("[data-e]").forEach(b => b.onclick = () => { if (b.dataset.filtreVers) { filtreP = b.dataset.filtreVers; chercheP = ""; } allerE(b.dataset.e, b.dataset.earg || null, b.hasAttribute("data-racine-e")); });
   $$("[data-filtre-p]").forEach(b => b.onclick = () => { filtreP = b.dataset.filtreP; rendre(); });

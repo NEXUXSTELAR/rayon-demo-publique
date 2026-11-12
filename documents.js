@@ -205,17 +205,17 @@ function texteDevisLocation(id) {
 }
 
 /* ---------------- Exports Excel ---------------- */
-const NOMS_GESTES = { "Prêt": "Sortie (prêt)", "Retour": "Retour", "Sortie": "Sortie", "Entrée": "Entrée", "Perte": "Perte ou casse", "Ajustement": "Correction de comptage", "Inventaire initial": "Inventaire initial", "Réparation": "Envoi à l'atelier", "Retour réparation": "Retour de l'atelier" };
+const NOMS_GESTES = { "Prêt": "Sortie (prêt)", "Retour": "Retour", "Sortie": "Sortie", "Entrée": "Entrée", "Perte": "Perte ou casse", "Ajustement": "Correction de comptage", "Inventaire initial": "Inventaire initial", "Réparation": "Envoi à l'atelier", "Retour réparation": "Retour de l'atelier", "Contrôle": "Contrôle périodique", "Transfert": "Transfert entre lieux" };
 const sousTitreExport = () => `Exporté le ${new Date().toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" })} par ${moi().nom || "?"} · ${S.monnaie === "XOF" ? "montants en francs CFA" : "montants en euros"}`;
 const nomEntreprise = () => (S.entreprise || {}).nom || "Stock";
 const fichier = n => `${nomEntreprise().replace(/\s*\(démo\)/, "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase()}-${n.normalize("NFD").replace(/[\u0300-\u036f]/g, "")}-${aujourdHui()}.xlsx`;
 function exporterJournal() {
   const cp = complet(), prix = droit("prix");
   const colonnes = [{ t: "Date et heure", l: 17, f: "dateheure" }, { t: "Par", l: 12 }, { t: "Geste", l: 22 }, { t: "Code", l: 11 }, { t: "Objet", l: 32 }, { t: "Quantité", l: 10, f: "entier", somme: false }, { t: V("imp"), l: 30 }]
-    .concat(cp ? [{ t: motClients().replace(/s$/, ""), l: 26 }, { t: "Motif", l: 24 }] : [], prix ? [{ t: "Valeur", l: 14, f: "argent", somme: false }] : []);
+    .concat(lieuxActifs() ? [{ t: "Lieu", l: 22 }] : [], cp ? [{ t: motClients().replace(/s$/, ""), l: 26 }, { t: "Motif", l: 24 }] : [], prix ? [{ t: "Valeur", l: 14, f: "argent", somme: false }] : []);
   const lignes = S.mouvements.slice().sort((a, b) => a.date - b.date).map(m => {
     const ev = m.evenement || m.imputation || "", c = ev ? clientDe(ev) : null;
-    return [m.date, m.qui || "", (NOMS_GESTES[m.type] || m.type) + (m.annule ? " (annulation)" : ""), m.article, art(m.article).nom, m.qte, ev].concat(cp ? [c ? c.nom : "", m.motif || ""] : [], prix ? [valeurM(m)] : []);
+    return [m.date, m.qui || "", (NOMS_GESTES[m.type] || m.type) + (m.annule ? " (annulation)" : ""), m.article, art(m.article).nom, m.qte, ev].concat(lieuxActifs() ? [m.type === "Transfert" ? `${nomLieu(m.de)} → ${nomLieu(m.vers)}` : nomLieu(m.lieu || "")] : [], cp ? [c ? c.nom : "", m.motif || ""] : [], prix ? [m.type === "Transfert" ? 0 : valeurM(m)] : []);
   });
   telechargerXlsx(fichier("journal"), [{ nom: "Journal", titre: `${nomEntreprise()} · Journal des mouvements`, sousTitre: sousTitreExport() + ". Rien ne s'efface : une erreur se corrige par une nouvelle ligne.", colonnes, lignes }]);
   toast("Journal exporté en Excel.");

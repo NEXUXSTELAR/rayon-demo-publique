@@ -66,12 +66,14 @@ let pile = [];            // écrans précédents, pour le bouton retour
 /* ---------------- Stockage ---------------- */
 function charger() {
   try { const b = localStorage.getItem(CLE); if (b) { const s = JSON.parse(b); if (s.version === 13) return s; } } catch (e) { /* stockage bloqué : données de démo */ }
-  return seedMouvements(SEED());
+  return semerComptages(seedMouvements(SEED()));
 }
-function sauver() { try { localStorage.setItem(CLE, JSON.stringify(S)); } catch (e) { /* mode privé */ } }
+// Si le téléphone refuse d'enregistrer (mémoire pleine, navigation privée), l'en-tête le dit : sans cela les gestes se perdraient en silence.
+let nonEnregistre = false;
+function sauver() { try { localStorage.setItem(CLE, JSON.stringify(S)); nonEnregistre = false; } catch (e) { nonEnregistre = true; } }
 
 /* ---------------- Calculs ---------------- */
-const SIGNE = { "Inventaire initial": 1, "Entrée": 1, "Retour": 1, "Prêt": -1, "Perte": -1, "Sortie": -1, "Ajustement": 1, "Réparation": -1, "Retour réparation": 1 };
+const SIGNE = { "Inventaire initial": 1, "Entrée": 1, "Retour": 1, "Prêt": -1, "Perte": -1, "Sortie": -1, "Ajustement": 1, "Réparation": -1, "Retour réparation": 1, "Contrôle": 0, "Transfert": 0 };
 const art = id => S.articles.find(a => a.id === id);
 const actif = c => !!S.modules[c];
 const stock = id => S.mouvements.filter(m => m.article === id).reduce((t, m) => t + SIGNE[m.type] * m.qte, 0);
@@ -341,11 +343,12 @@ const VUES = () => ({
   materiel: bMateriel, fiche: bFiche, commandes: bCommandes, journal: bJournal, docs: bDocs, etiquettes: bEtiquettes,
   inventairePapier: bInventairePapier, refacturer: bRefacturer, rapport: dRapport, installation: dInstallation, equipe: dEquipe,
   reservations: bReservations, reservation: bReservation, clients: bClients, client: vClient, devisLoc: vDevisLocation,
+  controles: vRegistreControles, lieux: vLieux, lieu: vLieu, ficheLieu: vFicheLieu,
 });
 // Les écrans du dépôt restent sur une colonne étroite, même sur ordinateur.
-const ETROITS = new Set(["tournee", "depot", "objet", "kits", "recuperer", "retourEv", "chercher", "jour", "bon", "preparer", "preparation", "reception", "receptionCmd", "zones", "zone"]);
-const PARENT = { client: "clients", devisLoc: "reservations", fiche: "materiel", reservation: "reservations", etiquettes: "docs", inventairePapier: "docs", refacturer: "docs", rapport: "docs", retourEv: "recuperer", preparation: "preparer", receptionCmd: "reception", zone: "zones" };
-const TITRES = { client: "Client", devisLoc: "Devis de location", objet: "Objet", fiche: "Fiche de l'objet", bon: "Bon", facture: "Facture de casse", reservation: "Réservation", retourEv: "Retour", preparation: "Préparation", receptionCmd: "Réception", zone: "Comptage", etiquettes: "Étiquettes", inventairePapier: "Inventaire", refacturer: "À refacturer", rapport: "Rapport" };
+const ETROITS = new Set(["tournee", "depot", "objet", "kits", "recuperer", "retourEv", "chercher", "jour", "bon", "preparer", "preparation", "reception", "receptionCmd", "zones", "zone", "lieux", "lieu"]);
+const PARENT = { client: "clients", devisLoc: "reservations", fiche: "materiel", reservation: "reservations", etiquettes: "docs", inventairePapier: "docs", refacturer: "docs", rapport: "docs", controles: "docs", lieu: "lieux", ficheLieu: "lieux", retourEv: "recuperer", preparation: "preparer", receptionCmd: "reception", zone: "zones" };
+const TITRES = { client: "Client", devisLoc: "Devis de location", objet: "Objet", fiche: "Fiche de l'objet", bon: "Bon", facture: "Facture de casse", reservation: "Réservation", retourEv: "Retour", preparation: "Préparation", receptionCmd: "Réception", zone: "Comptage", etiquettes: "Étiquettes", inventairePapier: "Inventaire", refacturer: "À refacturer", rapport: "Rapport", controles: "Contrôles", lieu: "Contenu du lieu", ficheLieu: "Fiche du lieu" };
 const sectionsPermises = () => Object.keys(SECTIONS).filter(k => k !== "accueil" && permis(k));
 
 function coque() {
@@ -372,7 +375,7 @@ function coque() {
     <header class="haut verre">
       ${nom === "accueil" ? `<div class="marque">${e.logo ? `<img src="${e.logo}" alt="" class="logo-client">` : I.logo}</div>` : `<button class="rond" data-act="retour" aria-label="Retour">${I.precedent}</button>`}
       <b class="haut-titre">${nom === "accueil" ? `<span class="ht-tel">${titre}</span><span class="ht-ordi">Accueil</span>` : titre}</b>
-      <form class="haut-cherche" data-form="rapide" role="search"><label class="recherche">${I.loupe}<span class="cache">Chercher un objet ou taper le code d'une étiquette</span><input type="search" name="q" placeholder="Chercher un objet, ou taper un code" autocomplete="off" autocapitalize="none" spellcheck="false"></label></form>${navigator.onLine === false ? `<span class="hors-ligne" title="Vos gestes sont gardés sur le téléphone et partiront au retour du réseau">Hors ligne</span>` : ""}
+      <form class="haut-cherche" data-form="rapide" role="search"><label class="recherche">${I.loupe}<span class="cache">Chercher un objet ou taper le code d'une étiquette</span><input type="search" name="q" placeholder="Chercher un objet, ou taper un code" autocomplete="off" autocapitalize="none" spellcheck="false"></label></form>${nonEnregistre ? `<span class="hors-ligne non-enregistre" role="status" title="Ce téléphone refuse d'enregistrer : mémoire pleine ou navigation privée. Ce que vous faites sera perdu à la fermeture.">Non enregistré</span>` : navigator.onLine === false ? `<span class="hors-ligne" role="status" title="L'appli continue sans réseau. Vos gestes sont gardés sur ce téléphone.">Hors ligne</span>` : ""}
       <div class="outils"><button class="rond" data-act="verrouiller" aria-label="Verrouiller l'écran">${I.cadenas}</button><button class="avatar-btn" data-act="plus" aria-label="Mon compte et tous les écrans">${avatar(u)}</button></div>
     </header>
     <main class="${ETROITS.has(nom) ? "t-main" : "b-main"}">${corps}</main>
@@ -398,7 +401,7 @@ function feuillePlus() {
 /* Accueil : une salutation, puis les blocs choisis pour ce rôle dans cette entreprise. */
 function vAccueil() {
   const u = moi(), h = new Date().getHours();
-  return `<div class="salut"><p class="date">${dateLongue(aujourdHui())}</p><h1>${h >= 18 || h < 5 ? "Bonsoir" : "Bonjour"} ${esc(u.nom)}</h1></div>${bento(cfg().accueil, window.innerWidth < 720 && !toutVoir ? 6 : 0)}`;
+  return `<div class="salut"><p class="date">${dateLongue(aujourdHui())}</p><h1>${h >= 18 || h < 5 ? "Bonsoir" : "Bonjour"} ${esc(u.nom)}</h1></div>${bento(accueilAvecControles(cfg().accueil), window.innerWidth < 720 && !toutVoir ? 6 : 0)}`;
 }
 // Les gestes du magasinier, ouverts à toute l'équipe.
 const vDepot = () => `<h1>Au dépôt</h1><p class="sous">Scanner, sortir, rentrer, compter : ce que fait le magasinier, chacun peut le faire.</p>${wScan()}${wActions()}`;
@@ -415,10 +418,11 @@ function tObjet(id) {
   const actions = (c.html || "") + (c.mvt === b2[0] ? bouton(b2) + bouton(b1) : bouton(b1) + bouton(b2));
   return `<div class="t-objet">${img(a)}<span class="code">${a.id}</span><h1>${esc(a.nom)}</h1>
     ${jauge}<div style="margin-top:8px"><span class="etat ${e.c}"><i></i>${e.t}</span></div>
-
+    ${ligneControle(a)}${ligneLieux(a)}
     ${lots.length ? `<p class="lot-premier">À sortir en premier : ${lots[0].qte} avec date limite au <b>${dateFr(lots[0].dlc)}</b></p>` : ""}</div>
   <div class="t-actions">${actions}
     <button class="t-action compter" data-mvt="Compter">${I.compter}<span>Compter<small>Je vérifie combien il y en a</small></span></button>
+    ${boutonControleFait(a)}${boutonTransfert(a)}
     ${pret ? `<button class="btn" data-atelier="${a.id}">À réparer ou à nettoyer${totalAtelier(id) ? ` (${totalAtelier(id)} déjà à l'atelier)` : ""}</button>` : ""}
     <button class="t-action perte" data-mvt="Perte">${I.perte}<span>${metier().dlc ? "Périmé, cassé ou perdu" : "Cassé ou perdu"}</span></button>
     ${permis("materiel") ? `<button class="btn" data-fiche="${a.id}">${I.materiel}Fiche complète : ${droit("prix") ? "prix, " : ""}historique, entrée en stock</button>` : ""}
@@ -447,12 +451,12 @@ function tJour() {
   const debut = new Date(); debut.setHours(0, 0, 0, 0);
   const l = S.mouvements.filter(m => m.date >= debut.getTime() && m.qui === session.nom).reverse();
   return `<h1>Ma journée</h1><p class="sous">${l.length} enregistrement${l.length > 1 ? "s" : ""} aujourd'hui.</p>
-  <ul class="t-liste">${l.map(m => { const a = art(m.article); return `<li><button data-objet="${a.id}">${img(a)}<span><b>${esc(m.type)} · ${esc(a.nom)}</b><small>${quand(m.date)}${(m.evenement || m.imputation) ? " · " + esc(m.evenement || m.imputation) : ""}</small></span><span class="n">${m.qte}</span></button></li>`; }).join("") || `<li class="vide">Rien encore aujourd'hui. Scannez un objet pour commencer.</li>`}</ul>`;
+  <ul class="t-liste">${l.map(m => { const a = art(m.article); return `<li><button data-objet="${a.id}">${img(a)}<span><b>${esc(m.type)} · ${esc(a.nom)}</b><small>${quand(m.date)}${(m.evenement || m.imputation) ? " · " + esc(m.evenement || m.imputation) : ""}</small></span><span class="n">${m.type === "Contrôle" ? "" : m.qte}</span></button></li>`; }).join("") || `<li class="vide">Rien encore aujourd'hui. Scannez un objet pour commencer.</li>`}</ul>`;
 }
 function tKits() {
   return `<h1>Sortir un kit</h1><p class="sous">Choisissez le kit, puis indiquez le nombre et la destination (${motImp()}).</p>
   <ul class="t-liste">${S.kits.map(k => {
-    const ok = k.lignes.every(([id, q]) => stock(id) >= q);
+    const ok = k.lignes.every(([id, q]) => stockIci(id) >= q);
     return `<li><button data-kit="${k.id}">${pic(I.kit)}<span><b>${esc(k.nom)}</b><small>${k.lignes.map(([id, q]) => q + " × " + esc(art(id).nom)).join(" · ")}</small></span><span class="etat ${ok ? "" : "zero"}"><i></i></span></button></li>`;
   }).join("")}</ul>`;
 }
@@ -498,15 +502,17 @@ function blocPeremption() {
 }
 function bMateriel(f) {
   f = f || "tous";
+  if (f === "controle" && !suiviControles()) f = "tous";
   const ids = new Set(dehors().map(d => d.article));
-  const l = S.articles.filter(a => f === "tous" || (f === "alerte" && ["zero", "bas"].includes(etat(a).c)) || (f === "dehors" && ids.has(a.id)));
-  const vide = f === "alerte" ? "Rien à commander : tout est au-dessus du seuil." : f === "dehors" ? "Tout est rentré." : "Aucun objet pour l'instant.";
-  const compte = k => k === "tous" ? S.articles.length : k === "alerte" ? S.articles.filter(a => ["zero", "bas"].includes(etat(a).c)).length : ids.size;
+  const ctrl = suiviControles() ? aControler() : [];
+  const l = (f === "controle" ? ctrl : S.articles.filter(a => f === "tous" || (f === "alerte" && ["zero", "bas"].includes(etat(a).c)) || (f === "dehors" && ids.has(a.id)))).filter(dansLieuStock);
+  const vide = f === "alerte" ? "Rien à commander : tout est au-dessus du seuil." : f === "dehors" ? "Tout est rentré." : f === "controle" ? "Aucun contrôle en retard ni à faire dans les 30 jours." : "Aucun objet pour l'instant.";
+  const compte = k => k === "tous" ? S.articles.length : k === "alerte" ? S.articles.filter(a => ["zero", "bas"].includes(etat(a).c)).length : k === "controle" ? ctrl.length : ids.size;
   return `<h1>${esc(titreSection("materiel"))}</h1>
-  <div class="outils-liste"><div class="filtres">${[["tous", "Tout"], ["alerte", "À commander"]].concat(aDesPrets() ? [["dehors", V("chez")]] : []).map(([k, t]) => `<button data-filtre-materiel="${k}" aria-pressed="${f === k}">${t}<span class="nb">${compte(k)}</span></button>`).join("")}</div>
-  ${champFiltre("#liste-materiel", exempleRecherche())}<span class="filtre-compte" data-filtre-compte role="status"></span></div>
-  <ul class="b-liste" id="liste-materiel">${l.map(a => { const e = etat(a); return `<li data-cherche="${cherchable(a.nom, a.id, zoneDe(a), e.t)}"><button class="l" data-fiche="${a.id}">${img(a)}<span><b>${esc(a.nom)}</b><small><span class="code">${a.id}</span> · <span class="etat ${e.c}"><i></i>${e.t}</span></small></span><span class="l-zone">${esc(zoneDe(a))}</span><span class="n">${stock(a.id)}</span></button></li>`; }).join("")}
-  <li class="vide" data-rien ${l.length ? "hidden" : ""}>${l.length ? "Aucun objet ne correspond à cette recherche." : vide}</li></ul>`;
+  <div class="outils-liste"><div class="filtres">${[["tous", "Tout"], ["alerte", "À commander"]].concat(aDesPrets() ? [["dehors", V("chez")]] : [], suiviControles() ? [["controle", "À contrôler"]] : []).map(([k, t]) => `<button data-filtre-materiel="${k}" aria-pressed="${f === k}">${t}<span class="nb">${compte(k)}</span></button>`).join("")}</div>
+  ${champFiltre("#liste-materiel", exempleRecherche())}${choixLieuStock()}<span class="filtre-compte" data-filtre-compte role="status"></span></div>
+  <ul class="b-liste" id="liste-materiel">${l.map(a => { const e = etat(a); return `<li data-cherche="${cherchable(a.nom, a.id, zoneDe(a), e.t)}"><button class="l" data-fiche="${a.id}">${img(a)}<span><b>${esc(a.nom)}</b><small><span class="code">${a.id}</span> · <span class="etat ${e.c}"><i></i>${e.t}</span>${pastilleControle(a, f === "controle")}</small></span><span class="l-zone">${esc(zoneDe(a))}</span><span class="n">${qteStock(a)}</span></button></li>`; }).join("")}
+  <li class="vide" data-rien ${l.length ? "hidden" : ""}>${l.length ? "Aucun objet ne correspond à cette recherche." : filtreLieuActif() ? `Rien ici : ${esc(nomLieu(lieuStock))}.` : vide}</li></ul>`;
 }
 function bFiche(id) {
   const a = art(id); if (!a) return "<p>Introuvable.</p>";
@@ -514,12 +520,15 @@ function bFiche(id) {
   return `<div class="fiche">${img(a)}<div>
     <div class="entete"><div><span class="code">${a.id}</span><h1>${esc(a.nom)}</h1><span class="etat ${e.c}"><i></i>${e.t}</span></div>
     ${a.type === "equip" ? "" : anneau(q, a.cible, couleurEtat(e), q, "sur " + a.cible, true)}</div>
+    ${ligneControle(a)}
     <dl><div><dt>En stock</dt><dd>${q}</dd></div>${logique(a) === "pret" ? `<div><dt>${V("chez")}</dt><dd>${d.reduce((t, x) => t + x.qte, 0)}</dd></div>` : `<div><dt>${V("sortiesMot")} en 30 jours</dt><dd>${S.mouvements.filter(m => m.article === id && m.type === "Sortie" && m.date >= Date.now() - 30 * 86400000).reduce((t, m) => t + m.qte, 0)}</dd></div>`}
       <div><dt>Seuil d'alerte</dt><dd>${a.seuil}</dd></div><div><dt>Niveau normal</dt><dd>${a.cible}</dd></div>
       ${droit("prix") ? `<div><dt>Prix unitaire</dt><dd>${argent(a.prix)}</dd></div><div><dt>Valeur au dépôt</dt><dd>${argent(Math.max(0, q) * a.prix)}</dd></div>` : ""}
-      ${a.serie ? `<div><dt>N° de série</dt><dd class="code">${a.serie}</dd></div>` : ""}</dl>
-    <div class="boutons">${totalAtelier(id) ? `<p class="sous" style="width:100%;margin:0 0 6px">À l'atelier : ${aLAtelier(id).map(x => x.qte + " " + (x.motif === "Au nettoyage" ? "au nettoyage" : "en réparation")).join(", ")}</p>` : ""}<button class="btn petit" data-atelier="${a.id}">Envoyer à l'atelier</button><button class="btn petit" data-mvt="Entrée">Entrée en stock</button><button class="btn petit" data-mvt="Compter">Compter</button><button class="btn petit" data-mvt="Perte">Perte</button></div>
+      ${a.serie ? `<div><dt>N° de série</dt><dd class="code">${a.serie}</dd></div>` : ""}${detailsControle(a)}</dl>
+    <div class="boutons">${totalAtelier(id) ? `<p class="sous" style="width:100%;margin:0 0 6px">À l'atelier : ${aLAtelier(id).map(x => x.qte + " " + (x.motif === "Au nettoyage" ? "au nettoyage" : "en réparation")).join(", ")}</p>` : ""}<button class="btn petit" data-atelier="${a.id}">Envoyer à l'atelier</button><button class="btn petit" data-mvt="Entrée">Entrée en stock</button><button class="btn petit" data-mvt="Compter">Compter</button><button class="btn petit" data-mvt="Perte">Perte</button>${boutonTransfert(a, true)}${boutonsControle(a)}</div>
   </div></div>
+  ${blocLieuxFiche(a)}
+  ${blocRentabilite(a)}
   ${metier().dlc && lotsEnStock(id).length ? `<h2>Lots en stock</h2><table class="t"><tbody>${lotsEnStock(id).map(l => `<tr><td>Date limite au ${dateFr(l.dlc)}</td><td class="n">${l.qte}</td></tr>`).join("")}</tbody></table>` : ""}
   ${d.length ? `<h2>Chez qui</h2><table class="t"><tbody>${d.map(x => `<tr><td>${esc(x.evenement)}</td><td class="n">${x.qte}</td></tr>`).join("")}</tbody></table>` : ""}
   <h2>Historique</h2>${tableMouvements(S.mouvements.filter(m => m.article === id).slice(-10).reverse(), false)}`;
@@ -527,18 +536,18 @@ function bFiche(id) {
 function tableMouvements(l, avecObjet) {
   if (!l.length) return `<p class="vide">Aucun mouvement.</p>`;
   return `<div class="defile"><table class="t mvts${avecObjet ? " avec-objet" : ""}"><thead><tr><th>Quand</th><th>Qui</th><th>Quoi</th>${avecObjet ? "<th>Objet</th>" : ""}<th class="n">Qté</th></tr></thead><tbody>
-  ${l.map(m => `<tr><td class="m-quand">${quand(m.date)}</td><td class="m-qui">${esc(m.qui || PROFILS[m.profil].nom)}</td><td class="m-quoi">${esc(m.type)}${(m.evenement || m.imputation) ? "<br><small>" + esc(m.evenement || m.imputation) + "</small>" : ""}${m.motif ? "<br><small>" + esc(m.motif) + "</small>" : ""}</td>${avecObjet ? `<td class="m-objet">${esc(art(m.article).nom)}</td>` : ""}<td class="n m-qte">${qteSignee(m)}</td></tr>`).join("")}</tbody></table></div>`;
+  ${l.map(m => `<tr><td class="m-quand">${quand(m.date)}</td><td class="m-qui">${esc(m.qui || PROFILS[m.profil].nom)}</td><td class="m-quoi">${esc(m.type)}${(m.evenement || m.imputation) ? "<br><small>" + esc(m.evenement || m.imputation) + "</small>" : ""}${m.motif ? "<br><small>" + esc(m.motif) + "</small>" : ""}${lieuMv(m)}</td>${avecObjet ? `<td class="m-objet">${esc(art(m.article).nom)}</td>` : ""}<td class="n m-qte">${qteSignee(m)}</td></tr>`).join("")}</tbody></table></div>`;
 }
 // La quantité porte son sens : + ce qui entre au dépôt, − ce qui en sort.
-const qteSignee = m => { const v = (SIGNE[m.type] || 1) * m.qte; return (v < 0 ? "−" : "+") + Math.abs(v).toLocaleString("fr-FR"); };
+const qteSignee = m => { if (m.type === "Contrôle") return ""; if (m.type === "Transfert") return (m.qte < 0 ? "−" : "") + Math.abs(m.qte).toLocaleString("fr-FR"); const v = (SIGNE[m.type] || 1) * m.qte; return (v < 0 ? "−" : "+") + Math.abs(v).toLocaleString("fr-FR"); };
 /* Journal : les 60 derniers mouvements, un filtre par geste et une recherche (objet, personne, lieu, motif). */
-const GESTES_JOURNAL = { sorties: ["Prêt", "Sortie"], entrees: ["Retour", "Entrée", "Inventaire initial"], pertes: ["Perte"], comptages: ["Ajustement"], atelier: ["Réparation", "Retour réparation"] };
+const GESTES_JOURNAL = { sorties: ["Prêt", "Sortie"], entrees: ["Retour", "Entrée", "Inventaire initial"], pertes: ["Perte"], comptages: ["Ajustement"], atelier: ["Réparation", "Retour réparation"], controles: ["Contrôle"], transferts: ["Transfert"] };
 function lignesJournal() {
   const types = GESTES_JOURNAL[jr.type], mots = sansAccent(jr.q.trim()).split(/\s+/).filter(Boolean);
   return S.mouvements.filter(m => {
     if (types && !types.includes(m.type)) return false;
     if (!mots.length) return true;
-    const a = art(m.article), t = sansAccent([a ? a.nom : "", m.article, m.type, m.qui, m.evenement, m.imputation, m.motif].filter(Boolean).join(" "));
+    const a = art(m.article), t = sansAccent([a ? a.nom : "", m.article, m.type, m.qui, m.evenement, m.imputation, m.motif, m.lieu ? nomLieu(m.lieu) : ""].filter(Boolean).join(" "));
     return mots.every(x => t.includes(x));
   }).reverse().sort((a, b) => b.date - a.date);
 }
@@ -553,15 +562,18 @@ function brancherJournal() {
   const plus = boite.querySelector("[data-journal-plus]"); if (plus) plus.onclick = () => { jr.n += 60; boite.innerHTML = corpsJournal(); brancherJournal(); };
 }
 const bJournal = () => `<h1>Journal</h1><p class="sous">Tout est gardé. Une erreur se corrige par un nouveau mouvement, jamais en effaçant.</p>
-  <div class="outils-liste"><div class="filtres">${[["tous", "Tout"], ["sorties", "Sorties"], ["entrees", "Entrées et retours"], ["pertes", "Pertes"], ["comptages", "Comptages"]].map(([k, t]) => `<button data-journal-type="${k}" aria-pressed="${jr.type === k}">${t}</button>`).join("")}</div>
+  <div class="outils-liste"><div class="filtres">${[["tous", "Tout"], ["sorties", "Sorties"], ["entrees", "Entrées et retours"], ["pertes", "Pertes"], ["comptages", "Comptages"]].concat(lieuxActifs() ? [["transferts", "Transferts"]] : [], suiviControles() ? [["controles", "Contrôles"]] : []).map(([k, t]) => `<button data-journal-type="${k}" aria-pressed="${jr.type === k}">${t}</button>`).join("")}</div>
   <label class="recherche">${I.loupe}<span class="cache">Chercher dans le journal</span><input type="search" data-journal-q value="${esc(jr.q)}" placeholder="Objet, personne, ${esc((V("imp") || "lieu").toLowerCase())}…" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="search"></label></div>
   <div data-journal>${corpsJournal()}</div>`;
+// « 6 lots de 10 » quand l'objet se commande par lots entiers, rien sinon.
+const parLots = (id, qte) => { const lot = art(id).lot || 1; return lot > 1 && qte > 0 && qte % lot === 0 ? `${qte / lot} lot${qte / lot > 1 ? "s" : ""} de ${lot}` : ""; };
 function brouillons() {
   const f = {};
   // Un brouillon déjà envoyé depuis cet écran ne se propose pas une seconde fois tant que la livraison est attendue.
   const dejaEnvoye = new Set(S.commandes.filter(c => c.deBrouillon && ["Envoyée", "Reçue en partie"].includes(c.statut)).flatMap(c => c.lignes.map(x => x.id)));
   S.articles.filter(a => a.type === "conso" && stock(a.id) <= a.seuil && !dejaEnvoye.has(a.id)).forEach(a => {
-    const q = a.cible - stock(a.id); if (q > 0) (f[a.fou] = f[a.fou] || []).push({ id: a.id, qte: q });
+    // On commande par lots entiers : un objet conditionné par 10 se commande par 10, arrondi au lot du dessus.
+    const lot = a.lot > 1 ? a.lot : 1, q = Math.ceil((a.cible - stock(a.id)) / lot) * lot; if (q > 0) (f[a.fou] = f[a.fou] || []).push({ id: a.id, qte: q });
   });
   return f;
 }
@@ -573,7 +585,7 @@ function bCommandes() {
     const tot = l.reduce((t, x) => t + x.qte * art(x.id).prix, 0);
     const attente = S.commandes.find(c => c.fid === fid && c.statut === "À valider");
     return `<section class="bon"><header><b>${esc(f.nom)}</b><span>Brouillon · délai ${f.delai} j</span></header>
-      <table class="t"><tbody>${l.map(x => `<tr><td>${esc(art(x.id).nom)}</td><td class="n">${x.qte}</td><td class="n">${argent(x.qte * art(x.id).prix)}</td></tr>`).join("")}</tbody></table>
+      <table class="t"><tbody>${l.map(x => `<tr><td>${esc(art(x.id).nom)}${parLots(x.id, x.qte) ? `<br><small>${parLots(x.id, x.qte)}</small>` : ""}</td><td class="n">${x.qte}</td><td class="n">${argent(x.qte * art(x.id).prix)}</td></tr>`).join("")}</tbody></table>
       <p style="text-align:right;font-weight:800;font-size:20px">${argent(tot)} HT</p>
       ${attente ? `<p class="sous">En attente de l'accord du gérant.</p>` : tot > SEUIL_VALIDATION_EUR ? `<button class="btn" data-cmd="${fid}" data-statut="À valider">Demander l'accord du gérant</button>` : `<button class="btn plein" data-cmd="${fid}" data-statut="Envoyée">Envoyer au fournisseur</button>`}
     </section>`;
@@ -594,7 +606,8 @@ function bDocs() {
   const argent_ = [["rapport", I.argent, "Rapport du mois", "Valeur, pertes, refacturable, à imprimer ou garder en PDF"], ["refacturer", I.perte, "Manquants à refacturer", `Par ${motImp()}, avec les montants et les factures`]];
   const excel = [["csv", I.excel, "Journal des mouvements", cp ? "Excel : qui, quoi, quand, pour qui, avec la valeur" : "Excel : tous les gestes enregistrés"], ["finAnnee", I.excel, "Inventaire de fin d'année", cp ? "Excel en trois onglets : résumé, stock valorisé, pertes" : "Excel : stock valorisé et pertes de l'année"]]
     .concat(cp && (loueur || (S.clientsLoc || []).length) ? [["exportClients", I.excel, motClients() + " et " + motImps(), `Excel : coordonnées, cautions, casse par ${motImp()}`]] : []);
-  const d = session.profil === "direction" ? argent_.concat(excel) : papier.concat(argent_.slice(1), excel);
+  const registre = suiviControles() ? [["controles", PICTO_CONTROLE, "Registre des contrôles", "Échéances, dernier contrôle et par qui, à imprimer"]] : [];
+  const d = session.profil === "direction" ? argent_.concat(registre, excel) : papier.concat(registre, argent_.slice(1), excel);
   const acte = k => ["csv", "finAnnee", "exportClients"].includes(k);
   return `<h1>Documents</h1><p class="sous">Ce que vous pouvez imprimer, envoyer ou transmettre. Les fichiers Excel s'ouvrent aussi dans Google Sheets et LibreOffice.</p>
   <div class="docs">${d.map(([k, ic, t, s_]) => `<button class="doc-carte" ${acte(k) ? `data-act="${k}"` : `data-aller="${k}"`}><span class="pastille ${acte(k) ? "excel" : ""}">${ic}</span><span><b>${t}</b><small>${s_}</small></span></button>`).join("")}</div>`;
@@ -605,7 +618,7 @@ const bEtiquettes = () => `${retourDocs}<div class="pas-imprimer"><h1>Planche d'
   <div class="planche">${S.articles.map(a => `<div class="etiquette"><div data-qr="${a.id}"></div><div><b>${esc(a.nom)}</b><span class="code">${a.id}</span><small class="proprio">Propriété de ${esc((S.entreprise || {}).nom || "l'entreprise")}</small></div></div>`).join("")}</div>`;
 const bInventairePapier = () => `${retourDocs}<div class="feuille-doc">${enTeteDoc()}<h1>Fiche d'inventaire</h1><p>Date : ____ / ____ / ________ · Compté par : ______________________</p>
   ${S.emplacements.map(e => `<h2 style="font-size:17px">${esc(e.nom)}</h2><table><thead><tr><th class="code">Code</th><th>Objet</th><th>Attendu</th><th>Compté</th></tr></thead><tbody>
-  ${S.articles.filter(a => a.emp === e.id).map(a => `<tr><td>${a.id}</td><td>${esc(a.nom)}</td><td>${stock(a.id)}</td><td style="width:90px"></td></tr>`).join("")}</tbody></table>`).join("")}</div>`;
+  ${S.articles.filter(a => a.emp === e.id).map(a => `<tr><td>${a.id}</td><td>${esc(a.nom)}</td><td>${stockIci(a.id)}</td><td style="width:90px"></td></tr>`).join("")}</tbody></table>`).join("")}${inventaireLieux()}</div>`;
 function bRefacturer() {
   const l = S.mouvements.filter(m => m.type === "Perte" && m.refac);
   return `${retourDocs}<div class="feuille-doc">${enTeteDoc()}<h1>Manquants à refacturer</h1>
@@ -809,22 +822,27 @@ function feuille(id, type) {
     ${a.type === "conso" && type !== "Compter" ? `<div class="rapides">${[10, 50, 100].map(n => `<button data-plus="${n}">+${n}</button>`).join("")}</div>` : ""}
     ${evs ? (["Prêt", "Sortie", "Surplus"].includes(type) ? choixEvenement(evs) : radios("ev", evs, V("imp"))) : ""}
     ${type === "Perte" ? radios("motif", ["Cassé", "Pas rendu", "Abîmé", "Volé"], "Motif") : ""}
+    ${champLieu(a, type)}
     <div class="valider"><button class="btn" data-x>Annuler</button><button class="btn plein" data-ok>Valider</button></div></div>`);
   const max = ["Prêt", "Sortie"].includes(type) ? q : null;
   const champ = compteur(f, 0, max);
-  brancherAutre(f);
+  brancherAutre(f); brancherLieuFeuille(f, id, type, champ);
   if (type === "Retour") f.querySelectorAll("input[name=ev]").forEach(r => r.onchange = () => { champ.value = d.find(x => x.evenement === r.value).qte; });
   f.querySelector("[data-x]").onclick = () => f.remove();
   const valider = confirme => {
     const n = Math.floor(+champ.value);
     if (!(n >= 0) || (n === 0 && type !== "Compter")) return toast("Indiquez une quantité.");
-    if (type === "Compter" && !confirme && grandEcart(n, Math.max(0, q))) return confirmerEcart([{ nom: a.nom, compte: n, attendu: Math.max(0, q) }], () => valider(true));
+    // Avec plusieurs lieux de stock : on compte un lieu, on prend dans un lieu
+    const lieu = lieuChoisi(f), qc = lieu === undefined ? q : stockLieu(id, lieu), dispo = dispoGeste(f, id, type);
+    if (type === "Compter" && !confirme && grandEcart(n, Math.max(0, qc))) return confirmerEcart([{ nom: a.nom, compte: n, attendu: Math.max(0, qc) }], () => valider(true));
     if (max !== null && n > max) return toast(`Il n'y en a que ${max} au dépôt.`);
+    if (dispo !== null && n > dispo) return toast(dispo ? `Il n'y en a que ${dispo} : ${nomLieu(lieu || "")}.` : `Il n'y en a pas : ${nomLieu(lieu || "")}.`);
+    if (lieu !== undefined) retenirLieu(lieu);
     const ev = evChoisi(f);
     if (evs && !ev) return toast(`Indiquez : ${V("imp").toLowerCase()}.`);
     const motif = (f.querySelector("input[name=motif]:checked") || {}).value || "";
     f.remove();
-    if (type === "Compter") { const e = n - q; if (!e) { toast("Le compte est bon."); return rendre(); } const m = mouvement(id, "Ajustement", e, { motif: "Comptage" }); rendre(); return annulable([m], `Écart de ${e > 0 ? "+" : "−"}${Math.abs(e)} enregistré.`); }
+    if (type === "Compter") { const e = n - qc; if (!e) { toast("Le compte est bon."); return rendre(); } const m = mouvement(id, "Ajustement", e, Object.assign({ motif: "Comptage" }, extraLieu(lieu))); rendre(); return annulable([m], `Écart de ${e > 0 ? "+" : "−"}${Math.abs(e)} enregistré.`); }
     if (type === "Retour") {
       const attendu = d.find(x => x.evenement === ev).qte, rendu = Math.min(n, attendu);
       const m = mouvement(id, "Retour", rendu, { evenement: ev });
@@ -832,8 +850,8 @@ function feuille(id, type) {
       if ((S.metier || "loueur") === "loueur") { const b = creerBon({ type: "retour", evenement: ev, date: Date.now(), lignes: [[id, rendu]] }); aller("bon", b); return annulable([m], `${rendu} revenu${rendu > 1 ? "s" : ""}, ajouté${rendu > 1 ? "s" : ""} au bon de retour.`, b, [[id, rendu]]); }
       rendre(); return annulable([m], "Retour enregistré.");
     }
-    if (type === "Sortie") { const m = mouvement(id, "Sortie", n, { imputation: ev }); rendre(); return annulable([m], `${n} sorti${n > 1 ? "s" : ""} pour ${ev}.`); }
-    if (type === "Surplus") { const m = mouvement(id, "Entrée", n, { motif: "Surplus remis", imputation: ev }); rendre(); return annulable([m], `${n} remis en stock.`); }
+    if (type === "Sortie") { const m = mouvement(id, "Sortie", n, Object.assign({ imputation: ev }, extraLieu(lieu))); rendre(); return annulable([m], `${n} sorti${n > 1 ? "s" : ""} pour ${ev}.`); }
+    if (type === "Surplus") { const m = mouvement(id, "Entrée", n, Object.assign({ motif: "Surplus remis", imputation: ev }, extraLieu(lieu))); rendre(); return annulable([m], `${n} remis en stock.`); }
     if (type === "Prêt") {
       const m = mouvement(id, "Prêt", n, { evenement: ev });
       if (S.metier && S.metier !== "loueur") { rendre(); return annulable([m], `Emprunté pour ${ev}.`); }
@@ -841,7 +859,7 @@ function feuille(id, type) {
       const b = creerBon({ type: "sortie", evenement: ev, date: Date.now(), lignes: [[id, n]] }); aller("bon", b);
       return annulable([m], `${n} ajouté${n > 1 ? "s" : ""} au bon de sortie.`, b, [[id, n]]);
     }
-    const m = mouvement(id, type, n, { evenement: ev === "Au dépôt" ? "" : ev, motif, refac: type === "Perte" && ev !== "Au dépôt" && motif !== "Abîmé" });
+    const m = mouvement(id, type, n, Object.assign({ evenement: ev === "Au dépôt" ? "" : ev, motif, refac: type === "Perte" && ev !== "Au dépôt" && motif !== "Abîmé" }, extraLieu(lieu)));
     rendre(); annulable([m], "Enregistré.");
   };
   f.querySelector("[data-ok]").onclick = () => valider();
@@ -871,7 +889,7 @@ function feuilleKit(kid) {
   f.querySelector("[data-ok]").onclick = () => {
     const n = Math.max(1, Math.floor(+champ.value)), ev = evChoisi(f);
     if (!ev) return toast(`Indiquez : ${V("imp").toLowerCase()}.`);
-    const manque = k.lignes.filter(([id, q]) => stock(id) < q * n);
+    const manque = k.lignes.filter(([id, q]) => stockIci(id) < q * n);
     if (manque.length) return toast("Pas assez au dépôt : " + manque.map(([id]) => art(id).nom).join(", ") + ".");
     const ids = k.lignes.map(([id, q]) => logique(art(id)) === "pret" ? mouvement(id, "Prêt", q * n, { evenement: ev }) : mouvement(id, "Sortie", q * n, { imputation: ev }));
     f.remove();
@@ -933,7 +951,7 @@ function brancher() {
   $$("[data-voir]").forEach(b => b.onclick = () => { const i = b.parentNode.querySelector("input"); const v = i.type === "password"; i.type = v ? "text" : "password"; b.setAttribute("aria-label", v ? "Cacher le mot de passe" : "Afficher le mot de passe"); b.classList.toggle("actif", v); });
   $$("[data-remplir]").forEach(b => b.onclick = () => { const [i, m] = b.dataset.remplir.split("|"), f = $('[data-form="connexion"]'); f.ident.value = i; f.mdp.value = m; seConnecter(f); });
   $$("[data-racine]").forEach(b => b.onclick = () => aller(b.dataset.racine, null, true));
-  $$("[data-periode]").forEach(b => b.onclick = () => { periode = +b.dataset.periode; rendre(); });
+  $$("[data-periode]").forEach(b => b.onclick = () => { periode = +b.dataset.periode; rendre(); refocus(`[data-periode="${periode}"]`); });
   $$("[data-acces]").forEach(c => c.onchange = () => { const u = S.equipe.find(x => x.id === c.dataset.acces); u.actif = c.checked; sauver(); rendre(); toast(c.checked ? `${u.nom} peut de nouveau se connecter.` : `Accès retiré à ${u.nom}. Ses mouvements restent dans le journal.`); });
   $$("[data-nouveau-code]").forEach(b => b.onclick = () => feuilleCode(b.dataset.nouveauCode));
   $$("[data-verrou]").forEach(s => s.onchange = () => { S.reglages.verrou = +s.value; sauver(); activite(); toast("Réglage enregistré."); });
@@ -959,8 +977,10 @@ function brancher() {
     if (filtreTexte) filtrerListe(c);
   });
   const fq = $('[data-form="cherche"]'); if (fq) fq.onsubmit = e => e.preventDefault();
-  $$("[data-filtre-materiel]").forEach(b => b.onclick = () => { vue = { nom: "materiel", arg: b.dataset.filtreMateriel }; rendre(); });
-  $$("[data-journal-type]").forEach(b => b.onclick = () => { jr.type = b.dataset.journalType; jr.n = 60; rendre(); });
+  // Après un filtre, l'écran est redessiné : on rend le focus au filtre choisi (clavier, lecteur d'écran).
+  const refocus = sel => { const n = $(sel); if (n) n.focus({ preventScroll: true }); };
+  $$("[data-filtre-materiel]").forEach(b => b.onclick = () => { const k = b.dataset.filtreMateriel; vue = { nom: "materiel", arg: k }; rendre(); refocus(`[data-filtre-materiel="${k}"]`); });
+  $$("[data-journal-type]").forEach(b => b.onclick = () => { const k = b.dataset.journalType; jr.type = k; jr.n = 60; rendre(); refocus(`[data-journal-type="${k}"]`); });
   $$("[data-journal-q]").forEach(c => c.oninput = () => { jr.q = c.value; jr.n = 60; $("[data-journal]").innerHTML = corpsJournal(); brancherJournal(); });
   brancherJournal();
   // Sur ordinateur, la recherche de l'en-tête : un code ouvre l'objet, un mot filtre la liste.
@@ -986,6 +1006,8 @@ function brancher() {
   brancherPlus();
   brancherMetiers();
   brancherOutils();
+  brancherControles();
+  brancherLieux();
   brancherConfig();
   brancherBlocs();
   brancherDocuments();
@@ -1033,7 +1055,8 @@ function lienProfond() { const id = code(location.hash); if (id && art(id)) vue 
 // Liens directs pour la démo : ?profil=terrain|bureau|direction&vue=…&arg=…, ?installateur=1
 (function () {
   const q = new URLSearchParams(location.search);
-  if (METIERS[q.get("metier")] && (S.variante || S.metier || "loueur") !== q.get("metier")) { const garder = { monnaie: S.monnaie }; S = construireDemo(q.get("metier")); Object.assign(S, garder); sauver(); }
+  // Une démo d'essai ouverte (essai.js) n'est pas remplacée ici : essai.js la met de côté avec ses gestes avant de changer de métier
+  if (METIERS[q.get("metier")] && !S.monEssai && (S.variante || S.metier || "loueur") !== q.get("metier")) { const garder = { monnaie: S.monnaie }; S = construireDemo(q.get("metier")); Object.assign(S, garder); sauver(); }
   if (q.get("monnaie") === "XOF" || q.get("monnaie") === "EUR") { S.monnaie = q.get("monnaie"); sauver(); }
   // En démo, un lien direct ouvre la session de la première personne active du profil, sans mot de passe.
   // En production, ces liens n'existent pas : chacun se connecte avec son identifiant et son mot de passe.
@@ -1047,8 +1070,14 @@ function lienProfond() { const id = code(location.hash); if (id && art(id)) vue 
   if (["clair", "sombre", "nuit"].includes(q.get("theme"))) { try { localStorage.setItem(CLE_THEME, q.get("theme")); } catch (e) { /* stockage bloqué */ } appliquerTheme(); }
 })();
 window.addEventListener("hashchange", () => { if (session) { lienProfond(); rendre(); } });
-["online", "offline"].forEach(ev => window.addEventListener(ev, () => { if (session && !verrouille) { rendre(); toast(ev === "online" ? "Réseau revenu : tout est envoyé." : "Hors ligne : vos gestes sont gardés et partiront au retour du réseau."); } }));
-if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) navigator.serviceWorker.register("sw.js").catch(() => {});
+["online", "offline"].forEach(ev => window.addEventListener(ev, () => { if (session && !verrouille) { rendre(); toast(ev === "online" ? "Réseau revenu." : "Hors ligne : l'appli continue, vos gestes sont gardés sur ce téléphone."); } }));
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) navigator.serviceWorker.register("sw.js").then(() => garderPhotos()).catch(() => {});
+// Hors ligne, les photos des objets doivent être là : on demande au service worker de garder celles du métier ouvert.
+function garderPhotos() {
+  if (!("serviceWorker" in navigator)) return;
+  const liste = [...new Set(S.articles.filter(a => a.img).map(a => `img/${a.img}.webp`))];
+  navigator.serviceWorker.ready.then(r => { if (r.active) r.active.postMessage({ type: "photos", liste }); }).catch(() => {});
+}
 rendre();
 // Les graphiques se redessinent à la largeur de l'écran (rotation du téléphone, fenêtre redimensionnée).
 let attenteTaille, largeurAvant = window.innerWidth;
