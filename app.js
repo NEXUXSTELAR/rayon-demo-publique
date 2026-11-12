@@ -253,6 +253,7 @@ function vConnexion() {
       <button class="btn plein visite" data-act="tour">${I.fleche}Visite guidée en 2 minutes</button>
       <p>Démo réglée pour : <b>${esc(metier().nom)}</b> · <button class="lien" data-act="metiers">Voir un autre métier</button></p>
       <p>${ESPACE ? `<button class="lien" data-act="installateur">Mon espace (installateur)</button> · ` : ""}<button class="lien" data-act="reinit">Remettre la démo à zéro</button></p>
+      ${dejaInstallee() ? "" : `<p><button class="lien" data-act="ecranAccueil">Mettre l'appli sur l'écran d'accueil</button></p>`}
     </div>
   </div>`;
 }
@@ -327,6 +328,7 @@ function feuilleReglages() {
     <p class="sous">Le thème ne change que l'affichage de cet appareil. Les couleurs des actions gardent leur sens : orange, ça part ; vert, ça revient.</p>
     <div class="themes" role="radiogroup" aria-label="Thème">${Object.entries(THEMES).map(([k, n]) => `<label><input type="radio" name="theme" value="${k}" ${k === c ? "checked" : ""}><span class="apercu" style="background:${ap[k][0]}"><i style="background:${ap[k][1]}"></i><i style="background:${ap[k][2]}"></i></span>${n}</label>`).join("")}</div>
     ${session ? `<div class="valider" style="grid-template-columns:1fr 1fr"><button class="btn" data-a="verrouiller">${I.cadenas}Verrouiller</button><button class="btn" data-a="sortir">${I.sortir}Se déconnecter</button></div>` : ""}
+    ${dejaInstallee() ? "" : `<div class="valider" style="grid-template-columns:1fr"><button class="btn" data-a="ecranAccueil">${I.maison}Mettre l'appli sur l'écran d'accueil</button></div>`}
     <div class="valider" style="grid-template-columns:1fr"><button class="btn plein" data-x>Fermer</button></div></div>`);
   f.querySelectorAll("input[name=theme]").forEach(i => i.onchange = () => { try { localStorage.setItem(CLE_THEME, i.value); } catch (e) { /* stockage bloqué */ } appliquerTheme(); rendre(); });
   f.querySelector("[data-x]").onclick = () => f.remove();
@@ -750,6 +752,27 @@ function feuilleIntervention(module) {
 /* =================================================================
    Saisies
    ================================================================= */
+/* L'appli sur l'écran d'accueil du téléphone : rien à télécharger, le navigateur pose une icône.
+   Android propose parfois l'installation tout seul (invite gardée ici) ; sinon, et sur iPhone, on montre le chemin. */
+let inviteInstall = null;
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); inviteInstall = e; });
+window.addEventListener("appinstalled", () => { inviteInstall = null; toast("L'appli est sur votre écran d'accueil"); });
+function dejaInstallee() { return matchMedia("(display-mode: standalone)").matches || navigator.standalone === true; }
+function feuilleEcranAccueil() {
+  if (inviteInstall) { const i = inviteInstall; inviteInstall = null; i.prompt(); return; }
+  const ua = navigator.userAgent, iphone = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1), android = /Android/.test(ua);
+  const pas = l => `<ol class="pas-accueil">${l.map(x => `<li>${x}</li>`).join("")}</ol>`;
+  const iph = pas(["Ouvrez cette page dans <b>Safari</b>.", "Touchez le bouton <b>Partager</b> (un carré avec une flèche vers le haut).", "Choisissez <b>« Sur l'écran d'accueil »</b>, puis <b>« Ajouter »</b>."]);
+  const andr = pas(["Ouvrez cette page dans <b>Chrome</b>.", "Touchez le menu <b>⋮</b>, en haut à droite.", "Choisissez <b>« Ajouter à l'écran d'accueil »</b> ou <b>« Installer l'application »</b>."]);
+  const ordi = pas(["Dans <b>Chrome</b> ou <b>Edge</b>, cliquez sur l'icône d'installation, au bout de la barre d'adresse.", "Ou ouvrez le menu, puis <b>« Installer »</b>."]);
+  const corps = iphone ? iph : android ? andr : `<h2>Sur un téléphone Android</h2>${andr}<h2>Sur un iPhone</h2>${iph}<h2>Sur un ordinateur</h2>${ordi}`;
+  const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="tea"><h1 id="tea" style="font-size:26px">Sur l'écran d'accueil</h1>
+    <p class="sous">Rien à télécharger. Le téléphone pose une icône, et l'appli s'ouvre ensuite en plein écran, même sans réseau.</p>
+    ${corps}
+    <div class="valider" style="grid-template-columns:1fr"><button class="btn plein" data-x>J'ai compris</button></div></div>`);
+  f.querySelector("[data-x]").onclick = () => f.remove();
+}
+
 function ouvrirFeuille(html) {
   const f = document.createElement("div"); f.className = "feuille"; f.innerHTML = html; document.body.appendChild(f);
   f.onclick = e => { if (e.target === f) f.remove(); };
@@ -1039,6 +1062,7 @@ const ACTIONS = {
   sortir: garderMessage => { session = null; verrouille = false; clearTimeout(minuteur); if (garderMessage !== true) msgConnexion = ""; vue = { nom: "accueil" }; pile = []; $$(".feuille").forEach(f => f.remove()); rendre(); window.scrollTo(0, 0); },
   verrouiller: () => { verrouille = true; msgConnexion = ""; clearTimeout(minuteur); rendre(); },
   reglages: () => feuilleReglages(),
+  ecranAccueil: () => feuilleEcranAccueil(),
   ajouterPersonne: () => feuilleCode(null),
   installateur: () => { if (ESPACE) feuilleInstallateur(); },
   quitterInstallateur: () => { installateur = false; rendre(); },
