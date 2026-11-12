@@ -6,7 +6,7 @@
    et renvoyer ses gestes d'essai (« Envoyer mon essai »). Tout reste dans le navigateur. Chargé après app.js. */
 
 const CLE_ESSAI = "rayon-essai-v1";
-const ADRESSE_DEMO = "https://nexuxstelar.github.io/rayon-demo-publique/";
+const ADRESSE_DEMO = "https://demo.stockclair.com/";
 // Taille maximale d'un lien, adresse comprise. Au-delà, on passe par le fichier : un lien plus long se colle mal
 // dans un message, et certains logiciels de courrier le coupent.
 const LIEN_ESSAI_MAX = 4000;
