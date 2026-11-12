@@ -1326,3 +1326,27 @@ table.t.comparer td.pire i { display: inline-block; width: 8px; height: 8px; bor
   table.t.comparer thead th:first-child { width: 33%; }
 }
 @media print { .etab-bandeau { display: none !important; } }
+
+/* =========================================================
+   LES ARTICLES GÉRÉS PAR LE CLIENT (articles.js) : ajouter, modifier, retirer, remettre.
+   ========================================================= */
+.art-outils { display: flex; justify-content: flex-end; margin: -2px 0 12px; }
+.art-outils .btn { min-height: 48px; }
+.art-demandes { margin-bottom: 14px; }
+.art-demandes small { display: block; color: var(--gris); font-size: 14px; }
+.art-note { margin: 12px 0; background: var(--carte2); border-radius: 12px; padding: 12px 14px; font-size: 15px; overflow-wrap: anywhere; }
+.art-note.retire { box-shadow: inset 4px 0 0 var(--alerte); font-weight: 600; }
+.art-form .champ input, .art-form .champ select { width: 100%; min-width: 0; }
+.art-form .choix label { overflow-wrap: anywhere; }
+.art-details { margin: 16px 0 0; background: var(--carte); border-radius: 16px; padding: 0 16px; }
+.art-details summary { min-height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-weight: 800; cursor: pointer; list-style: none; }
+.art-details summary::-webkit-details-marker { display: none; }
+.art-details summary::after { content: ""; flex: none; width: 10px; height: 10px; margin: 0 6px 4px 0; border-right: 2.5px solid var(--gris); border-bottom: 2.5px solid var(--gris); transform: rotate(45deg); }
+.art-details[open] summary::after { transform: rotate(-135deg); margin-bottom: -4px; }
+.art-details[open] { padding-bottom: 14px; }
+.art-photo { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center; margin-top: 14px; }
+.art-photo .vignette { width: 72px; }
+.art-photo:not(:has(.vignette)) { grid-template-columns: 1fr; }
+.t-actions .art-note { margin: 0; }
+.vide .btn { width: 100%; }
+.art-form [hidden] { display: none; }

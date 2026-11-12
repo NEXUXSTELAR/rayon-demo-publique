@@ -245,6 +245,7 @@ function recevoirEtab(t, qui, date) {
   dansEtab(t.vers, () => {
     let a = art(t.article);
     if (!a) { a = Object.assign({}, t.fiche, { emp: (S.emplacements.find(x => x.id === t.fiche.emp) || S.emplacements[0] || {}).id || "", fou: (S.fournisseurs.find(x => x.id === t.fiche.fou) || S.fournisseurs[0] || {}).id || "" }); S.articles.push(a); t.cree = true; }
+    if (a.retire) remettreArticle(a.id, true, "Remis dans le stock : reçu d'un autre établissement");
     delete a.chezEtab;
     const base = { profil: qui.profil, qui: qui.nom, article: t.article, type: "Entrée", motif: "Reçu de " + nomEtab(t.de), etab: t.de, transfert: t.id };
     let reste = t.qte;

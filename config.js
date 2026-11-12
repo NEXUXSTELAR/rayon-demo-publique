@@ -12,6 +12,8 @@ const DROITS = {
   commander: "Préparer et envoyer les commandes",
   valider: "Valider les commandes au-dessus du seuil",
   documents: "Documents, étiquettes et exports",
+  articles: "Ajouter et modifier des articles",
+  retirer: "Retirer un article du stock",
   analyses: "Analyses et courbes",
   equipe: "Gérer l'équipe et les accès (administrateur seulement)",
   installation: "Voir l'installation et demander une intervention",
@@ -70,13 +72,13 @@ function configParDefaut(m, taille) {
       barre: ["accueil", "materiel", loueur ? "reservations" : "commandes"],
       accueil: [["aujourdhui", "l"], ["taches", "m"]].concat(loueur ? [["dispo", "m"]] : [], [["depot3d", "m"], ["cycle", "m"]], dlc ? [["peremption", "m"]] : [], [["atelier", "m"]], courbesBureau, [["alertes", "m"]]),
       analyses: courbesBureau.concat([["g_top", "m"], ["g_valeur", "m"]]),
-      droits: { stock: 1, prix: 1, reserver: 1, commander: 1, documents: 1, analyses: 1 },
+      droits: { stock: 1, prix: 1, reserver: 1, commander: 1, documents: 1, analyses: 1, articles: 1 },
     },
     direction: {
       barre: ["accueil", "analyses", "docs"],
       accueil: [["pouls", "l"], ["partLoue", "s"], ["refac", "s"], ["decider", "m"], ["depot3d", "m"], ["trio", "l"]].concat(dlc ? [["peremption", "m"]] : [], courbesDirection.slice(0, 2), [["resume", "m"], ["assistance", "m"]]),
       analyses: [["trio", "l"]].concat(courbesDirection, loueur ? [["g_depot", "m"], ["g_mvt14", "m"]] : [["g_mvt14", "m"]]),
-      droits: { stock: 1, prix: 1, reserver: 1, valider: 1, documents: 1, analyses: 1, equipe: 1, installation: 1 },
+      droits: { stock: 1, prix: 1, reserver: 1, valider: 1, documents: 1, analyses: 1, equipe: 1, installation: 1, articles: 1, retirer: 1 },
     },
   };
   // Une seule personne fait tout : un accueil court, les gestes du dépôt en premier, tous les droits.
@@ -84,7 +86,7 @@ function configParDefaut(m, taille) {
     barre: ["accueil", "depot", "materiel"],
     accueil: [["scan", "l"], ["taches", "l"], ["pouls", "l"]].concat(loueur ? [["dispo", "m"]] : [], [["actions", "l"], ["g_top", "m"]]),
     analyses: c.direction.analyses,
-    droits: { stock: 1, prix: 1, reserver: 1, commander: 1, valider: 1, documents: 1, analyses: 1, equipe: 1, installation: 1 },
+    droits: { stock: 1, prix: 1, reserver: 1, commander: 1, valider: 1, documents: 1, analyses: 1, equipe: 1, installation: 1, articles: 1, retirer: 1 },
   };
   // Un patron et des magasiniers, sans bureau : le patron commande et réserve lui-même.
   if (taille === "petite") {
@@ -105,6 +107,8 @@ function config() {
   if (!S.config) S.config = configParDefaut(S.metier, S.taille);
   // Un rôle ajouté depuis (le chauffeur, par exemple) reçoit ses réglages par défaut.
   const d = configParDefaut(S.metier, S.taille); Object.keys(d).forEach(r => { if (!S.config[r]) S.config[r] = d[r]; });
+  // Deux droits ajoutés depuis (articles.js) : un réglage plus ancien reçoit leur valeur par défaut, une seule fois.
+  Object.keys(d).forEach(r => ["articles", "retirer"].forEach(k => { const x = S.config[r].droits; if (x && x[k] === undefined) x[k] = d[r].droits[k] ? 1 : 0; }));
   return S.config;
 }
 const cfg = role => config()[role || (session && session.profil) || "terrain"];

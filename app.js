@@ -73,8 +73,9 @@ let nonEnregistre = false;
 function sauver() { try { localStorage.setItem(CLE, JSON.stringify(S)); nonEnregistre = false; } catch (e) { nonEnregistre = true; } }
 
 /* ---------------- Calculs ---------------- */
-const SIGNE = { "Inventaire initial": 1, "Entrée": 1, "Retour": 1, "Prêt": -1, "Perte": -1, "Sortie": -1, "Ajustement": 1, "Réparation": -1, "Retour réparation": 1, "Contrôle": 0, "Transfert": 0, "Envoi": -1 };
-const art = id => S.articles.find(a => a.id === id);
+const SIGNE = { "Inventaire initial": 1, "Entrée": 1, "Retour": 1, "Prêt": -1, "Perte": -1, "Sortie": -1, "Ajustement": 1, "Réparation": -1, "Retour réparation": 1, "Contrôle": 0, "Transfert": 0, "Envoi": -1, "Fiche": 0 };
+// Un article retiré du stock (articles.js) n'est plus dans S.articles, mais le journal et les anciens bons le retrouvent ici.
+const art = id => S.articles.find(a => a.id === id) || (S.retires || []).find(a => a.id === id);
 const actif = c => !!S.modules[c];
 const stock = id => S.mouvements.filter(m => m.article === id).reduce((t, m) => t + SIGNE[m.type] * m.qte, 0);
 function dehors(id) {
@@ -104,7 +105,7 @@ function argent(eur) {
 }
 const quand = t => { const d = new Date(t); return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) + " · " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }); };
 // Un article importé d'une liste n'a pas encore de photo : un pictogramme la remplace
-const img = a => a.img ? `<div class="vignette"><img src="img/${a.img}.webp" alt="" loading="lazy" width="360" height="360"></div>` : pic(I.materiel);
+const img = a => a.photo ? `<div class="vignette"><img src="${a.photo}" alt="" loading="lazy" width="360" height="360"></div>` : a.img ? `<div class="vignette"><img src="img/${a.img}.webp" alt="" loading="lazy" width="360" height="360"></div>` : pic(I.materiel);
 const pic = ic => `<div class="vignette pic">${ic}</div>`;
 const initiales = n => n.split(/\s+/).map(x => x[0]).join("").slice(0, 2).toUpperCase();
 const avatar = (u, grand) => `<span class="avatar ${u.role === "direction" ? "direction" : ""} ${grand ? "grand" : ""}" aria-hidden="true">${esc(initiales(u.nom))}</span>`;
@@ -344,12 +345,12 @@ const VUES = () => ({
   materiel: bMateriel, fiche: bFiche, commandes: bCommandes, journal: bJournal, docs: bDocs, etiquettes: bEtiquettes,
   inventairePapier: bInventairePapier, refacturer: bRefacturer, rapport: dRapport, installation: dInstallation, equipe: dEquipe,
   reservations: bReservations, reservation: bReservation, clients: bClients, client: vClient, devisLoc: vDevisLocation,
-  controles: vRegistreControles, lieux: vLieux, lieu: vLieu, ficheLieu: vFicheLieu, groupe: vGroupe,
+  controles: vRegistreControles, lieux: vLieux, lieu: vLieu, ficheLieu: vFicheLieu, groupe: vGroupe, article: vArticle,
 });
 // Les écrans du dépôt restent sur une colonne étroite, même sur ordinateur.
-const ETROITS = new Set(["tournee", "depot", "objet", "kits", "recuperer", "retourEv", "chercher", "jour", "bon", "preparer", "preparation", "reception", "receptionCmd", "zones", "zone", "lieux", "lieu"]);
+const ETROITS = new Set(["tournee", "depot", "objet", "kits", "recuperer", "retourEv", "chercher", "jour", "bon", "preparer", "preparation", "reception", "receptionCmd", "zones", "zone", "lieux", "lieu", "article"]);
 const PARENT = { client: "clients", devisLoc: "reservations", fiche: "materiel", reservation: "reservations", etiquettes: "docs", inventairePapier: "docs", refacturer: "docs", rapport: "docs", controles: "docs", lieu: "lieux", ficheLieu: "lieux", retourEv: "recuperer", preparation: "preparer", receptionCmd: "reception", zone: "zones" };
-const TITRES = { client: "Client", devisLoc: "Devis de location", objet: "Objet", fiche: "Fiche de l'objet", bon: "Bon", facture: "Facture de casse", reservation: "Réservation", retourEv: "Retour", preparation: "Préparation", receptionCmd: "Réception", zone: "Comptage", etiquettes: "Étiquettes", inventairePapier: "Inventaire", refacturer: "À refacturer", rapport: "Rapport", controles: "Contrôles", lieu: "Contenu du lieu", ficheLieu: "Fiche du lieu", groupe: "Groupe" };
+const TITRES = { client: "Client", devisLoc: "Devis de location", objet: "Objet", fiche: "Fiche de l'objet", bon: "Bon", facture: "Facture de casse", reservation: "Réservation", retourEv: "Retour", preparation: "Préparation", receptionCmd: "Réception", zone: "Comptage", etiquettes: "Étiquettes", inventairePapier: "Inventaire", refacturer: "À refacturer", rapport: "Rapport", controles: "Contrôles", lieu: "Contenu du lieu", ficheLieu: "Fiche du lieu", groupe: "Groupe", article: "Article" };
 const sectionsPermises = () => Object.keys(SECTIONS).filter(k => k !== "accueil" && permis(k));
 
 function coque() {
@@ -408,6 +409,7 @@ function vAccueil() {
 const vDepot = () => `<h1>Au dépôt</h1><p class="sous">Scanner, sortir, rentrer, compter : les gestes de tous les jours, ouverts à toute l'équipe.</p>${wScan()}${wActions()}`;
 function tObjet(id) {
   const a = art(id); if (!a) return `<p>Objet introuvable.</p>`;
+  if (a.retire) return objetRetire(a);
   const q = stock(id), e = etat(a), pret = logique(a) === "pret";
   const jauge = a.type === "equip" ? `<div class="t-stock">${q >= 1 ? "Ici" : "Sorti"}</div>` : anneau(q, a.cible, couleurEtat(e), q, `en stock sur ${a.cible}`);
   const lots = metier().dlc ? lotsEnStock(id) : [];
@@ -446,13 +448,13 @@ function tChercher(filtre) {
   return `<h1>Chercher un objet</h1><p class="sous">Tapez le début du nom, le code de l'étiquette ou la zone. La liste se réduit à mesure.</p>
   <form class="t-ou" data-form="cherche">${champFiltre("#liste-cherche", exempleRecherche())}</form>
   <ul class="t-liste" id="liste-cherche">${S.articles.map(a => `<li data-cherche="${cherchable(a.nom, a.id, zoneDe(a))}"><button data-objet="${a.id}">${img(a)}<span><b>${esc(a.nom)}</b><small>${esc(zoneDe(a))}</small></span><span class="n">${stock(a.id)}</span></button></li>`).join("")}
-  <li class="vide" data-rien hidden>Aucun objet ne correspond. Vérifiez l'orthographe, ou tapez le code écrit sous le QR.</li></ul>`;
+  <li class="vide" data-rien hidden>Aucun objet ne correspond. Vérifiez l'orthographe, ou tapez le code écrit sous le QR.${boutonCreerRecherche()}</li></ul>`;
 }
 function tJour() {
   const debut = new Date(); debut.setHours(0, 0, 0, 0);
   const l = S.mouvements.filter(m => m.date >= debut.getTime() && m.qui === session.nom).reverse();
   return `<h1>Ma journée</h1><p class="sous">${l.length} enregistrement${l.length > 1 ? "s" : ""} aujourd'hui.</p>
-  <ul class="t-liste">${l.map(m => { const a = art(m.article); return `<li><button data-objet="${a.id}">${img(a)}<span><b>${esc(m.type)} · ${esc(a.nom)}</b><small>${quand(m.date)}${(m.evenement || m.imputation) ? " · " + esc(m.evenement || m.imputation) : ""}</small></span><span class="n">${m.type === "Contrôle" ? "" : m.qte}</span></button></li>`; }).join("") || `<li class="vide">Rien encore aujourd'hui. Scannez un objet pour commencer.</li>`}</ul>`;
+  <ul class="t-liste">${l.map(m => { const a = art(m.article); return `<li><button data-objet="${a.id}">${img(a)}<span><b>${esc(m.type)} · ${esc(a.nom)}</b><small>${quand(m.date)}${(m.evenement || m.imputation) ? " · " + esc(m.evenement || m.imputation) : ""}</small></span><span class="n">${m.type === "Contrôle" || m.type === "Fiche" ? "" : m.qte}</span></button></li>`; }).join("") || `<li class="vide">Rien encore aujourd'hui. Scannez un objet pour commencer.</li>`}</ul>`;
 }
 function tKits() {
   return `<h1>Sortir un kit</h1><p class="sous">Choisissez le kit, puis indiquez le nombre et la destination (${motImp()}).</p>
@@ -503,20 +505,22 @@ function blocPeremption() {
 }
 function bMateriel(f) {
   f = f || "tous";
+  if (f === "retires") return vRetires();
   if (f === "controle" && !suiviControles()) f = "tous";
   const ids = new Set(dehors().map(d => d.article));
   const ctrl = suiviControles() ? aControler() : [];
   const l = (f === "controle" ? ctrl : S.articles.filter(a => f === "tous" || (f === "alerte" && ["zero", "bas"].includes(etat(a).c)) || (f === "dehors" && ids.has(a.id)))).filter(dansLieuStock);
   const vide = f === "alerte" ? "Rien à commander : tout est au-dessus du seuil." : f === "dehors" ? "Tout est rentré." : f === "controle" ? "Aucun contrôle en retard ni à faire dans les 30 jours." : "Aucun objet pour l'instant.";
-  const compte = k => k === "tous" ? S.articles.length : k === "alerte" ? S.articles.filter(a => ["zero", "bas"].includes(etat(a).c)).length : k === "controle" ? ctrl.length : ids.size;
-  return `<h1>${esc(titreSection("materiel"))}</h1>
-  <div class="outils-liste"><div class="filtres">${[["tous", "Tout"], ["alerte", "À commander"]].concat(aDesPrets() ? [["dehors", V("chez")]] : [], suiviControles() ? [["controle", "À contrôler"]] : []).map(([k, t]) => `<button data-filtre-materiel="${k}" aria-pressed="${f === k}">${t}<span class="nb">${compte(k)}</span></button>`).join("")}</div>
+  const compte = k => k === "retires" ? S.retires.length : k === "tous" ? S.articles.length : k === "alerte" ? S.articles.filter(a => ["zero", "bas"].includes(etat(a).c)).length : k === "controle" ? ctrl.length : ids.size;
+  return `<h1>${esc(titreSection("materiel"))}</h1>${outilsArticles()}
+  <div class="outils-liste"><div class="filtres">${[["tous", "Tout"], ["alerte", "À commander"]].concat(aDesPrets() ? [["dehors", V("chez")]] : [], suiviControles() ? [["controle", "À contrôler"]] : [], aDesRetires() ? [["retires", "Retirés"]] : []).map(([k, t]) => `<button data-filtre-materiel="${k}" aria-pressed="${f === k}">${t}<span class="nb">${compte(k)}</span></button>`).join("")}</div>
   ${champFiltre("#liste-materiel", exempleRecherche())}${choixLieuStock()}<span class="filtre-compte" data-filtre-compte role="status"></span></div>
   <ul class="b-liste" id="liste-materiel">${l.map(a => { const e = etat(a); return `<li data-cherche="${cherchable(a.nom, a.id, zoneDe(a), e.t)}"><button class="l" data-fiche="${a.id}">${img(a)}<span><b>${esc(a.nom)}</b><small><span class="code">${a.id}</span> · <span class="etat ${e.c}"><i></i>${e.t}</span>${pastilleControle(a, f === "controle")}</small></span><span class="l-zone">${esc(zoneDe(a))}</span><span class="n">${qteStock(a)}</span></button></li>`; }).join("")}
   <li class="vide" data-rien ${l.length ? "hidden" : ""}>${l.length ? "Aucun objet ne correspond à cette recherche." : filtreLieuActif() ? `Rien ici : ${esc(nomLieu(lieuStock))}.` : vide}</li></ul>`;
 }
 function bFiche(id) {
   const a = art(id); if (!a) return "<p>Introuvable.</p>";
+  if (a.retire) return ficheRetiree(a);
   const q = stock(id), e = etat(a), d = dehors(id);
   return `<div class="fiche">${img(a)}<div>
     <div class="entete"><div><span class="code">${a.id}</span><h1>${esc(a.nom)}</h1><span class="etat ${e.c}"><i></i>${e.t}</span></div>
@@ -526,7 +530,7 @@ function bFiche(id) {
       <div><dt>Seuil d'alerte</dt><dd>${a.seuil}</dd></div><div><dt>Niveau normal</dt><dd>${a.cible}</dd></div>
       ${droit("prix") ? `<div><dt>Prix unitaire</dt><dd>${argent(a.prix)}</dd></div><div><dt>Valeur au dépôt</dt><dd>${argent(Math.max(0, q) * a.prix)}</dd></div>` : ""}
       ${a.serie ? `<div><dt>N° de série</dt><dd class="code">${a.serie}</dd></div>` : ""}${detailsControle(a)}</dl>
-    <div class="boutons">${totalAtelier(id) ? `<p class="sous" style="width:100%;margin:0 0 6px">À l'atelier : ${aLAtelier(id).map(x => x.qte + " " + (x.motif === "Au nettoyage" ? "au nettoyage" : "en réparation")).join(", ")}</p>` : ""}<button class="btn petit" data-atelier="${a.id}">Envoyer à l'atelier</button><button class="btn petit" data-mvt="Entrée">Entrée en stock</button><button class="btn petit" data-mvt="Compter">Compter</button><button class="btn petit" data-mvt="Perte">Perte</button>${boutonTransfert(a, true)}${boutonEnvoiEtab(a, true)}${boutonsControle(a)}</div>
+    <div class="boutons">${totalAtelier(id) ? `<p class="sous" style="width:100%;margin:0 0 6px">À l'atelier : ${aLAtelier(id).map(x => x.qte + " " + (x.motif === "Au nettoyage" ? "au nettoyage" : "en réparation")).join(", ")}</p>` : ""}<button class="btn petit" data-atelier="${a.id}">Envoyer à l'atelier</button><button class="btn petit" data-mvt="Entrée">Entrée en stock</button><button class="btn petit" data-mvt="Compter">Compter</button><button class="btn petit" data-mvt="Perte">Perte</button>${boutonTransfert(a, true)}${boutonEnvoiEtab(a, true)}${boutonsControle(a)}${boutonsArticle(a)}</div>
   </div></div>
   ${blocLieuxFiche(a)}
   ${blocRentabilite(a)}
@@ -540,7 +544,7 @@ function tableMouvements(l, avecObjet) {
   ${l.map(m => `<tr><td class="m-quand">${quand(m.date)}</td><td class="m-qui">${esc(m.qui || PROFILS[m.profil].nom)}</td><td class="m-quoi">${esc(m.type)}${(m.evenement || m.imputation) ? "<br><small>" + esc(m.evenement || m.imputation) + "</small>" : ""}${m.motif ? "<br><small>" + esc(m.motif) + "</small>" : ""}${lieuMv(m)}</td>${avecObjet ? `<td class="m-objet">${esc(art(m.article).nom)}</td>` : ""}<td class="n m-qte">${qteSignee(m)}</td></tr>`).join("")}</tbody></table></div>`;
 }
 // La quantité porte son sens : + ce qui entre au dépôt, − ce qui en sort.
-const qteSignee = m => { if (m.type === "Contrôle") return ""; if (m.type === "Transfert") return (m.qte < 0 ? "−" : "") + Math.abs(m.qte).toLocaleString("fr-FR"); const v = (SIGNE[m.type] || 1) * m.qte; return (v < 0 ? "−" : "+") + Math.abs(v).toLocaleString("fr-FR"); };
+const qteSignee = m => { if (m.type === "Contrôle" || m.type === "Fiche") return ""; if (m.type === "Transfert") return (m.qte < 0 ? "−" : "") + Math.abs(m.qte).toLocaleString("fr-FR"); const v = (SIGNE[m.type] || 1) * m.qte; return (v < 0 ? "−" : "+") + Math.abs(v).toLocaleString("fr-FR"); };
 /* Journal : les 60 derniers mouvements, un filtre par geste et une recherche (objet, personne, lieu, motif). */
 const GESTES_JOURNAL = { sorties: ["Prêt", "Sortie"], entrees: ["Retour", "Entrée", "Inventaire initial"], pertes: ["Perte"], comptages: ["Ajustement"], atelier: ["Réparation", "Retour réparation"], controles: ["Contrôle"], transferts: ["Transfert"] };
 function lignesJournal() {
@@ -614,7 +618,7 @@ function bDocs() {
   <div class="docs">${d.map(([k, ic, t, s_]) => `<button class="doc-carte" ${acte(k) ? `data-act="${k}"` : `data-aller="${k}"`}><span class="pastille ${acte(k) ? "excel" : ""}">${ic}</span><span><b>${t}</b><small>${s_}</small></span></button>`).join("")}</div>`;
 }
 const retourDocs = `<p class="pas-imprimer"><button class="lien" data-aller="docs">← Documents</button> · <button class="lien" data-act="imprimer">Imprimer ou enregistrer en PDF</button></p>`;
-const bEtiquettes = () => `${retourDocs}<div class="pas-imprimer"><h1>Planche d'étiquettes</h1><p class="sous">Scanné avec l'appareil photo, le QR ouvre directement la fiche de l'objet.</p></div>
+const bEtiquettes = id => id && art(id) ? etiquetteSeule(id) : `${retourDocs}<div class="pas-imprimer"><h1>Planche d'étiquettes</h1><p class="sous">Scanné avec l'appareil photo, le QR ouvre directement la fiche de l'objet.</p></div>
   ${blocPlanEtiquetage()}<h2 class="pas-imprimer">La planche à imprimer</h2>
   <div class="planche">${S.articles.map(a => `<div class="etiquette"><div data-qr="${a.id}"></div><div><b>${esc(a.nom)}</b><span class="code">${a.id}</span><small class="proprio">Propriété de ${esc((S.entreprise || {}).nom || "l'entreprise")}</small></div></div>`).join("")}</div>`;
 const bInventairePapier = () => `${retourDocs}<div class="feuille-doc">${enTeteDoc()}<h1>Fiche d'inventaire</h1><p>Date : ____ / ____ / ________ · Compté par : ______________________</p>
@@ -903,7 +907,7 @@ function feuilleKit(kid) {
 /* ---------------- Caméra ---------------- */
 const script = src => new Promise((ok, ko) => { if (document.querySelector(`script[src="${src}"]`)) return ok(); const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = ko; document.head.appendChild(s); });
 const code = t => { const m = String(t).toUpperCase().match(/ART-\d{4}/); return m ? m[0] : null; };
-function ouvrir(id) { if (!art(id)) return toast(`Aucun objet ${id} ici.`); if (vue.nom === "preparation") return scanPreparation(id); aller("objet", id); }
+function ouvrir(id) { if (!art(id)) return codeInconnu(id); if (vue.nom === "preparation") return scanPreparation(id); aller("objet", id); }
 let dernierScan = { id: "", t: 0 };
 async function camera(rafale) {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return toast("Caméra indisponible : tapez le code de l'étiquette.");
@@ -1010,6 +1014,7 @@ function brancher() {
   brancherControles();
   brancherLieux();
   brancherGroupe();
+  brancherArticles();
   brancherConfig();
   brancherBlocs();
   brancherDocuments();
