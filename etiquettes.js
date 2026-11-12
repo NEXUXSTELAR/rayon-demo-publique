@@ -6,7 +6,7 @@
    ================================================================= */
 const SUPPORTS = {
   papier:    { t: "Papier plastifié", s: "À l'abri : cartons, étagères intérieures, ce qui part vite" },
-  polyester: { t: "Polyester laminé", s: "Le standard : eau, soleil, frottements, imprimé en transfert thermique (jamais en papier thermique, qui s'efface à la chaleur)" },
+  polyester: { t: "Polyester laminé", s: "Le standard : eau, soleil, frottements, polyester en planche ou ruban laminé (jamais en papier thermique, qui s'efface à la chaleur)" },
   labo:      { t: "Polyester de labo", s: "Autoclave, congélateur, solvants" },
   textile:   { t: "Étiquette textile", s: "Cousue ou thermocollée, tient au lavage à 95 °C" },
   metal:     { t: "Plaque alu gravée", s: "Rivetée ou collée : chocs, lave-vaisselle, extérieur" },

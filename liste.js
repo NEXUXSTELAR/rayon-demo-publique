@@ -11,6 +11,7 @@ const LISTE_MAX = 5000; // lignes lues au plus ; les codes vont de ART-0001 à A
 // Titres reconnus, dans l'ordre où on les essaie (le premier qui convient gagne). Les titres sont comparés sans accents ni majuscules.
 // Ils couvrent le modèle à remplir, l'onglet ARTICLES du classeur livré, et les mots courants d'un tableau de patron.
 const COLONNES_LISTE = [
+  ["vie", /ou vit|milieu|environnement/, "Où vit l'objet"],
   ["ctrlLe", /prochain controle|echeance|date d[ue] controle|controle avant/, "Prochain contrôle (date)"],
   ["ctrlMois", /controle tous|tous les|periodicite|rythme/, "Contrôle tous les (mois)"],
   ["ctrlNom", /controle|etalonnage|verification/, "Nom du contrôle"],
@@ -33,7 +34,7 @@ const COLONNES_LISTE = [
   ["nom", /^nom|designation|article|produit|libelle|objet|materiel/, "Nom de l'article"],
 ];
 // Ordre des colonnes du modèle : sert quand on colle des cellules sans leur ligne de titres
-const ORDRE_MODELE = ["nom", "qte", "emp", "logique", "categorie", "unite", "prix", "fou", "seuil", "cible", "cond", "serie", "suivi", "lotNum", "dlc", "code", "lieu", "ctrlNom", "ctrlLe", "ctrlMois"];
+const ORDRE_MODELE = ["nom", "qte", "emp", "logique", "categorie", "unite", "prix", "fou", "seuil", "cible", "cond", "serie", "suivi", "lotNum", "dlc", "code", "lieu", "ctrlNom", "ctrlLe", "ctrlMois", "vie"];
 // Stock par lieu (lieux.js) : le mot affiché dans l'appli du client, son singulier (étiquettes) et le nom du geste
 const MOTS_LIEUX = { "Fourgons": ["Fourgon", "Charger un fourgon"], "Véhicules": ["Véhicule", "Charger un véhicule"], "Sites": ["Site", "Approvisionner un site"], "Lieux de stock": ["Lieu de stock", "Déplacer vers un autre lieu"] };
 const EMP_DEFAUT = "À ranger", FOU_DEFAUT = "Fournisseur à préciser";
@@ -246,6 +247,8 @@ function controlerListeP(brutes, c, existants) {
     const a = { nom, qte, emp: texteP(v.emp).slice(0, 50) || EMP_DEFAUT, logique, categorie: texteP(v.categorie).slice(0, 40), unite: texteP(v.unite).slice(0, 20), prix: prix === null ? 0 : prix, fou: texteP(v.fou).slice(0, 60) || FOU_DEFAUT,
       seuil, cible, lot: cond || 1, serie, suiviLots: !!dlc, lots: dlc ? [{ num: lotNum, dlc, qte }] : [], code,
       lieux: lieu ? [{ nom: lieu, qte }] : [], ctrlLe, ctrlMois: ctrlLe ? ctrlMois : 0, ctrlNom: ctrlLe ? ctrlNom : "" };
+    // « Où vit l'objet » : facultatif, oriente le format et le support de son étiquette
+    const vie = vieP(v.vie); if (vie) a.vie = vie; else if (texteP(v.vie)) rem(`« Où vit l'objet » : « ${texteP(v.vie).slice(0, 30)} » n'est pas dans la liste. Étiquette proposée sans cette indication.`);
     articles.push(a); bonnes++;
     if (serie) series[normP(serie)] = n; else noms[cle] = { a, n, depot: !lieu };
     if (code) codes[normP(code)] = n;
@@ -335,40 +338,212 @@ function planListeP(a, c) {
   if (m === "ong" && a.lot > 1) return { sur: "contenant", n: Math.max(1, Math.ceil(a.qte / a.lot)) };
   return { sur: "emplacement", n: 1 };
 }
-const ETIQ_MAX = 60, ETIQ_PAR_PAGE = 24; // exemplaires au plus pour un même article ; 3 colonnes de 8 sur une page A4
+const ETIQ_MAX = 60; // exemplaires au plus pour un même article
+// Les six formats de docs/21, section 13. Planches A4 prédécoupées : étiquette (l × h), QR sans sa marge, colonnes × rangées,
+// marges et pas en mm (calculés : à vérifier sur le gabarit du fabricant). Rubans laminés : largeur du ruban (h), longueur (l), points par module.
+// niveau : correction du QR (Q pour les petits formats). nom : nombre de caractères gardés du nom.
+const FORMATS_ETIQ = {
+  etagere:    { t: "Étagère", l: 63.5, h: 33.9, qr: 22, niveau: "M", cols: 3, rangs: 8, haut: 12.9, gauche: 7.2, pasX: 66.0, pasY: 33.9, gabarit: "L4773", cout: .12 },
+  bac:        { t: "Bac", l: 45.7, h: 25.4, qr: 16, niveau: "M", cols: 4, rangs: 10, haut: 21.5, gauche: 9.8, pasX: 48.2, pasY: 25.4, gabarit: "L6140", cout: .06 },
+  petit:      { t: "Petit objet", l: 45.7, h: 21.2, qr: 13, niveau: "Q", cols: 4, rangs: 12, haut: 21.3, gauche: 9.8, pasX: 48.2, pasY: 21.2, gabarit: "L4778", nom: 18, cout: .06 },
+  outil:      { t: "Outil", ruban: 24, l: 38, h: 24, qr: 14.8, niveau: "Q", points: 5, nom: 12, cout: .08 },
+  petitOutil: { t: "Petit outil", ruban: 18, l: 28, h: 18, qr: 11.9, niveau: "Q", points: 4, nom: 0, cout: .05 },
+  drapeau:    { t: "Drapeau de câble", ruban: 24, l: 85, h: 24, qr: 14.8, niveau: "Q", points: 5, nom: 16, cout: .20 }, // 2 faces de 30 mm + le tour d'un câble de 8 mm
+};
+// Supports. « special » : à reporter à part sur le devis. « sansEtiquette » : fait par un graveur ou un atelier, rien à imprimer ici.
+// Coûts d'achat indicatifs de docs/21 (sections 11 et 12), jamais des prix de vente.
+const SUPPORTS_ETIQ = {
+  planche:    { t: "Polyester en planche" },
+  ruban:      { t: "Ruban laminé" },
+  plaquette:  { t: "Plaquette à collier", special: true, cout: .32 },
+  inviolable: { t: "Inviolable", special: true, cout: .12 },
+  gravee:     { t: "Plaque gravée", special: true, sansEtiquette: true, coutTexte: "1 à 6 € pièce" },
+  textile:    { t: "Étiquette textile", special: true, sansEtiquette: true, coutTexte: "sur devis" },
+};
+// « Où vit l'objet » : l'indication facultative qui oriente la proposition. Le motif reconnaît ce que le client a écrit.
+const VIES_ETIQ = {
+  sec: ["Intérieur sec", /sec|interieur/], gras: ["Atelier gras", /gras|atelier|huile/], dehors: ["Extérieur", /exterieur|dehors/], lavage: ["Lavage", /lav|\bjet\b/], froid: ["Froid", /froid|congel/],
+  colle: ["Ne se colle pas", /colle pas|tuyau|\bsacs?\b|elingue/], cable: ["Câble ou manche", /cable|manche|rallonge|flexible/], cher: ["Objet cher", /\bcher|\bvol\b/],
+};
+const vieP = v => { const n = normP(v); return !n ? "" : (Object.entries(VIES_ETIQ).find(([, [, re]]) => re.test(n)) || [null])[0]; };
+const supportDuFormat = fmt => FORMATS_ETIQ[fmt].ruban ? "ruban" : "planche";
+// La proposition : d'abord où va l'étiquette (objet, contenant, bac ou étagère), puis ce que dit « Où vit l'objet »
+function propositionEtiqP(x, sur) {
+  if (x.vie === "cable") return { fmt: "drapeau", sup: "ruban" };
+  if (x.vie === "colle") return { fmt: "petitOutil", sup: "plaquette" };
+  if (x.vie === "cher") return { fmt: "petit", sup: "inviolable" };
+  if (["gras", "dehors", "lavage"].includes(x.vie) && sur !== "emplacement") return { fmt: "outil", sup: "ruban" };
+  return sur === "objet" ? { fmt: "outil", sup: "ruban" } : sur === "contenant" ? { fmt: "bac", sup: "planche" } : { fmt: "etagere", sup: "planche" };
+}
+// Le choix retenu : celui de l'installateur s'il en a fait un, sinon la proposition. Le support suit le format (une planche ne passe pas dans une étiqueteuse).
+function choixEtiqP(x, sur) {
+  const p = propositionEtiqP(x, sur), fmt = FORMATS_ETIQ[x.fmt] ? x.fmt : p.fmt;
+  let sup = SUPPORTS_ETIQ[x.sup] ? x.sup : fmt === p.fmt ? p.sup : supportDuFormat(fmt);
+  if (sup === "planche" || sup === "ruban") sup = supportDuFormat(fmt);
+  if (sup === "inviolable" && FORMATS_ETIQ[fmt].ruban) sup = "ruban"; // l'inviolable n'existe qu'en planche
+  return { fmt, sup, propose: p };
+}
+// Une ligne par article et par emplacement ou lieu : { id, nom, sous, n (exemplaires), fmt, sup, i (rang de l'article, -1 sinon) }
 function etiquettesListeP(c) {
   const b = construireListeP(c), L = c.liste.articles, l = [];
   const emps = b.emplacements.slice().sort((x, y) => x.nom.localeCompare(y.nom, "fr", { numeric: true }));
-  b.lieux.forEach(x => l.push({ type: "emp", id: x.id, nom: x.nom, sous: MOTS_LIEUX[b.mot][0], n: 1 })); // une étiquette par fourgon, véhicule ou site
+  b.lieux.forEach(x => l.push({ type: "emp", id: x.id, nom: x.nom, sous: MOTS_LIEUX[b.mot][0], n: 1, fmt: "etagere", sup: "planche", i: -1 })); // une étiquette par fourgon, véhicule ou site
   emps.forEach(e => {
-    l.push({ type: "emp", id: e.id, nom: e.nom, sous: "Emplacement", n: 1 });
+    l.push({ type: "emp", id: e.id, nom: e.nom, sous: "Emplacement", n: 1, fmt: "etagere", sup: "planche", i: -1 });
     b.articles.forEach((a, i) => {
       if (a.emp !== e.id) return;
-      const p = planListeP(L[i], c), n = Math.min(ETIQ_MAX, p.n);
-      l.push({ type: p.sur, id: a.id, nom: a.nom, sous: a.serie ? "N° de série " + a.serie : p.sur === "contenant" ? `Par ${L[i].lot}` : p.sur === "emplacement" ? "Sur le bac ou l'étagère" : "", n, coupe: p.n > ETIQ_MAX ? p.n : 0 });
+      const p = planListeP(L[i], c), n = Math.min(ETIQ_MAX, p.n), ch = choixEtiqP(L[i], p.sur);
+      l.push({ type: p.sur, id: a.id, nom: a.nom, sous: a.serie ? "N° de série " + a.serie : p.sur === "contenant" ? `Par ${L[i].lot}` : p.sur === "emplacement" ? "Sur le bac ou l'étagère" : "", n, coupe: p.n > ETIQ_MAX ? p.n : 0, fmt: ch.fmt, sup: ch.sup, i, emp: e.nom });
     });
   });
   return l;
 }
+const mm = n => String(Math.round(n * 100) / 100).replace(".", ",");
+const coupeP = (t, n) => t.length > n ? t.slice(0, n - 1).trimEnd() + "…" : t;
+// Le récapitulatif : par format et par support, les planches, le ruban, les supports spéciaux. departs : case de départ par format de planche.
+function recapEtiqP(l, departs) {
+  const lignes = new Map(), formats = {};
+  l.forEach(x => {
+    const s = SUPPORTS_ETIQ[x.sup], k = (s.sansEtiquette ? "-" : x.fmt) + "|" + x.sup, r = lignes.get(k) || { fmt: s.sansEtiquette ? "" : x.fmt, sup: x.sup, n: 0 };
+    r.n += x.n; lignes.set(k, r);
+    if (!s.sansEtiquette) formats[x.fmt] = (formats[x.fmt] || 0) + x.n;
+  });
+  const tot = {}; Object.entries(formats).forEach(([k, n]) => { const f = FORMATS_ETIQ[k]; tot[k] = f.ruban ? { n, cm: Math.round(n * f.l / 10) } : { n, planches: Math.ceil((n + (departs[k] || 1) - 1) / (f.cols * f.rangs)) }; });
+  return { lignes: [...lignes.values()], formats: tot, speciaux: Object.keys(SUPPORTS_ETIQ).filter(k => SUPPORTS_ETIQ[k].special).map(k => [k, l.filter(x => x.sup === k).reduce((t, x) => t + x.n, 0)]).filter(x => x[1]) };
+}
+function texteRecapEtiqP(c, l, R) {
+  const std = l.filter(x => !SUPPORTS_ETIQ[x.sup].special).reduce((t, x) => t + x.n, 0);
+  return `Étiquettes · ${c.nom}\nÉtiquettes standard (polyester en planche ou ruban laminé) : ${std}\n` +
+    Object.entries(R.formats).map(([k, v]) => `- ${FORMATS_ETIQ[k].t} : ${v.n}${v.planches ? `, ${pluriel(v.planches, "planche")} A4` : `, ${v.cm} cm de ruban de ${FORMATS_ETIQ[k].ruban} mm`}`).join("\n") +
+    `\nSupports spéciaux : ${R.speciaux.length ? "\n" + R.speciaux.map(([k, n]) => `- ${SUPPORTS_ETIQ[k].t} : ${n}`).join("\n") : "aucun"}`;
+}
+// Une étiquette. Le QR est une case vide remplie par dessinerQrP : code | niveau | taille du code en mm (sans la marge).
+function etiquetteP(x, c, style) {
+  const f = FORMATS_ETIQ[x.fmt], qr = `<i class="pl-qr" data-qr-p="${x.id}|${f.niveau}|${f.qr}"></i>`, prop = `Propriété de ${esc(c.nom)}`;
+  if (x.fmt === "etagere") return `<div class="pl-e pl-etagere" ${style}>${qr}<div><span class="pl-nom">${esc(x.nom)}</span><b class="pl-code">${x.id}</b>${x.sous ? `<small>${esc(x.sous)}</small>` : ""}<small>${prop}</small></div></div>`;
+  if (x.fmt === "bac") return `<div class="pl-e pl-bac" ${style}>${qr}<div><b class="pl-code">${x.id}</b><span class="pl-nom">${esc(x.nom)}</span><small>${prop}</small></div></div>`;
+  if (x.fmt === "petit") return `<div class="pl-e pl-petit" ${style}>${qr}<div><b class="pl-code">${x.id}</b><span class="pl-nom">${esc(coupeP(x.nom, f.nom))}</span><small>${prop}</small></div></div>`;
+  if (x.fmt === "outil") return `<div class="pl-e pl-outil">${qr}<div><b class="pl-code">${x.id}</b><span class="pl-nom">${esc(coupeP(x.nom, f.nom))}</span><small>${esc(c.nom)}</small></div></div>`;
+  if (x.fmt === "petitOutil") { const [a, n] = x.id.split("-"); return `<div class="pl-e pl-petitOutil">${qr}<div><b class="pl-code">${a}-<br>${n || ""}</b></div></div>`; }
+  return `<div class="pl-e pl-drapeau"><span class="pl-face">${qr}</span><span class="pl-tour">tour du câble</span><span class="pl-face"><b class="pl-code">${x.id}</b><span class="pl-nom">${esc(coupeP(x.nom, f.nom))}</span></span></div>`;
+}
+let departEtiqP = {}, choixEtiqOuvert = false; // case de départ par format ; le volet des choix reste ouvert pendant qu'on y travaille
 function eEtiquettesP(id) {
   const c = clientP(id); if (!c || !c.liste) return eClient(id);
-  const l = etiquettesListeP(c), total = l.reduce((t, x) => t + x.n, 0), compte = k => l.filter(x => x.type === k).reduce((t, x) => t + x.n, 0), coupes = l.filter(x => x.coupe);
-  return `<div class="pas-imprimer"><h1>Étiquettes · ${esc(c.nom)}</h1>
-    <p class="sous">${pluriel(total, "étiquette")}, rangées par emplacement : ${[[compte("emp"), l.some(x => /^LIEU-/.test(x.id)) ? "d'emplacement ou de lieu" : "d'emplacement"], [compte("objet"), "à poser sur l'objet"], [compte("contenant"), "sur le chariot, le casier ou le carton"], [compte("emplacement"), "sur le bac ou l'étagère"]].filter(x => x[0]).map(x => x.join(" ")).join(", ")}. Environ ${pluriel(Math.ceil(total / ETIQ_PAR_PAGE), "page")} A4, ${ETIQ_PAR_PAGE} étiquettes par page.</p>
-    <div class="boutons" style="margin-bottom:12px"><button class="btn petit plein" data-act="imprimer">${I.imprimer}Imprimer ou enregistrer en PDF</button><button class="btn petit" data-e="liste" data-earg="${c.id}">Sa liste</button><button class="btn petit" data-e="client" data-earg="${c.id}">Fiche du client</button></div>
-    <p class="w-note">Le QR contient le code seul (ART-0001, EMP-01), comme dans le classeur du client : il se lit avec le bouton Scanner de l'appli. Un objet unique a une étiquette ; un objet prêté en plusieurs exemplaires en a une par exemplaire ou par contenant ; un consommable en a une, pour son bac ou son étagère.${coupes.length ? ` Au plus ${ETIQ_MAX} exemplaires par article : ${coupes.length > 1 ? coupes.length + " articles en demandent" : esc(coupes[0].nom) + " en demande"} davantage, à réimprimer au besoin.` : ""} Support de chaque étiquette : docs/21.</p></div>
-  <div class="planche planche-p">${l.map(x => { const une = `<div class="etiquette ${x.type === "emp" ? "etiq-emp" : ""}"><div data-qr-p="${x.id}"></div><div><b>${esc(x.nom)}</b><span class="code">${x.id}</span>${x.sous ? `<small class="proprio">${esc(x.sous)}</small>` : ""}<small class="proprio">Propriété de ${esc(c.nom)}</small></div></div>`; return x.n > 1 ? une.repeat(x.n) : une; }).join("")}</div>`;
+  const l = etiquettesListeP(c), L = c.liste.articles, R = recapEtiqP(l, departEtiqP), total = l.reduce((t, x) => t + x.n, 0), coupes = l.filter(x => x.coupe);
+  const nf = n => n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+  let achat = 0; const aPart = [];
+  const lignes = R.lignes.map(r => {
+    const s = SUPPORTS_ETIQ[r.sup], f = r.fmt ? FORMATS_ETIQ[r.fmt] : null, u = s.coutTexte ? null : (s.cout || f.cout);
+    if (u === null) aPart.push(s.t + " : " + s.coutTexte); else achat += u * r.n;
+    return `<tr><td>${f ? esc(f.t) : "—"}</td><td>${esc(s.t)}${s.special ? " <small>(spécial)</small>" : ""}</td><td class="n">${r.n.toLocaleString("fr-FR")}</td><td class="n">${u === null ? esc(s.coutTexte) : nf(u * r.n)}</td></tr>`;
+  }).join("");
+  // Les choix : par groupe, puis article par article
+  const groupes = [...new Set(L.map(x => "emp|" + x.emp))].map(k => [k, "Emplacement : " + k.slice(4)]).concat([...new Set(L.filter(x => x.categorie).map(x => "cat|" + x.categorie))].map(k => [k, "Catégorie : " + k.slice(4)]));
+  const optF = (v, prop) => `<option value="">${prop}</option>${Object.entries(FORMATS_ETIQ).map(([k, f]) => `<option value="${k}" ${v === k ? "selected" : ""}>${f.t}</option>`).join("")}`;
+  const optS = (v, prop) => `<option value="">${prop}</option>${Object.entries(SUPPORTS_ETIQ).map(([k, s]) => `<option value="${k}" ${v === k ? "selected" : ""}>${s.t}</option>`).join("")}`;
+  const optV = v => `<option value="">Non précisé</option>${Object.entries(VIES_ETIQ).map(([k, [t]]) => `<option value="${k}" ${v === k ? "selected" : ""}>${t}</option>`).join("")}`;
+  const choix = `<details class="bloc regl-bloc pl-choix" data-etiq-choix ${choixEtiqOuvert ? "open" : ""}><summary>Format et support de chaque objet</summary>
+    <p class="w-note">Chaque article reçoit une proposition : sur l'objet, un ruban laminé « Outil » ; sur un contenant, « Bac » ; sur le bac ou l'étagère, « Étagère ». « Où vit l'objet » l'affine (câble : drapeau ; ne se colle pas : plaquette à collier ; objet cher : inviolable ; gras, extérieur, lavage : ruban laminé). Changez ce qui ne convient pas ; laissez le reste.</p>
+    <div class="pl-groupe"><label class="champ">Tout un groupe<select data-etiq-groupe><option value="">Choisir un emplacement ou une catégorie…</option>${groupes.map(([k, t]) => `<option value="${esc(k)}">${esc(t)}</option>`).join("")}</select></label>
+      <label class="champ">Format<select data-etiq-gfmt>${optF("", "Format proposé")}</select></label><label class="champ">Support<select data-etiq-gsup>${optS("", "Support proposé")}</select></label>
+      <button class="btn petit" data-etiq-appliquer="${c.id}">Appliquer au groupe</button></div>
+    <div class="pl-lignes">${l.filter(x => x.i >= 0).map(x => { const a = L[x.i], p = propositionEtiqP(a, x.type);
+      return `<div class="pl-ligne"><span><b>${esc(a.nom)}</b><small>${x.id} · ${esc(a.emp)}${a.categorie ? " · " + esc(a.categorie) : ""} · ${pluriel(x.n, "étiquette")}</small></span>
+        <select data-etiq-vie="${c.id}|${x.i}" aria-label="Où vit l'objet">${optV(a.vie || "")}</select>
+        <select data-etiq-fmt="${c.id}|${x.i}" aria-label="Format">${optF(a.fmt || "", "Proposé : " + FORMATS_ETIQ[p.fmt].t)}</select>
+        <select data-etiq-sup="${c.id}|${x.i}" aria-label="Support">${optS(a.sup || "", "Proposé : " + SUPPORTS_ETIQ[p.sup].t)}</select></div>`; }).join("")}</div>
+    <p style="margin:10px 0 0"><button class="btn petit" data-etiq-propositions="${c.id}">Revenir aux propositions</button></p></details>`;
+  // Une section par format
+  const sections = Object.entries(FORMATS_ETIQ).map(([k, f]) => {
+    const items = l.filter(x => x.fmt === k && !SUPPORTS_ETIQ[x.sup].sansEtiquette), n = items.reduce((t, x) => t + x.n, 0); if (!n) return "";
+    const sup = [...new Set(items.map(x => SUPPORTS_ETIQ[x.sup].t))].join(", ");
+    if (f.ruban) {
+      const vus = items.slice(0, 12);
+      return `<section class="pl-format pas-imprimer" data-fmt="${k}"><h2>${f.t} <small class="compte-ph">${n}</small></h2>
+        <p class="sous">Ruban laminé de ${f.ruban} mm, ${mm(f.l)} mm de long${k === "drapeau" ? " pour un câble de 8 mm (deux faces de 30 mm, plus le tour du câble)" : ""} · QR de ${mm(f.qr)} mm, soit ${f.points} points par module à 180 points par pouce · ${R.formats[k].cm} cm de ruban · ${esc(sup)}.</p>
+        <div class="boutons" style="margin-bottom:10px"><button class="btn petit plein" data-etiq-csv="${c.id}|${k}">${I.excel}Exporter le CSV pour l'étiqueteuse</button></div>
+        <p class="w-note">Le fichier s'ouvre dans le logiciel de l'étiqueteuse, relié à un modèle d'étiquette : une ligne par étiquette (code, nom coupé, sous-titre, entreprise, format, longueur). C'est ce logiciel qui dessine le QR et qui imprime. Aperçu à taille réelle, un exemplaire par article${items.length > vus.length ? `, les ${vus.length} premiers` : ""} :</p>
+        <div class="pl-rubans">${vus.map(x => etiquetteP(x, c, "")).join("")}</div></section>`;
+    }
+    const par = f.cols * f.rangs, depart = Math.min(par, Math.max(1, departEtiqP[k] || 1)), cases = []; items.forEach(x => { for (let j = 0; j < x.n; j++) cases.push(x); });
+    const pages = []; for (let p = 0; p * par < cases.length + depart - 1; p++) pages.push(cases.slice(Math.max(0, p * par - depart + 1), (p + 1) * par - depart + 1).map((x, j) => { const pos = (p ? 0 : depart - 1) + j; return etiquetteP(x, c, `style="left:${mm(f.gauche + (pos % f.cols) * f.pasX).replace(",", ".")}mm;top:${mm(f.haut + Math.floor(pos / f.cols) * f.pasY).replace(",", ".")}mm"`); }).join(""));
+    return `<section class="pl-format" data-fmt="${k}"><div class="pas-imprimer"><h2>${f.t} <small class="compte-ph">${n}</small></h2>
+      <p class="sous">Planche A4 prédécoupée de ${par} étiquettes de ${mm(f.l)} × ${mm(f.h)} mm (${f.cols} × ${f.rangs}) · QR de ${mm(f.qr)} mm · ${pluriel(pages.length, "planche")} · ${esc(sup)}.</p>
+      <div class="boutons pl-outils"><label class="champ">Commencer à l'étiquette n°<input type="number" inputmode="numeric" min="1" max="${par}" step="1" value="${depart}" data-etiq-depart="${k}"></label>
+        <button class="btn petit plein" data-etiq-imprimer="${k}">${I.imprimer}Imprimer ce format</button></div>
+      <p class="w-note"><b>Imprimez à 100 %</b> (« Taille réelle », sans « Ajuster à la page »), sans marges ni en-têtes. Marges et pas calculés (haut ${mm(f.haut)} mm, gauche ${mm(f.gauche)} mm, pas ${mm(f.pasX)} × ${mm(f.pasY)} mm) : <b>à vérifier sur le gabarit du fabricant</b> (${f.gabarit}), par une impression d'essai sur papier, posée sur la planche à contre-jour.</p></div>
+      <div class="pl-zone">${pages.map(p => `<div class="pl-page">${p}</div>`).join("")}</div></section>`;
+  }).join("");
+  return `<div class="pas-imprimer ecran-etiq"><h1>Étiquettes · ${esc(c.nom)}</h1>
+    <p class="sous">${pluriel(total, "étiquette")} pour ${pluriel(L.length, "article")}, leurs emplacements et leurs lieux. Le QR porte le code seul (ART-0001, EMP-01), avec sa marge blanche : il se lit avec le bouton Scanner de l'appli.${coupes.length ? ` Au plus ${ETIQ_MAX} exemplaires par article : ${coupes.length > 1 ? coupes.length + " articles en demandent" : esc(coupes[0].nom) + " en demande"} davantage, à réimprimer au besoin.` : ""}</p>
+    <div class="boutons" style="margin-bottom:12px"><button class="btn petit" data-e="liste" data-earg="${c.id}">Sa liste</button><button class="btn petit" data-e="client" data-earg="${c.id}">Fiche du client</button></div>
+    <h2>Récapitulatif, à reporter sur le devis</h2>
+    <div class="bloc regl-bloc" style="padding-top:12px"><div class="defile"><table class="t"><thead><tr><th>Format</th><th>Support</th><th class="n">Étiquettes</th><th class="n">Achat indicatif</th></tr></thead><tbody>${lignes}</tbody></table></div>
+      <p style="margin:10px 0 4px">${Object.entries(R.formats).map(([k, v]) => `<b>${FORMATS_ETIQ[k].t}</b> : ${v.planches ? pluriel(v.planches, "planche") + " A4" : v.cm + " cm de ruban de " + FORMATS_ETIQ[k].ruban + " mm"}`).join(" · ")}</p>
+      <p style="margin:0 0 4px"><b>Supports spéciaux</b> : ${R.speciaux.length ? R.speciaux.map(([k, n]) => `${esc(SUPPORTS_ETIQ[k].t)} ${n}`).join(" · ") : "aucun"}.</p>
+      <p class="w-note">Achat des consommables, indicatif, à confirmer : ${nf(achat)} HT${aPart.length ? ", plus " + esc(aPart.join(" ; ")) : ""}. Ce n'est pas un prix de vente : les étiquettes standard sont dans l'offre, les supports spéciaux se chiffrent à part (docs/21, section 12).</p>
+      <div class="boutons"><button class="btn petit plein" data-etiq-copier="${c.id}">Copier pour le devis</button><button class="btn petit" data-etiq-liste="${c.id}">${I.excel}Exporter la liste (CSV)</button></div></div>
+    <h2>Les choix</h2>${choix}</div>${sections}`;
 }
-// Les QR se dessinent par paquets, pour qu'une planche de plusieurs centaines d'étiquettes ne fige pas l'écran
+function csvEtiqP(nom, lignes) {
+  const cel = v => /[";\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v);
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿" + lignes.map(l => l.map(cel).join(";")).join("\r\n") + "\r\n"], { type: "text/csv;charset=utf-8" })); a.download = nom;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+// Les QR se dessinent par paquets, pour qu'une planche de plusieurs centaines d'étiquettes ne fige pas l'écran.
+// Marge blanche de 4 modules dessinée avec le code ; la taille demandée est celle du code sans la marge, agrandie si le code a plus de 21 modules.
 async function dessinerQrP() {
-  const cases = [...$$("[data-qr-p]")]; if (!cases.length) return;
+  const cases = [...$$("[data-qr-p]")]; delete document.body.dataset.qrPrets; if (!cases.length) return;
   try { await script("lib/qrcode.js"); } catch (e) { cases.forEach(c => { c.textContent = "QR indisponible hors ligne"; }); return; }
   const faits = {};
-  for (let i = 0; i < cases.length; i += 120) {
-    cases.slice(i, i + 120).forEach(c => { const k = c.dataset.qrP; if (!faits[k]) { const q = window.qrcode(0, "M"); q.addData(k); q.make(); faits[k] = q.createSvgTag({ cellSize: 3, margin: 0, scalable: true }); } c.innerHTML = faits[k]; });
+  for (let i = 0; i < cases.length; i += 150) {
+    cases.slice(i, i + 150).forEach(c => {
+      const k = c.dataset.qrP;
+      if (!faits[k]) { const [code, niveau, taille] = k.split("|"), q = window.qrcode(0, niveau); q.addData(code); q.make(); const n = q.getModuleCount(), cote = Math.round(+taille * (n + 8) / 21 * 100) / 100;
+        faits[k] = q.createSvgTag({ cellSize: 4, margin: 16, scalable: true }).replace("<svg ", `<svg shape-rendering="crispEdges" style="width:${cote}mm;height:${cote}mm" `); }
+      c.innerHTML = faits[k];
+    });
     await new Promise(r => setTimeout(r, 0));
   }
   document.body.dataset.qrPrets = String(cases.length);
+}
+function brancherEtiqP() {
+  const lire = b => { const [id, i] = b.split("|"), c = clientP(id); return { c, a: c.liste.articles[+i] }; };
+  const poser = (a, cle, v) => { if (v) a[cle] = v; else delete a[cle]; };
+  const det = $("[data-etiq-choix]"); if (det) det.ontoggle = () => { choixEtiqOuvert = det.open; };
+  [["vie", "etiqVie"], ["fmt", "etiqFmt"], ["sup", "etiqSup"]].forEach(([cle, d]) => $$(`[data-etiq-${cle}]`).forEach(s => s.onchange = () => { const { a } = lire(s.dataset[d]); poser(a, cle, s.value); sauverP(); rendre(); }));
+  $$("[data-etiq-appliquer]").forEach(b => b.onclick = () => {
+    const c = clientP(b.dataset.etiqAppliquer), g = $("[data-etiq-groupe]").value, fmt = $("[data-etiq-gfmt]").value, sup = $("[data-etiq-gsup]").value;
+    if (!g) return toast("Choisissez d'abord un emplacement ou une catégorie.");
+    const l = c.liste.articles.filter(a => g.startsWith("emp|") ? a.emp === g.slice(4) : a.categorie === g.slice(4));
+    l.forEach(a => { poser(a, "fmt", fmt); poser(a, "sup", sup); }); sauverP(); rendre();
+    toast(`${pluriel(l.length, "article")} : ${fmt ? FORMATS_ETIQ[fmt].t : "format proposé"}, ${sup ? SUPPORTS_ETIQ[sup].t.toLowerCase() : "support proposé"}.`);
+  });
+  $$("[data-etiq-propositions]").forEach(b => b.onclick = () => {
+    const c = clientP(b.dataset.etiqPropositions);
+    if (!confirm("Revenir aux formats et aux supports proposés pour tous les articles ? « Où vit l'objet » est gardé.")) return;
+    c.liste.articles.forEach(a => { delete a.fmt; delete a.sup; }); sauverP(); rendre(); toast("Propositions remises.");
+  });
+  $$("[data-etiq-depart]").forEach(i => i.onchange = () => { departEtiqP[i.dataset.etiqDepart] = Math.max(1, Math.floor(+i.value) || 1); rendre(); });
+  $$("[data-etiq-imprimer]").forEach(b => b.onclick = () => {
+    $$(".pl-format").forEach(s => s.classList.toggle("pl-hors", s.dataset.fmt !== b.dataset.etiqImprimer));
+    window.print(); setTimeout(() => $$(".pl-hors").forEach(s => s.classList.remove("pl-hors")), 500);
+  });
+  $$("[data-etiq-csv]").forEach(b => b.onclick = () => {
+    const [id, k] = b.dataset.etiqCsv.split("|"), c = clientP(id), f = FORMATS_ETIQ[k], lignes = [["Code", "Nom", "Sous-titre", "Entreprise", "Format", "Longueur (mm)"]];
+    etiquettesListeP(c).filter(x => x.fmt === k && !SUPPORTS_ETIQ[x.sup].sansEtiquette).forEach(x => { for (let j = 0; j < x.n; j++) lignes.push([x.id, f.nom ? coupeP(x.nom, f.nom) : "", x.sous, c.nom, f.t, mm(f.l)]); });
+    csvEtiqP(`etiquettes-${normP(f.t).replace(/ /g, "-")}-${normP(c.nom).replace(/ /g, "-").slice(0, 30) || "client"}.csv`, lignes); toast(`${pluriel(lignes.length - 1, "étiquette")} « ${f.t} » dans le fichier.`);
+  });
+  $$("[data-etiq-liste]").forEach(b => b.onclick = () => {
+    const c = clientP(b.dataset.etiqListe), lignes = [["Code", "Nom", "Format", "Support", "Étiquettes", "Où vit l'objet", "Emplacement"]];
+    etiquettesListeP(c).forEach(x => lignes.push([x.id, x.nom, SUPPORTS_ETIQ[x.sup].sansEtiquette ? "" : FORMATS_ETIQ[x.fmt].t, SUPPORTS_ETIQ[x.sup].t, x.n, x.i >= 0 && c.liste.articles[x.i].vie ? VIES_ETIQ[c.liste.articles[x.i].vie][0] : "", x.emp || ""]));
+    csvEtiqP(`plan-etiquettes-${normP(c.nom).replace(/ /g, "-").slice(0, 30) || "client"}.csv`, lignes); toast("Plan d'étiquetage enregistré dans vos téléchargements.");
+  });
+  $$("[data-etiq-copier]").forEach(b => b.onclick = async () => {
+    const c = clientP(b.dataset.etiqCopier), l = etiquettesListeP(c), t = texteRecapEtiqP(c, l, recapEtiqP(l, departEtiqP));
+    try { await navigator.clipboard.writeText(t); toast("Récapitulatif copié."); } catch (e) { prompt("Copiez ce récapitulatif :", t); }
+  });
 }
 
 /* ---------------- Export pour le classeur du client ---------------- */
@@ -674,7 +849,7 @@ function blocEssaiP(c) {
 }
 
 function brancherListeP() {
-  if (vueE.nom === "etiquettes") dessinerQrP();
+  if (vueE.nom === "etiquettes") { dessinerQrP(); brancherEtiqP(); }
   $$("[data-liste-fichier]").forEach(i => i.onchange = async () => {
     const f = i.files[0], id = i.dataset.listeFichier; if (!f) return; i.value = "";
     try {
