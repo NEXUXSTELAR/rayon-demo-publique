@@ -131,7 +131,7 @@ const wResume = () => `<button class="w-plein" data-act="resume"><small>Chaque l
 function feuilleResume() {
   const t = texteResume();
   const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="trs"><h1 id="trs" style="font-size:26px">Résumé du lundi</h1>
-    <p class="sous">Ce message part tout seul chaque lundi à 8 h. Le gérant n'a pas besoin d'ouvrir l'appli pour savoir où il en est.</p>
+    <p class="sous">Ce message part tout seul chaque lundi à 8 h. Pas besoin d'ouvrir l'appli pour savoir où en est le stock.</p>
     <div class="bulle-wa">${esc(t).replace(/\n/g, "<br>")}<small>08:00 ✓✓</small></div>
     <div class="valider"><button class="btn" data-x>Fermer</button><button class="btn plein" data-ok>${I.partager}Envoyer maintenant</button></div></div>`);
   f.querySelector("[data-x]").onclick = () => f.remove();

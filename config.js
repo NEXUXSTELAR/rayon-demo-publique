@@ -176,9 +176,9 @@ function wActions() {
   return `${actif("MO-RES") ? tuilePreparer() : ""}
   <div class="t-tuiles">
     ${actif("MO-KIT") && S.kits.length ? `<button class="t-tuile" data-aller="kits"><span class="pastille">${I.kit}</span><div><b>Sortir un kit</b><small>Tout un ensemble d'un coup</small></div></button>` : ""}
-    ${aDesPrets() ? `<button class="t-tuile" data-aller="recuperer"><span class="pastille">${I.retour}</span><div><b>${V("retourTitre")}</b><small>${n} ${V("retourSous")}</small></div></button>` : ""}
+    ${aDesPrets() ? `<button class="t-tuile" data-aller="recuperer"><span class="pastille">${I.retour}</span><div><b>${V("retourTitre")}</b><small>${n} ${n > 1 ? V("retourSous") : V("retourSous").replace(/^(\S+?)s(\s|$)/, "$1$2").replace(/(prêté|sorti)s\b/, "$1")}</small></div></button>` : ""}
     <button class="t-tuile" data-aller="reception"><span class="pastille">${I.camion}</span><div><b>Réceptionner une livraison</b><small>${attendues} attendue${attendues > 1 ? "s" : ""}</small></div></button>
-    <button class="t-tuile" data-aller="zones"><span class="pastille">${I.compter}</span><div><b>Compter une zone</b><small>Allée par allée</small></div></button>
+    <button class="t-tuile" data-aller="zones"><span class="pastille">${I.compter}</span><div><b>Compter une zone</b><small>Zone par zone</small></div></button>
     <button class="t-tuile" data-aller="chercher"><span class="pastille">${I.loupe}</span><div><b>Chercher un objet</b><small>Sans étiquette sous la main</small></div></button>
     <button class="t-tuile" data-aller="jour"><span class="pastille">${I.jour}</span><div><b>Ma journée</b><small>Ce que j'ai enregistré</small></div></button>
   </div>`;
@@ -288,7 +288,7 @@ function wAssistance() {
   const inst = S.installation || { livreLe: Date.now(), heuresUtilisees: 0 };
   const jours = Math.max(0, Math.ceil((inst.livreLe + OFFRE.jours * J_MS - Date.now()) / J_MS)), h = Math.max(0, OFFRE.heures - inst.heuresUtilisees);
   const enCours = jours > 0 && h > 0;
-  return `<button class="w-plein" data-aller="installation"><small>Assistance incluse</small><b class="w-moyen">${enCours ? String(h).replace(".", ",") + " h restantes" : "Terminée"}</b><small>${enCours ? `encore ${jours} jours` : "interventions sur devis"}</small></button>`;
+  return `<button class="w-plein" data-aller="installation"><small>Assistance incluse</small><b class="w-moyen">${enCours ? String(h).replace(".", ",") + " h restantes" : "Terminée"}</b><small>${enCours ? `encore ${jours} jour${jours > 1 ? "s" : ""}` : "interventions sur devis"}</small></button>`;
 }
 
 /* Page Analyses : les courbes choisies pour ce rôle et ce métier */

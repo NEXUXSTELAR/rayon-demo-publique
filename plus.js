@@ -56,7 +56,7 @@ function bReservation(id) {
   <div class="defile"><table class="t"><thead><tr><th>Objet</th><th class="n">Réservé</th><th class="n">Libre ces jours-là</th></tr></thead><tbody>
   ${r.lignes.map(([aid, q]) => { const libre = dispoSur(aid, r.debut, r.fin, r.id); return `<tr><td>${esc(art(aid).nom)}</td><td class="n">${q}</td><td class="n"><b class="${libre < q ? "rouge" : ""}">${libre}</b>${libre < q ? `<br><small class="rouge">il en manque ${q - libre}</small>` : ""}</td></tr>`; }).join("")}
   </tbody></table></div>
-  ${r.statut === "Confirmée" ? `<p class="sous" style="margin-top:12px">Le jour du départ, cette réservation devient la liste de préparation du magasinier.</p><p><button class="btn" data-annuler-resa="${r.id}">Annuler la réservation</button></p>` : ""}`;
+  ${r.statut === "Confirmée" ? `<p class="sous" style="margin-top:12px">Le jour du départ, cette réservation devient la liste de préparation du dépôt.</p><p><button class="btn" data-annuler-resa="${r.id}">Annuler la réservation</button></p>` : ""}`;
 }
 function feuilleReservation(d1, d2) {
   const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="trz"><h1 id="trz" style="font-size:26px">Nouvelle réservation</h1>

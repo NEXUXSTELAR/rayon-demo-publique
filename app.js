@@ -389,7 +389,7 @@ function coque() {
 function feuillePlus() {
   const u = moi(), sec = PARENT[ALIAS[vue.nom] || vue.nom] || ALIAS[vue.nom] || vue.nom;
   const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-label="Tous les écrans">
-    <div class="plus-moi">${avatar(u, true)}<div><b>${esc(u.nom)}</b><small>${esc(u.poste || "")}${session.admin ? " · administratrice du compte" : ""}</small></div></div>
+    <div class="plus-moi">${avatar(u, true)}<div><b>${esc(u.nom)}</b><small>${esc(u.poste || "")}${session.admin ? " · administre le compte" : ""}</small></div></div>
     ${Object.entries(GROUPES).map(([g, t]) => { const l = sectionsPermises().filter(k => SECTIONS[k].g === g); return l.length ? `<h2>${t}</h2><div class="plus-grille">${l.map(k => `<button data-k="${k}" ${k === sec ? 'aria-current="page"' : ""}><span class="pastille">${I[SECTIONS[k].i]}</span>${esc(titreSection(k))}</button>`).join("")}</div>` : ""; }).join("")}
     <div class="valider trois"><button class="btn" data-a="reglages">${I.reglages}Thème</button><button class="btn" data-a="verrouiller">${I.cadenas}Verrouiller</button><button class="btn" data-a="sortir">${I.sortir}Sortir</button></div>
     ${installateur ? `<div class="valider" style="grid-template-columns:1fr"><button class="btn plein" data-a="revenirConfig">Revenir au réglage de l'installation</button></div>` : ""}
@@ -404,7 +404,7 @@ function vAccueil() {
   return `<div class="salut"><p class="date">${dateLongue(aujourdHui())}</p><h1>${h >= 18 || h < 5 ? "Bonsoir" : "Bonjour"} ${esc(u.nom)}</h1></div>${bento(accueilAvecControles(cfg().accueil), window.innerWidth < 720 && !toutVoir ? 6 : 0)}`;
 }
 // Les gestes du magasinier, ouverts à toute l'équipe.
-const vDepot = () => `<h1>Au dépôt</h1><p class="sous">Scanner, sortir, rentrer, compter : ce que fait le magasinier, chacun peut le faire.</p>${wScan()}${wActions()}`;
+const vDepot = () => `<h1>Au dépôt</h1><p class="sous">Scanner, sortir, rentrer, compter : les gestes de tous les jours, ouverts à toute l'équipe.</p>${wScan()}${wActions()}`;
 function tObjet(id) {
   const a = art(id); if (!a) return `<p>Objet introuvable.</p>`;
   const q = stock(id), e = etat(a), pret = logique(a) === "pret";
@@ -579,7 +579,7 @@ function brouillons() {
 }
 function bCommandes() {
   const b = Object.entries(brouillons());
-  return `<h1>Commandes</h1><p class="sous">Préparées seules à partir des seuils. Au-dessus de ${argent(SEUIL_VALIDATION_EUR)}, le gérant valide.</p>
+  return `<h1>Commandes</h1><p class="sous">Préparées seules à partir des seuils. Au-dessus de ${argent(SEUIL_VALIDATION_EUR)}, la direction valide.</p>
   ${b.map(([fid, l]) => {
     const f = S.fournisseurs.find(x => x.id === fid);
     const tot = l.reduce((t, x) => t + x.qte * art(x.id).prix, 0);
@@ -587,7 +587,7 @@ function bCommandes() {
     return `<section class="bon"><header><b>${esc(f.nom)}</b><span>Brouillon · délai ${f.delai} j</span></header>
       <table class="t"><tbody>${l.map(x => `<tr><td>${esc(art(x.id).nom)}${parLots(x.id, x.qte) ? `<br><small>${parLots(x.id, x.qte)}</small>` : ""}</td><td class="n">${x.qte}</td><td class="n">${argent(x.qte * art(x.id).prix)}</td></tr>`).join("")}</tbody></table>
       <p style="text-align:right;font-weight:800;font-size:20px">${argent(tot)} HT</p>
-      ${attente ? `<p class="sous">En attente de l'accord du gérant.</p>` : tot > SEUIL_VALIDATION_EUR ? `<button class="btn" data-cmd="${fid}" data-statut="À valider">Demander l'accord du gérant</button>` : `<button class="btn plein" data-cmd="${fid}" data-statut="Envoyée">Envoyer au fournisseur</button>`}
+      ${attente ? `<p class="sous">En attente de l'accord de la direction.</p>` : tot > SEUIL_VALIDATION_EUR ? `<button class="btn" data-cmd="${fid}" data-statut="À valider">Demander l'accord de la direction</button>` : `<button class="btn plein" data-cmd="${fid}" data-statut="Envoyée">Envoyer au fournisseur</button>`}
     </section>`;
   }).join("") || `<p class="vide">Rien à commander.</p>`}
   <h2>Commandes passées</h2>
@@ -636,7 +636,7 @@ const ROLES = { terrain: "Terrain : dépôt et camion", chauffeur: "Chauffeur : 
 function dEquipe() {
   if (!session.admin) return `<h1>Équipe et accès</h1><p class="vide">Seul l'administrateur du compte gère les accès.</p>`;
   return `<h1>Équipe et accès</h1><p class="sous">Chacun entre avec son identifiant et son mot de passe. Chaque mouvement porte son nom. Retirer un accès prend une seconde.</p>
-  <div class="bloc">${S.equipe.map(u => `<div class="personne ${u.actif ? "" : "inactif"}">${avatar(u)}<div><b>${esc(u.nom)}${u.admin ? " · administratrice du compte" : ""}</b><small><span class="code">${esc(u.identifiant || "")}</span> · ${esc(u.poste)} · ${ROLES[u.role]}${u.actif ? "" : " · accès retiré"}</small></div>
+  <div class="bloc">${S.equipe.map(u => `<div class="personne ${u.actif ? "" : "inactif"}">${avatar(u)}<div><b>${esc(u.nom)}${u.admin ? " · administre le compte" : ""}</b><small><span class="code">${esc(u.identifiant || "")}</span> · ${esc(u.poste)} · ${ROLES[u.role]}${u.actif ? "" : " · accès retiré"}</small></div>
     <div class="actions"><button class="btn petit" data-nouveau-code="${u.id}">Nouveau mot de passe</button>${u.id === session.uid ? "" : `<label class="inter"><input type="checkbox" data-acces="${u.id}" ${u.actif ? "checked" : ""} aria-label="Accès de ${esc(u.nom)}"><span></span></label>`}</div></div>`).join("")}</div>
   <p style="margin-top:12px"><button class="btn plein petit" data-act="ajouterPersonne">Ajouter une personne</button></p>
   <h2>Sécurité</h2>
@@ -714,11 +714,11 @@ function dInstallation() {
   <div class="bloc"><div class="module"><b>Assistance incluse</b><span class="statut ${enCours ? "s-revenue" : "s-partie"}">${enCours ? "en cours" : "terminée"}</span>
     <p>${enCours ? `Encore ${jours} jour${jours > 1 ? "s" : ""} et ${String(restantes).replace(".", ",")} h sur ${OFFRE.heures} h. ` : `Terminée le ${new Date(fin).toLocaleDateString("fr-FR")}. `}Elle couvre les corrections de notre paramétrage et les questions d'utilisation, pas les nouvelles fonctions.</p></div>
   <div class="module"><b>Intervention ensuite</b><span>${fmt(TARIF_INTERVENTION[unite])} HT / h</span><p>À distance, par quart d'heure, 30 minutes au minimum, toujours sur devis accepté.</p></div>
-  <div class="module"><b>Payé chaque mois à Google, pas à Stockclair</b><span>${fmt(Math.round(google * 100) / 100)}</span><p>Licences Google des ${S.equipe.filter(u => u.actif).length} personnes de l'équipe (environ 6,80 € HT par personne).</p></div></div>
+  <div class="module"><b>Payé chaque mois à Google, pas à Stockclair</b><span>${fmt(Math.round(google * 100) / 100)}</span><p>Comptes Google des ${S.equipe.filter(u => u.actif).length} personnes de l'équipe (environ 6,80 € HT par personne).</p></div></div>
   <p style="margin-top:12px"><button class="btn plein" data-act="demanderIntervention">Demander une intervention</button></p>
   ${(S.interventions || []).length ? `<h2>Vos demandes</h2><table class="t"><tbody>${S.interventions.slice().reverse().map(i => `<tr><td>${quand(i.date)}<br><small>${esc(i.texte)}</small></td><td class="n">${i.incluse ? "dans l'assistance" : "devis envoyé"}</td></tr>`).join("")}</tbody></table>` : ""}
   <h2>Ce qui est installé</h2>
-  <p class="sous">Réglé à l'installation, d'après votre devis. Pour ajouter un module, demandez un devis : il se paie une fois et reste à vous.</p>
+  <p class="sous">Réglé à l'installation, d'après votre devis. Pour ajouter une fonction, demandez un devis : elle se paie une fois et reste à vous.</p>
   <div class="bloc">${Object.entries(CATALOGUE).map(([k, m]) => `<div class="module"><b>${m.nom}</b>${actif(k) ? `<span class="statut s-revenue">installé</span>` : `<button class="btn petit" data-devis="${k}">Demander un devis</button>`}<p>${m.detail}.${actif(k) ? "" : ` Environ ${fmt(m[unite])} HT, une fois.`}</p></div>`).join("")}</div>
   <h2>Réglages</h2>
   <div class="module"><b>Vos coordonnées sur les documents</b><button class="btn petit" data-act="coordonnees">Modifier</button><p>${S.entreprise && S.entreprise.nom ? esc(S.entreprise.nom) : "Nom, adresse, téléphone et logo en haut des bons et des factures."}</p></div>
@@ -730,7 +730,7 @@ function feuilleIntervention(module) {
   const incluse = !module && Date.now() < inst.livreLe + OFFRE.jours * 86400000 && inst.heuresUtilisees < OFFRE.heures;
   const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="ti"><h1 id="ti" style="font-size:26px">${module ? "Demander un devis" : "Demander une intervention"}</h1>
     <p class="sous">${module ? "Nous vous envoyons un devis. Rien n'est ajouté ni facturé avant votre accord." : incluse ? "Votre assistance incluse est en cours : si la demande entre dedans, elle ne vous coûte rien." : "Votre assistance incluse est terminée : vous recevrez un devis avant tout travail."}</p>
-    <label class="champ">Votre demande<textarea name="texte" rows="4" maxlength="400" style="border-radius:10px;border:2px solid var(--trait-fort);padding:10px;font:inherit;background:var(--carte);color:var(--encre)">${module ? esc("Ajout du module « " + CATALOGUE[module].nom + " ».") : ""}</textarea></label>
+    <label class="champ">Votre demande<textarea name="texte" rows="4" maxlength="400" style="border-radius:10px;border:2px solid var(--trait-fort);padding:10px;font:inherit;background:var(--carte);color:var(--encre)">${module ? esc("Ajout de la fonction « " + CATALOGUE[module].nom + " ».") : ""}</textarea></label>
     <div class="valider"><button class="btn" data-x>Annuler</button><button class="btn plein" data-ok>Envoyer</button></div></div>`);
   f.querySelector("[data-x]").onclick = () => f.remove();
   f.querySelector("[data-ok]").onclick = () => {
@@ -965,7 +965,7 @@ function brancher() {
   // Modules : seulement dans l'espace installateur, d'après le devis
   $$("[data-module]").forEach(c => c.onchange = () => { S.modules[c.dataset.module] = c.checked; sauver(); rendre(); toast(`${CATALOGUE[c.dataset.module].nom} ${c.checked ? "installé" : "retiré"} pour ce client.`); });
   $$("[data-monnaie]").forEach(s => s.onchange = () => { S.monnaie = s.value; sauver(); rendre(); });
-  $$("[data-cmd]").forEach(b => b.onclick = () => { creerCommande(b.dataset.cmd, b.dataset.statut); toast(b.dataset.statut === "Envoyée" ? "Bon de commande envoyé (simulation)." : "Demande envoyée au gérant."); rendre(); });
+  $$("[data-cmd]").forEach(b => b.onclick = () => { creerCommande(b.dataset.cmd, b.dataset.statut); toast(b.dataset.statut === "Envoyée" ? "Bon de commande envoyé (simulation)." : "Demande envoyée à la direction."); rendre(); });
   $$("[data-valider]").forEach(b => b.onclick = () => { S.commandes.find(c => c.id === b.dataset.valider).statut = "Envoyée"; sauver(); toast("Commande validée et envoyée (simulation)."); rendre(); });
   // « Réceptionner » ouvre l'écran de réception, prérempli avec la commande : on y note un écart et on photographie le bon.
   $$("[data-recevoir]").forEach(b => b.onclick = () => aller("receptionCmd", b.dataset.recevoir));

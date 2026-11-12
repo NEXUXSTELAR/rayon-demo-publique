@@ -129,7 +129,7 @@ function blocRentabilite(a) {
   const r = rapportObjet(a); if (!r.jours) return "";
   const part = r.achat ? Math.round(r.revenu / r.achat * 100) : 0;
   return `<h2>Ce qu'il rapporte</h2><table class="t"><tbody>
-    <tr><td>Locations en ${r.jours} jours<br><small>${r.sorties} sortie${r.sorties > 1 ? "s" : ""}, ${r.pieces.toLocaleString("fr-FR")} pièce${r.pieces > 1 ? "s" : ""} à ${argent(a.loc)}</small></td><td class="n">${argent(r.revenu)}</td></tr>
+    <tr><td>Locations en ${r.jours} jour${r.jours > 1 ? "s" : ""}<br><small>${r.sorties} sortie${r.sorties > 1 ? "s" : ""}, ${r.pieces.toLocaleString("fr-FR")} pièce${r.pieces > 1 ? "s" : ""} à ${argent(a.loc)}</small></td><td class="n">${argent(r.revenu)}</td></tr>
     <tr><td>Valeur du parc de cet objet<br><small>au prix unitaire de ${argent(a.prix)}</small></td><td class="n">${argent(r.achat)}</td></tr>
     <tr><td><b>Part de cette valeur déjà couverte</b></td><td class="n"><b>${part} %</b></td></tr></tbody></table>
   <p class="sous" style="margin-top:8px">Estimation : chaque sortie est comptée au prix de location actuel. Ce n'est pas votre facturation.</p>`;
