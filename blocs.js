@@ -25,23 +25,41 @@ function wPouls() {
   const W = 320, H = 70, max = Math.max(...serie) * 1.04 || 1, min = Math.min(...serie) * .96;
   const x = i => (i / (serie.length - 1)) * W, y = val => H - ((val - min) / ((max - min) || 1)) * (H - 6) - 3;
   const ligne = serie.map((val, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(val).toFixed(1)}`).join("");
-  const puce = (vers, coul, n, txt) => `<button class="puce" ${vers && permis(vers) ? `data-aller="${vers}"` : "disabled"}><i style="--c:${coul}"></i><b>${compte(n)}</b><span>${txt}</span></button>`;
+  // Un voyant s'ouvre toujours sur sa liste. Celui qui n'a rien à ouvrir (zéro, ou pas de liste pour ce rôle) n'a pas l'aspect d'un bouton. Un zéro passe en gris.
+  const puce = (attr, coul, n, txt) => { const corps = `<i style="--c:${coul}"></i><b>${compte(n)}</b><span>${txt}</span>`, zero = n ? "" : " zero"; return attr ? `<button class="puce${zero}" ${attr}>${corps}</button>` : `<div class="puce inerte${zero}">${corps}</div>`; };
+  const vers = k => permis(k) ? `data-aller="${k}"` : "";
   const prix = droit("prix");
   return `<div class="pouls">
     <div class="pouls-tete">
       <div><small>${(S.metier || "loueur") === "loueur" ? "Valeur du matériel au dépôt" : "Valeur du stock"}</small>
         <b class="pouls-chiffre">${prix ? compte(v, "argent") : compte(S.articles.reduce((t, a) => t + Math.max(0, stock(a.id)), 0)) + " pièces"}</b>
-        <span class="pouls-delta ${d > 0 ? "monte" : d < 0 ? "descend" : ""}">${d ? `<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M5 1 9.5 9h-9z"/></svg>` : ""}${d > 0 ? "+" : ""}${d} % en 30 jours</span></div>
+        <span class="pouls-delta ${d > 0 ? "monte" : d < 0 ? "descend" : ""}">${d ? `<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M5 1 9.5 9h-9z"/></svg>` : ""}${d > 0 ? "+" : d < 0 ? "−" : ""}${Math.abs(d)} % en 30 jours</span></div>
       ${permis("analyses") ? `<button class="rond clair" data-racine="analyses" aria-label="Voir les analyses">${I.fleche}</button>` : ""}
     </div>
     <svg class="pouls-courbe" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
       <path class="aire" d="${ligne}L${W},${H}L0,${H}Z"/><path class="trait" d="${ligne}"/><circle cx="${x(serie.length - 1)}" cy="${y(serie[serie.length - 1])}" r="3.5"/></svg>
     <div class="pouls-puces">
-      ${puce("materiel", "var(--sortie)", chez, aDesPrets() ? V("chez").toLowerCase() : V("sortiesMot").toLowerCase() + " en 7 j")}
-      ${puce("materiel", "var(--alerte)", rupt, "à commander")}
-      ${puce("", "var(--marque)", dec, "à décider")}
-      ${puce("", "var(--compter)", nt, "à faire")}
+      ${puce(permis("materiel") ? `data-aller="materiel"${aDesPrets() ? ' data-arg="dehors"' : ""}` : "", "var(--sortie)", chez, (chez > 1 ? "pièces " : "pièce ") + (aDesPrets() ? V("chez").toLowerCase() : V("sortiesMot").toLowerCase().replace(/^(\S*[éus])(?=\s|$)/, "$1" + (chez > 1 ? "es" : "e")) + " en 7 j"))}
+      ${puce(permis("materiel") ? `data-aller="materiel" data-arg="alerte"` : "", "var(--alerte)", rupt, "à commander")}
+      ${puce(dec ? vers("commandes") || `data-vers-bloc="decider"` : vers("commandes"), "var(--marque)", dec, "à décider")}
+      ${puce(nt ? `data-vers-bloc="taches"` : "", "var(--compter)", nt, "à faire")}
     </div></div>`;
+}
+
+// Un voyant du panneau mène à son bloc s'il est sur l'écran (au besoin en dépliant l'accueil) ; sinon « à faire » ouvre la liste des tâches dans une feuille.
+function versBloc(k) {
+  let b = $(`main [data-w="${k}"]`);
+  if (!b && !toutVoir && $(".voir-plus")) { toutVoir = true; rendre(); b = $(`main [data-w="${k}"]`); }
+  if (b) return b.scrollIntoView({ behavior: mouvementReduit() ? "auto" : "smooth", block: "center" });
+  if (k === "taches") feuilleTaches();
+}
+function feuilleTaches(filtre) {
+  const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-label="À faire">${wTaches(true, typeof filtre === "function" ? filtre : null)}
+    <div class="valider" style="grid-template-columns:1fr"><button class="btn" data-x>Fermer</button></div></div>`);
+  f.querySelector("[data-x]").onclick = () => f.remove();
+  // Les tâches de la feuille se branchent comme celles de l'accueil ; la feuille se ferme dès qu'on en touche une.
+  brancher();
+  f.querySelectorAll(".taches button").forEach(b => { const suite = b.onclick; b.onclick = e => { f.remove(); if (suite) suite.call(b, e); }; });
 }
 
 /* ---------------- Aujourd'hui : quatre voyants ---------------- */
@@ -51,12 +69,12 @@ function wAujourdhui() {
   const retours = aDesPrets() ? S.reservations.filter(r => r.statut === "Partie" && r.fin <= isoJour(Date.now() + JOUR_MS)).length : 0;
   const livr = S.commandes.filter(c => ["Envoyée", "Reçue en partie"].includes(c.statut)).length;
   const al = S.articles.filter(a => ["zero", "bas"].includes(etat(a).c)).length;
-  const case_ = (vers, coul, n, txt, sous) => `<button class="voyant" ${permis(vers) ? `data-aller="${vers}"` : "disabled"} style="--c:${coul}"><span class="voyant-n">${compte(n)}</span><b>${txt}</b><small>${sous}</small></button>`;
+  const case_ = (vers, coul, n, txt, sous) => `<button class="voyant${n ? "" : " zero"}" ${permis(vers) ? `data-aller="${vers}"` : "disabled"} style="--c:${coul}"><span class="voyant-n">${compte(n)}</span><b>${txt}</b><small>${sous}</small></button>`;
   return `<div class="voyants">
     ${actif("MO-RES") ? case_("preparer", "var(--sortie)", departs, "Départs", "aujourd'hui et demain") : case_("journal", "var(--sortie)", S.mouvements.filter(m => m.type === "Sortie" && isoJour(m.date) === auj).reduce((t, m) => t + m.qte, 0), V("sortiesMot"), "aujourd'hui")}
     ${aDesPrets() ? case_("recuperer", "var(--retour)", retours, "Retours", "attendus d'ici demain") : case_("journal", "var(--retour)", S.mouvements.filter(m => m.type === "Entrée" && isoJour(m.date) === auj).reduce((t, m) => t + m.qte, 0), "Entrées", "aujourd'hui")}
     ${case_("reception", "var(--compter)", livr, "Livraisons", "attendues")}
-    ${case_("materiel", "var(--alerte)", al, "Alertes", "à commander")}
+    ${case_("materiel", "var(--alerte)", al, "À commander", "stock bas").replace('data-aller="materiel"', 'data-aller="materiel" data-arg="alerte"')}
   </div>`;
 }
 
@@ -127,7 +145,8 @@ function texteResume() {
 • À commander : ${rupt.length ? rupt.slice(0, 3).join(", ") + (rupt.length > 3 ? "…" : "") : "rien"}
 • À décider : ${dec.length ? dec.map(c => `${c.fournisseur} (${argent(c.total)})`).join(", ") : "rien"}${prochain ? `\n• Prochain départ : ${prochain.nom}, ${dateLongue(prochain.debut)}` : ""}`;
 }
-const wResume = () => `<button class="w-plein" data-act="resume"><small>Chaque lundi à 8 h</small><b class="w-moyen">Résumé de la semaine</b><small>envoyé sur votre WhatsApp · voir le message</small></button>`;
+const wResume = () => `<div class="w-entete"><h3 class="w-titre">Résumé de la semaine</h3><button class="btn petit" data-act="resume">Voir le message</button></div>
+  <p class="w-note">Envoyé chaque lundi à 8 h sur votre WhatsApp.</p>`;
 function feuilleResume() {
   const t = texteResume();
   const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="trs"><h1 id="trs" style="font-size:26px">Résumé du lundi</h1>
@@ -147,12 +166,13 @@ function arrets() {
   });
   return l.sort((a, b) => a.jour.localeCompare(b.jour) || (a.type === "reprise" ? -1 : 1));
 }
-function carteArret(x) {
-  const r = x.r, c = (S.clientsLoc || []).find(k => k.id === r.client), liv = x.type === "livraison";
+// Un seul bouton plein par écran : celui du prochain arrêt. Les suivants sont en contour.
+function carteArret(x, premier) {
+  const r = x.r, fort = premier === true ? " plein" : "", c = (S.clientsLoc || []).find(k => k.id === r.client), liv = x.type === "livraison";
   const bon = S.bons.slice().reverse().find(b => b.evenement === r.nom && b.type === "sortie");
   const action = liv
-    ? (bon ? `<button class="btn petit plein" data-aller="bon" data-arg="${bon.id}">${bon.signature ? "Bon signé · voir" : "Faire signer le client"}</button>` : `<button class="btn petit" data-prep="${r.id}">À charger au dépôt</button>`)
-    : `<button class="btn petit plein" data-ev="${esc(r.nom)}">Reprendre le matériel</button>`;
+    ? (bon ? `<button class="btn petit${bon.signature ? "" : fort}" data-aller="bon" data-arg="${bon.id}">${bon.signature ? "Bon signé · voir" : "Faire signer le client"}</button>` : `<button class="btn petit" data-prep="${r.id}">À charger au dépôt</button>`)
+    : `<button class="btn petit${fort}" data-ev="${esc(r.nom)}">Reprendre le matériel</button>`;
   return `<article class="arret c-${liv ? "sortie" : "retour"}">
     <div class="arret-tete"><span class="pastille">${liv ? I.sortie : I.retour}</span>
       <div><b>${liv ? "Livraison" : "Reprise"} · ${esc(r.nom)}</b><small>${c ? esc(c.nom) + " · " : ""}${esc(r.adresse || "Adresse à compléter")}</small></div>
@@ -165,14 +185,15 @@ function carteArret(x) {
 function vTournee() {
   const l = arrets(), jours = [...new Set(l.map(x => x.jour))];
   const nomJour = d => d === aujourdHui() ? "Aujourd'hui" : d === isoJour(Date.now() + JOUR_MS) ? "Demain" : dateLongue(d);
-  return `<h1>Tournée</h1><p class="sous">Livraisons et reprises des trois prochains jours. Le client signe sur le téléphone, le bon part aussitôt.</p>
-  ${jours.map(d => `<h2>${nomJour(d)}</h2><div class="arrets">${l.filter(x => x.jour === d).map(carteArret).join("")}</div>`).join("") || `<p class="vide">Rien de prévu dans les trois prochains jours.</p>`}`;
+  return `<h1>Tournée</h1><p class="sous">Les trois prochains jours.</p>
+  ${jours.map(d => `<h2>${nomJour(d)}</h2><div class="arrets">${l.filter(x => x.jour === d).map(x => carteArret(x, x === l[0])).join("")}</div>`).join("") || `<p class="vide">Rien de prévu dans les trois prochains jours.</p>`}`;
 }
 function wTournee() {
   const l = arrets(), auj = l.filter(x => x.jour === aujourdHui()), dem = l.filter(x => x.jour !== aujourdHui());
-  return `<div class="w-entete"><h3 class="w-titre">${I.camion}Ma tournée</h3><button class="btn petit" data-racine="tournee">Tout voir</button></div>
-  <div class="tournee-resume"><div><b>${auj.length}</b><small>arrêt${auj.length > 1 ? "s" : ""} aujourd'hui</small></div><div><b>${dem.length}</b><small>les jours suivants</small></div></div>
-  ${l.slice(0, 2).map(carteArret).join("")}`;
+  return `<h3 class="w-titre dp-titre">Ma tournée</h3>
+  <p class="tournee-ligne"><span><b>${auj.length}</b> arrêt${auj.length > 1 ? "s" : ""} aujourd'hui</span><span><b>${dem.length}</b> les jours suivants</span></p>
+  <div class="arrets">${l.slice(0, 2).map((x, i) => carteArret(x, i === 0)).join("")}</div>
+  <button class="es-ligne es-suite dp-tout" data-racine="tournee"><span>Voir toute la tournée</span><span class="chev">${I.chevron}</span></button>`;
 }
 
 /* ---------------- Devis de l'installateur ---------------- */
@@ -222,5 +243,7 @@ function brancherBlocs() {
     if (!confirm(`Régler l'appli pour « ${TAILLES_EQUIPE[b.dataset.taille].nom} » ? Les blocs, la barre et les droits de chaque rôle sont remis selon ce modèle.`)) return;
     S.taille = b.dataset.taille; S.detail = S.taille === "bureau" ? "complet" : "simple"; S.config = configParDefaut(S.metier, S.taille); roleConf = rolesUtiles().includes(roleConf) ? roleConf : rolesUtiles()[0]; sauver(); rendre(); toast(`Appli réglée : ${TAILLES_EQUIPE[S.taille].nom}.`);
   });
+  $$("[data-vers-bloc]").forEach(b => b.onclick = () => versBloc(b.dataset.versBloc));
+  $$("[data-taches-tout]").forEach(b => b.onclick = () => { tachesToutes = true; rendre(); });
   $$(".iso [data-zone]").forEach(g => g.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); aller("zone", g.dataset.zone); } });
 }

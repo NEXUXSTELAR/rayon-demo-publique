@@ -10,14 +10,20 @@ const ESPACE = (() => {
   catch (e) { return demande; }
 })();
 
+// France seulement pour l'instant : l'appli n'affiche que des euros et ne propose ni le franc CFA ni le Sénégal.
+// Tout le reste (prix en FCFA, devis sénégalais, relais) est gardé dans le code pour le jour où l'on rouvre.
+// « ?pays=tous » lève le réglage le temps d'une page, pour nos propres essais.
+const FRANCE_SEULE = new URLSearchParams(location.search).get("pays") !== "tous";
+
 const CATALOGUE = {
   "MO-PRET": { nom: "Prêts et retours", detail: "Départ chez le client, retour, manquants à refacturer", eur: 290, xof: 140000 },
   "MO-RES":  { nom: "Réservations et préparation", detail: "Disponibilité à une date, liste de préparation scannée, facture de casse", eur: 490, xof: 230000, pack: true },
   "MO-KIT":  { nom: "Kits", detail: "Sortir un ensemble complet en un geste", eur: 290, xof: 140000 },
   "MO-CMD":  { nom: "Commandes fournisseurs", detail: "Brouillons automatiques, validation, bon de commande", eur: 290, xof: 140000 },
   "MO-DASH": { nom: "Tableau de direction", detail: "Valeur du stock, pertes, rapport du mois", eur: 290, xof: 140000 },
-  "AL-SMS":  { nom: "Alertes SMS", detail: "Branchées sur le compte SMS du client, qui paie ses messages à son fournisseur", eur: 190, xof: 90000 },
-  "AL-WA":   { nom: "Alertes WhatsApp", detail: "Branchées sur le compte WhatsApp du client, qui paie ses messages à son fournisseur", eur: 190, xof: 90000 },
+  // detailClient : la même phrase, dite au client lui-même dans son écran « Installation » (detail sert aux écrans de l'installateur et au devis).
+  "AL-SMS":  { nom: "Alertes SMS", detail: "Branchées sur le compte SMS du client, qui paie ses messages à son fournisseur", detailClient: "Branchées sur votre compte SMS : vous payez vos messages à votre fournisseur", eur: 190, xof: 90000 },
+  "AL-WA":   { nom: "Alertes WhatsApp", detail: "Branchées sur le compte WhatsApp du client, qui paie ses messages à son fournisseur", detailClient: "Branchées sur votre compte WhatsApp : vous payez vos messages à votre fournisseur", eur: 190, xof: 90000 },
 };
 const OFFRE = { nom: "Complet", eur: 1990, xof: 950000, jours: 60, heures: 4 };
 // Les trois offres (docs/23). « inclus » : modules compris dans le prix ; les autres s'ajoutent au prix du catalogue.
@@ -163,6 +169,7 @@ function seedMouvements(state) {
   const alea = () => (graine = (graine * 16807) % 2147483647) / 2147483647;
   const entre = (a, b) => Math.round(a + alea() * (b - a));
   const jour = 86400000, maintenant = Date.now();
+  const minuit = new Date(maintenant).setHours(0, 0, 0, 0); // les gestes tombent aux heures de travail, pas la nuit
   const debut = maintenant - 62 * jour;
   let n = 0;
   const add = (t, profil, art, type, qte, evenement, motif, refac) => {
@@ -176,7 +183,7 @@ function seedMouvements(state) {
   const mois = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
   // Événements passés, tous revenus (avec un peu de casse)
   for (let j = 58; j >= 8; j -= entre(3, 5)) {
-    const t = maintenant - j * jour + 9 * 3600000, d = new Date(t + 2 * jour);
+    const t = minuit - j * jour + 8.5 * 3600000, d = new Date(t + 2 * jour);
     const ev = `${types[entre(0, types.length - 1)]} · ${d.getDate()} ${mois[d.getMonth()]}`;
     const lot = [["ART-0001", entre(60, 220)], ["ART-0003", entre(80, 300)], ["ART-0004", entre(80, 320)], ["ART-0002", entre(6, 18)], ["ART-0010", entre(0, 160)], ["ART-0005", entre(4, 10)]];
     if (alea() > .5) lot.push(["ART-0006", 1], ["ART-0009", entre(2, 5)]);
@@ -186,13 +193,13 @@ function seedMouvements(state) {
     lot.forEach(([a, q]) => {
       const casse = a === "ART-0003" || a === "ART-0004" ? entre(0, Math.ceil(q * .03)) : a === "ART-0001" ? entre(0, 3) : a === "ART-0016" || a === "ART-0013" ? entre(0, 1) : 0;
       const refac = alea() < .45;
-      add(t + 2 * jour + 3600000, "terrain", a, "Retour", q - casse, ev);
-      add(t + 2 * jour + 3700000, "terrain", a, "Perte", casse, ev, refac ? "Cassé par le client" : "Casse au chargement", refac);
+      add(t + 2 * jour + 8 * 3600000, "terrain", a, "Retour", q - casse, ev);
+      add(t + 2 * jour + 8.1 * 3600000, "terrain", a, "Perte", casse, ev, refac ? "Cassé par le client" : "Casse au chargement", refac);
     });
   }
   // Événements en cours
   const ev = state.evenements;
-  const t0 = maintenant - 3 * jour;
+  const t0 = minuit - 3 * jour + 10.25 * 3600000;
   add(t0, "terrain", "ART-0001", "Prêt", 120, ev[0]);
   add(t0, "terrain", "ART-0003", "Prêt", 240, ev[0]);
   add(t0, "terrain", "ART-0005", "Prêt", 12, ev[0]);
@@ -225,7 +232,7 @@ function seedMouvements(state) {
   const adresse = { "R-P01": "Salle des fêtes, place de la Mairie", "R-P02": "Hôtel du centre, salle Horizon", "R-P03": "12 rue des Lilas, jardin", "R-001": "Domaine des Tilleuls, route du Lac", "R-002": "Hôtel du centre, salle Horizon", "R-003": "Parc des expositions, hall B" };
   state.reservations.forEach(r => { r.client = lien[r.id] || ""; r.adresse = adresse[r.id] || ""; });
   // Une enceinte au nettoyage et des nappes en réparation, pour montrer l'atelier
-  add(maintenant - 2 * jour, "terrain", "ART-0010", "Réparation", 25, "", "Au nettoyage");
+  add(minuit - 2 * jour + 14 * 3600000, "terrain", "ART-0010", "Réparation", 25, "", "Au nettoyage");
   // Une livraison attendue, à réceptionner depuis le terrain
   state.commandes.push({ id: "CMD-0001", date: maintenant - 2 * jour, fid: "FOU-02", fournisseur: "Fournisseur de textile (démo)", lignes: [{ id: "ART-0005", qte: 20 }, { id: "ART-0010", qte: 100 }], total: 20 * 22 + 100 * 3.9, statut: "Envoyée" });
   // Événements passés reliés à un client (pour la caution sur la facture de casse)

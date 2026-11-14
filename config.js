@@ -16,6 +16,7 @@ const DROITS = {
   retirer: "Retirer un article du stock",
   analyses: "Analyses et courbes",
   equipe: "Gérer l'équipe et les accès (administrateur seulement)",
+  profils: "Voir les fiches de l'équipe et le compte rendu de leurs gestes",
   installation: "Voir l'installation et demander une intervention",
 };
 
@@ -24,25 +25,27 @@ const DROITS = {
 const SECTIONS = {
   accueil:      { t: "Accueil", i: "maison", g: "" },
   depot:        { t: "Au dépôt", i: "scan", g: "depot", s: "Scanner, sortir, rentrer" },
-  tournee:      { t: "Tournée", i: "camion", g: "depot", mod: "MO-RES", si: () => (S.metier || "loueur") === "loueur", s: "Livraisons et reprises" },
+  tournee:      { t: "Tournée", i: "itineraire", g: "depot", mod: "MO-RES", si: () => (S.metier || "loueur") === "loueur", s: "Livraisons et reprises" },
   preparer:     { t: "Préparer", i: "camion", g: "depot", mod: "MO-RES", s: "Les départs prévus" },
   recuperer:    { t: () => V("retourTitre") || "Retours", c: "Retours", i: "retour", g: "depot", si: () => aDesPrets() },
-  reception:    { t: "Réception", i: "camion", g: "depot", s: "Une livraison" },
+  reception:    { t: "Réception", i: "colis", g: "depot", s: "Une livraison" },
   zones:        { t: "Compter", i: "compter", g: "depot", s: "Une zone" },
   kits:         { t: "Kits", i: "kit", g: "depot", mod: "MO-KIT", si: () => S.kits.length > 0 },
   chercher:     { t: "Chercher", i: "loupe", g: "depot" },
-  jour:         { t: "Ma journée", i: "jour", g: "depot" },
+  jour:         { t: "Ma journée", i: "liste", g: "depot" },
   materiel:     { t: "Stock", i: "materiel", g: "gestion", droit: "stock" },
   reservations: { t: "Réservations", c: "Résas", i: "jour", g: "gestion", mod: "MO-RES", droit: "reserver" },
-  clients:      { t: () => motClients(), i: "equipe", g: "gestion", si: () => actif("MO-RES") || complet(), droit: "reserver" },
+  clients:      { t: () => motClients(), i: "carnet", g: "gestion", si: () => actif("MO-RES") || complet(), droit: "reserver" },
   commandes:    { t: "Commandes", c: "Achats", i: "bon", g: "gestion", mod: "MO-CMD", droit: "commander" },
   journal:      { t: "Journal", i: "journal", g: "gestion", droit: "stock" },
   analyses:     { t: "Analyses", i: "releve", g: "gestion", droit: "analyses" },
   docs:         { t: "Documents", i: "docs", g: "gestion", droit: "documents" },
-  equipe:       { t: "Équipe et accès", c: "Équipe", i: "equipe", g: "compte", droit: "equipe" },
+  equipe:       { t: "Équipe", i: "equipe", g: "compte" },
   installation: { t: "Installation", i: "abo", g: "compte", droit: "installation" },
 };
 const GROUPES = { depot: "Au dépôt", gestion: "Gestion", compte: "Compte" };
+// Sous un titre : une phrase de dix mots au plus. Le reste de l'explication s'ouvre par le bouton rond « ? » (utile en formation).
+const sousAide = (court, long) => `<details class="aide"><summary><span>${court}</span><i aria-hidden="true">?</i><span class="cache">Lire l'explication</span></summary><p>${long}</p></details>`;
 const titreCourt = k => (SECTIONS[k] && SECTIONS[k].c) || titreSection(k);
 const titreSection = k => { const s = SECTIONS[k]; return !s ? "" : typeof s.t === "function" ? s.t() : s.t; };
 
@@ -72,13 +75,13 @@ function configParDefaut(m, taille) {
       barre: ["accueil", "materiel", loueur ? "reservations" : "commandes"],
       accueil: [["aujourdhui", "l"], ["taches", "m"]].concat(loueur ? [["dispo", "m"]] : [], [["depot3d", "m"], ["cycle", "m"]], dlc ? [["peremption", "m"]] : [], [["atelier", "m"]], courbesBureau, [["alertes", "m"]]),
       analyses: courbesBureau.concat([["g_top", "m"], ["g_valeur", "m"]]),
-      droits: { stock: 1, prix: 1, reserver: 1, commander: 1, documents: 1, analyses: 1, articles: 1 },
+      droits: { stock: 1, prix: 1, reserver: 1, commander: 1, documents: 1, analyses: 1, articles: 1, profils: 1 },
     },
     direction: {
       barre: ["accueil", "analyses", "docs"],
       accueil: [["pouls", "l"], ["partLoue", "s"], ["refac", "s"], ["decider", "m"], ["depot3d", "m"], ["trio", "l"]].concat(dlc ? [["peremption", "m"]] : [], courbesDirection.slice(0, 2), [["resume", "m"], ["assistance", "m"]]),
       analyses: [["trio", "l"]].concat(courbesDirection, loueur ? [["g_depot", "m"], ["g_mvt14", "m"]] : [["g_mvt14", "m"]]),
-      droits: { stock: 1, prix: 1, reserver: 1, valider: 1, documents: 1, analyses: 1, equipe: 1, installation: 1, articles: 1, retirer: 1 },
+      droits: { stock: 1, prix: 1, reserver: 1, valider: 1, documents: 1, analyses: 1, equipe: 1, profils: 1, installation: 1, articles: 1, retirer: 1 },
     },
   };
   // Une seule personne fait tout : un accueil court, les gestes du dépôt en premier, tous les droits.
@@ -86,7 +89,7 @@ function configParDefaut(m, taille) {
     barre: ["accueil", "depot", "materiel"],
     accueil: [["scan", "l"], ["taches", "l"], ["pouls", "l"]].concat(loueur ? [["dispo", "m"]] : [], [["actions", "l"], ["g_top", "m"]]),
     analyses: c.direction.analyses,
-    droits: { stock: 1, prix: 1, reserver: 1, commander: 1, valider: 1, documents: 1, analyses: 1, equipe: 1, installation: 1, articles: 1, retirer: 1 },
+    droits: { stock: 1, prix: 1, reserver: 1, commander: 1, valider: 1, documents: 1, analyses: 1, equipe: 1, profils: 1, installation: 1, articles: 1, retirer: 1 },
   };
   // Un patron et des magasiniers, sans bureau : le patron commande et réserve lui-même.
   if (taille === "petite") {
@@ -101,14 +104,29 @@ const TAILLES_EQUIPE = {
   petite: { nom: "Petite équipe", detail: "Un patron et des magasiniers : le patron commande et réserve" },
   bureau: { nom: "Avec un bureau", detail: "Magasiniers, un responsable au bureau, une direction" },
 };
+/* Présentation de l'accueil du gérant et du responsable : « L'essentiel » (un chiffre, quatre raccourcis, ce qui est à voir aujourd'hui)
+   ou « Tout » (les onglets et tous les blocs). Réglée ici par l'installateur, jamais par le client. Sans réglage : l'essentiel.
+   Le magasinier et le chauffeur gardent leur accueil dans les deux cas. */
+const PRESENTATIONS = {
+  essentiel: { nom: "L'essentiel", detail: "Un chiffre, quatre raccourcis, ce qui est à voir aujourd'hui. Le tableau de bord complet reste à un geste" },
+  complet: { nom: "Tout", detail: "Les onglets Aujourd'hui, Chiffres et Équipe, avec tous les blocs choisis plus bas" },
+};
+const presentation = () => S.presentation === "complet" ? "complet" : "essentiel";
+// Dans un groupe, le réglage vaut pour tous les établissements.
+function reglerPresentation(v) {
+  if (!PRESENTATIONS[v]) return;
+  S.presentation = v;
+  if (groupeActif()) { Object.values(G.etats).forEach(s => { if (s) s.presentation = v; }); persisterGroupe(); }
+  sauver();
+}
 // Les rôles présents : ceux de l'équipe active, plus ceux que la taille prévoit
 const rolesUtiles = () => ["terrain", "chauffeur", "bureau", "direction"].filter(r => S.equipe.some(u => u.role === r) && !(S.taille === "seul" && r !== "direction") && !(S.taille === "petite" && r === "bureau"));
 function config() {
   if (!S.config) S.config = configParDefaut(S.metier, S.taille);
   // Un rôle ajouté depuis (le chauffeur, par exemple) reçoit ses réglages par défaut.
   const d = configParDefaut(S.metier, S.taille); Object.keys(d).forEach(r => { if (!S.config[r]) S.config[r] = d[r]; });
-  // Deux droits ajoutés depuis (articles.js) : un réglage plus ancien reçoit leur valeur par défaut, une seule fois.
-  Object.keys(d).forEach(r => ["articles", "retirer"].forEach(k => { const x = S.config[r].droits; if (x && x[k] === undefined) x[k] = d[r].droits[k] ? 1 : 0; }));
+  // Des droits ajoutés depuis (articles.js, equipe.js) : un réglage plus ancien reçoit leur valeur par défaut, une seule fois.
+  Object.keys(d).forEach(r => ["articles", "retirer", "profils"].forEach(k => { const x = S.config[r].droits; if (x && x[k] === undefined) x[k] = d[r].droits[k] ? 1 : 0; }));
   return S.config;
 }
 const cfg = role => config()[role || (session && session.profil) || "terrain"];
@@ -119,7 +137,8 @@ function permis(k, role) {
   if (s.mod && !actif(s.mod)) return false;
   if (s.si && !s.si()) return false;
   if (s.droit && !droit(s.droit, role)) return false;
-  if (k === "equipe" && !role && session && !session.admin) return false;
+  // « Équipe » : les fiches pour qui a le droit de les voir, les accès pour l'administrateur du compte.
+  if (k === "equipe") return role ? droit("profils", role) || droit("equipe", role) : !!session && (droit("profils") || (droit("equipe") && session.admin));
   return true;
 }
 
@@ -127,32 +146,32 @@ function permis(k, role) {
 const WIDGETS = {
   pouls:         { t: "Panneau de pilotage : valeur, tendance, quatre voyants", tailles: ["l"], nu: true, r: () => wPouls() },
   aujourdhui:    { t: "Aujourd'hui : départs, retours, livraisons, alertes", tailles: ["l"], nu: true, r: () => wAujourdhui() },
-  depot3d:       { t: "Le dépôt en 3D, zone par zone", tailles: ["m", "l"], r: () => wDepot3d() },
+  depot3d:       { o: "chiffres", t: "Le dépôt en 3D, zone par zone", tailles: ["m", "l"], r: () => wDepot3d() },
   dispo:         { t: "Disponible le … ? (réponse en dix secondes)", tailles: ["m", "l"], si: () => actif("MO-RES"), r: () => wDispo() },
   resume:        { t: "Résumé du lundi par WhatsApp", tailles: ["s", "m"], si: () => droit("prix"), r: () => wResume() },
   tournee:       { t: "Tournée du jour (chauffeur)", tailles: ["m", "l"], si: () => permis("tournee"), r: () => wTournee() },
   scan:          { t: "Gros bouton Scanner", tailles: ["l"], nu: true, r: wScan },
   actions:       { t: "Gestes du dépôt", tailles: ["l"], nu: true, r: wActions },
   taches:        { t: "À faire", tailles: ["m", "l"], r: wTaches },
-  valeur:        { t: "Valeur du stock", tailles: ["s", "m", "l"], cls: "accent", r: wValeur },
+  valeur:        { o: "chiffres", t: "Valeur du stock", tailles: ["s", "m", "l"], cls: "accent", r: wValeur },
   partLoue:      { t: "Jauge : part louée, ou stock au bon niveau", tailles: ["s", "m"], r: wPartLoue },
   refac:         { t: "Jauge : part refacturée, ou part perdue", tailles: ["s", "m"], si: () => droit("prix"), r: wRefac },
-  trio:          { t: "Sorties, pertes, refacturable, avec la période", tailles: ["m", "l"], si: () => droit("prix"), r: wTrio },
+  trio:          { o: "chiffres", t: "Sorties, pertes, refacturable, avec la période", tailles: ["m", "l"], si: () => droit("prix"), r: wTrio },
   decider:       { t: "À décider (commandes à valider)", tailles: ["m", "l"], si: () => droit("valider") && actif("MO-CMD"), r: wDecider },
-  chiffres:      { t: "Quatre chiffres du stock", tailles: ["m", "l"], r: wChiffres },
-  cycle:         { t: "Cycle du matériel", tailles: ["m", "l"], r: () => `<h3 class="w-titre">${aDesPrets() ? "Le cycle du matériel" : "Le mouvement du stock"}</h3>${cycle()}` },
+  chiffres:      { o: "chiffres", t: "Quatre chiffres du stock", tailles: ["m", "l"], r: wChiffres },
+  cycle:         { o: "chiffres", t: "Cycle du matériel", tailles: ["m", "l"], r: () => `<h3 class="w-titre">${aDesPrets() ? "Le cycle du matériel" : "Le mouvement du stock"}</h3>${cycle()}` },
   atelier:       { t: "À l'atelier (réparation, nettoyage)", tailles: ["m", "l"], r: () => blocAtelier() },
   peremption:    { t: "Dates limites proches", tailles: ["m", "l"], si: () => metier().dlc, r: () => blocPeremption() },
   alertes:       { t: "Alertes de stock", tailles: ["m", "l"], r: wAlertes },
   resas:         { t: "Réservations à venir", tailles: ["m", "l"], si: () => permis("reservations"), r: wResas },
   assistance:    { t: "Assistance restante", tailles: ["s", "m"], si: () => permis("installation"), r: wAssistance },
-  g_mvt14:       { t: "Courbe : sorties et entrées par jour", tailles: ["m", "l"], nu: true, r: () => gMouvements14() },
-  g_depot:       { t: "Graphique : au dépôt ou chez les clients", tailles: ["m", "l"], nu: true, si: () => aDesPrets(), r: () => gDepotClients() },
-  g_utilisation: { t: "Courbe : part du parc louée", tailles: ["m", "l"], nu: true, si: () => aDesPrets() && droit("prix"), r: () => gUtilisation() },
-  g_pertes8:     { t: "Graphique : pertes par semaine", tailles: ["m", "l"], nu: true, si: () => droit("prix"), r: () => gPertes8() },
-  g_top:         { t: "Graphique : ce qui sort, ce qui dort", tailles: ["m", "l"], nu: true, r: () => gTopLoues() },
-  g_imputations: { t: "Graphique : sorties par chantier, service ou lieu", tailles: ["m", "l"], nu: true, si: () => droit("prix"), r: () => gImputations() },
-  g_valeur:      { t: "Courbe : valeur du stock", tailles: ["m", "l"], nu: true, si: () => droit("prix"), r: () => gValeurStock() },
+  g_mvt14:       { o: "chiffres", t: "Courbe : sorties et entrées par jour", tailles: ["m", "l"], nu: true, r: () => gMouvements14() },
+  g_depot:       { o: "chiffres", t: "Graphique : au dépôt ou chez les clients", tailles: ["m", "l"], nu: true, si: () => aDesPrets(), r: () => gDepotClients() },
+  g_utilisation: { o: "chiffres", t: "Courbe : part du parc louée", tailles: ["m", "l"], nu: true, si: () => aDesPrets() && droit("prix"), r: () => gUtilisation() },
+  g_pertes8:     { o: "chiffres", t: "Graphique : pertes par semaine", tailles: ["m", "l"], nu: true, si: () => droit("prix"), r: () => gPertes8() },
+  g_top:         { o: "chiffres", t: "Graphique : ce qui sort, ce qui dort", tailles: ["m", "l"], nu: true, r: () => gTopLoues() },
+  g_imputations: { o: "chiffres", t: "Graphique : sorties par chantier, service ou lieu", tailles: ["m", "l"], nu: true, si: () => droit("prix"), r: () => gImputations() },
+  g_valeur:      { o: "chiffres", t: "Courbe : valeur du stock", tailles: ["m", "l"], nu: true, si: () => droit("prix"), r: () => gValeurStock() },
 };
 const TAILLES = { s: "Petit", m: "Moyen", l: "Pleine largeur" };
 
@@ -161,7 +180,7 @@ function bento(liste, limite) {
     const w = WIDGETS[k]; if (!w || (w.si && !w.si())) return "";
     window.largeurDemi = taille !== "l" && window.innerWidth >= 1100;
     const h = w.r(); window.largeurDemi = false;
-    return h ? `<section class="w w-${taille} ${w.nu ? "nu" : ""} ${w.cls || ""}">${h}</section>` : "";
+    return h ? `<section class="w w-${taille} ${w.nu ? "nu" : ""} ${w.cls || ""}" data-w="${k}">${h}</section>` : "";
   }).filter(Boolean);
   // Sur téléphone, l'accueil reste court : les blocs suivants s'ouvrent d'un geste.
   const cache = limite && blocs.length > limite + 1 ? blocs.length - limite : 0;
@@ -177,15 +196,21 @@ function wScan() {
 function wActions() {
   const n = aDesPrets() ? new Set(dehors().map(d => d.evenement)).size : 0;
   const attendues = S.commandes.filter(c => ["Envoyée", "Reçue en partie"].includes(c.statut)).length;
-  return `${actif("MO-RES") ? tuilePreparer() : ""}
-  <div class="t-tuiles">
-    ${actif("MO-KIT") && S.kits.length ? `<button class="t-tuile" data-aller="kits"><span class="pastille">${I.kit}</span><div><b>Sortir un kit</b><small>Tout un ensemble d'un coup</small></div></button>` : ""}
-    ${aDesPrets() ? `<button class="t-tuile" data-aller="recuperer"><span class="pastille">${I.retour}</span><div><b>${V("retourTitre")}</b><small>${n} ${n > 1 ? V("retourSous") : V("retourSous").replace(/^(\S+?)s(\s|$)/, "$1$2").replace(/(prêté|sorti)s\b/, "$1")}</small></div></button>` : ""}
-    <button class="t-tuile" data-aller="reception"><span class="pastille">${I.camion}</span><div><b>Réceptionner une livraison</b><small>${attendues} attendue${attendues > 1 ? "s" : ""}</small></div></button>
-    <button class="t-tuile" data-aller="zones"><span class="pastille">${I.compter}</span><div><b>Compter une zone</b><small>Zone par zone</small></div></button>
-    <button class="t-tuile" data-aller="chercher"><span class="pastille">${I.loupe}</span><div><b>Chercher un objet</b><small>Sans étiquette sous la main</small></div></button>
-    <button class="t-tuile" data-aller="jour"><span class="pastille">${I.jour}</span><div><b>Ma journée</b><small>Ce que j'ai enregistré</small></div></button>
-  </div>`;
+  // Une entrée n'est dite qu'une fois : pas de tuile pour ce qui est déjà dans la barre du bas (ou le menu de gauche) de ce rôle,
+  // ni pour une livraison que « À faire » montre déjà sur le même accueil.
+  const barre = cfg().barre.filter(k => permis(k)).slice(0, 3), double = k => barre.includes(k);
+  const avecTaches = (ALIAS[vue.nom] || vue.nom) === "accueil" && cfg().accueil.some(([k]) => k === "taches") && session.profil !== "chauffeur";
+  // Des raccourcis ronds, comme sur l'accueil du gérant : le pictogramme d'abord, le mot dessous. Les comptes se lisent sur l'écran ouvert.
+  const prep = S.reservations.filter(r => ["Confirmée", "Préparée"].includes(r.statut) && r.debut <= isoJour(Date.now() + 10 * JOUR_MS)).length;
+  return `<nav class="t-tuiles dp-gestes" aria-label="Gestes du dépôt">
+    ${actif("MO-RES") && !double("preparer") ? `<button class="t-tuile" data-aller="preparer"><span class="pastille">${I.camion}</span><div><b>Préparer un départ</b><small>${prep} départ${prep > 1 ? "s" : ""} prévu${prep > 1 ? "s" : ""} dans les 10 jours</small></div></button>` : ""}
+    ${actif("MO-KIT") && S.kits.length && !double("kits") ? `<button class="t-tuile" data-aller="kits"><span class="pastille">${I.kit}</span><div><b>Sortir un kit</b></div></button>` : ""}
+    ${aDesPrets() && !double("recuperer") ? `<button class="t-tuile" data-aller="recuperer"><span class="pastille">${I.retour}</span><div><b>${V("retourTitre")}</b><small>${n} ${n > 1 ? V("retourSous") : V("retourSous").replace(/^(\S+?)s(\s|$)/, "$1$2").replace(/(prêté|sorti)s\b/, "$1")}</small></div></button>` : ""}
+    ${double("reception") || (avecTaches && attendues) ? "" : `<button class="t-tuile" data-aller="reception"><span class="pastille">${I[SECTIONS.reception.i]}</span><div><b>Réception</b><small>${attendues} livraison${attendues > 1 ? "s" : ""} attendue${attendues > 1 ? "s" : ""}</small></div></button>`}
+    <button class="t-tuile" data-aller="zones"><span class="pastille">${I.compter}</span><div><b>Compter une zone</b></div></button>
+    <button class="t-tuile" data-aller="chercher"><span class="pastille">${I.loupe}</span><div><b>Chercher un objet</b></div></button>
+    ${double("jour") ? "" : `<button class="t-tuile" data-aller="jour"><span class="pastille">${I[SECTIONS.jour.i]}</span><div><b>Ma journée</b></div></button>`}
+  </nav>`;
 }
 
 /* À faire : la liste se construit seule, à partir des données et des droits de la personne. */
@@ -198,7 +223,7 @@ function taches() {
   if (aDesPrets()) S.reservations.filter(r => r.statut === "Partie" && r.fin <= auj && dehors().some(d => d.evenement === r.nom)).forEach(r =>
     l.push({ c: "retour", i: I.retour, t: "Retour attendu · " + r.nom, s: "Fin prévue " + dateCourte(r.fin), a: `data-ev="${esc(r.nom)}"` }));
   S.commandes.filter(c => ["Envoyée", "Reçue en partie"].includes(c.statut)).forEach(c =>
-    l.push({ c: "compter", i: I.camion, t: "Réceptionner · " + c.fournisseur, s: `${c.id} · ${c.lignes.reduce((t, x) => t + (x.qte - (x.recu || 0)), 0)} pièces attendues`, a: `data-recep="${c.id}"` }));
+    l.push({ c: "compter", i: I.colis, t: "Réceptionner · " + c.fournisseur, s: `${c.id} · ${c.lignes.reduce((t, x) => t + (x.qte - (x.recu || 0)), 0)} pièces attendues`, a: `data-recep="${c.id}"` }));
   if (droit("valider") && actif("MO-CMD")) S.commandes.filter(c => c.statut === "À valider").forEach(c =>
     l.push({ c: "marque", i: I.bon, t: "Valider · " + c.fournisseur, s: argent(c.total) + " HT", bouton: `<button class="btn petit plein" data-valider="${c.id}">Valider</button>` }));
   if (droit("commander") && actif("MO-CMD")) {
@@ -206,16 +231,31 @@ function taches() {
     if (n && !S.commandes.some(c => c.statut === "À valider")) l.push({ c: "attention", i: I.bon, t: "Commandes à préparer", s: `${n} objet${n > 1 ? "s" : ""} sous le seuil`, a: `data-aller="commandes"` });
   }
   if (complet() && droit("reserver")) evSansClient().slice(0, 2).forEach(ev => l.push({ c: "attention", i: I.equipe, t: "Indiquer le client · " + ev, s: "Pour des bons et des factures complets", a: `data-infos-ev="${esc(ev)}"` }));
-  if (metier().dlc) { const b = bientotPerimes(2); if (b.length) l.push({ c: "alerte", i: I.perte, t: "À utiliser en premier", s: b.slice(0, 2).map(x => x.a.nom).join(", "), a: `data-objet="${b[0].a.id}"` }); }
+  if (metier().dlc) { const b = bientotPerimes(2); if (b.length) l.push({ k: "dlc", c: "alerte", i: I.perte, t: "À utiliser en premier", s: b.slice(0, 2).map(x => x.a.nom).join(", "), a: `data-objet="${b[0].a.id}"` }); }
   return l;
 }
-function wTaches() {
-  const l = taches();
+// Sur l'accueil : quatre tâches, puis « Voir les n autres ». La liste entière s'ouvre d'un geste (et dans la feuille du panneau de pilotage).
+const TACHES_VUES = 4;
+let tachesToutes = false;
+function wTaches(tout, filtre) {
+  if (entree) tachesToutes = false;
+  // Le chauffeur voit sa tournée : les tâches du dépôt (préparer, réceptionner, compter) ne sont pas les siennes. Sa carte d'arrêt dit ce qui reste à charger.
+  if (!tout && session && session.profil === "chauffeur") return "";
+  // Une tâche qui a déjà son bloc sur le même écran (« À utiliser en premier ») n'est pas écrite deux fois.
+  const blocDates = !tout && vue.nom === "accueil" && cfg().accueil.some(([k]) => k === "peremption");
+  const l = taches().filter(x => !(x.k === "dlc" && blocDates) && (!filtre || filtre(x)));
+  const vus = tout || tachesToutes || l.length <= TACHES_VUES + 1 ? l : l.slice(0, TACHES_VUES), reste = l.length - vus.length;
+  // Le magasinier lit ses tâches comme le gérant lit son accueil : une puce de la couleur du geste, une phrase, une ligne grise, un chevron.
+  if (!tout && session && session.profil === "terrain") return `<h3 class="w-titre dp-titre">À faire</h3>
+  ${l.length ? `<ul class="es-lignes dp-taches">${vus.map(x => {
+    const corps = `<i style="--c:var(--${x.c})"></i><span>${esc(x.t)}<small>${esc(x.s)}</small></span>`;
+    return `<li>${x.bouton ? `<div class="es-ligne">${corps}${x.bouton}</div>` : `<button class="es-ligne" ${x.a}>${corps}<span class="chev">${I.chevron}</span></button>`}</li>`;
+  }).join("")}${reste ? `<li><button class="es-ligne es-suite" data-taches-tout><span>Voir les ${reste} autres</span><span class="chev">${I.chevron}</span></button></li>` : ""}</ul>` : `<p class="es-rien">Rien à faire pour l'instant.</p>`}`;
   return `<h3 class="w-titre">À faire ${l.length ? `<span class="compte">${l.length}</span>` : ""}</h3>
-  ${l.length ? `<ul class="taches">${l.map(x => {
+  ${l.length ? `<ul class="taches">${vus.map(x => {
     const corps = `<span class="pastille">${x.i}</span><span><b>${esc(x.t)}</b><small>${esc(x.s)}</small>${x.p !== undefined ? `<i class="barre"><i style="width:${Math.round(x.p * 100)}%"></i></i>` : ""}</span>`;
     return `<li>${x.bouton ? `<div class="tache c-${x.c}">${corps}${x.bouton}</div>` : `<button class="tache c-${x.c}" ${x.a}>${corps}<span class="chev">${I.fleche}</span></button>`}</li>`;
-  }).join("")}</ul>` : `<p class="vide" style="padding:4px 0">Rien en attente. Tout est à jour.</p>`}`;
+  }).join("")}</ul>${reste ? `<button class="btn petit taches-suite" data-taches-tout>Voir les ${reste} autres</button>` : ""}` : `<p class="vide" style="padding:4px 0">Rien en attente. Tout est à jour.</p>`}`;
 }
 
 /* Chiffres de la direction */
@@ -255,17 +295,20 @@ function wTrio() {
   const delta = (a, b, plusEstMieux) => {
     if (!b) return `<span class="delta">pas de période avant</span>`;
     const d = Math.round((a - b) / b * 100), mieux = plusEstMieux ? d >= 0 : d <= 0;
-    return `<span class="delta ${d === 0 ? "" : mieux ? "mieux" : "pire"}">${d > 0 ? "+" : ""}${d} % vs avant</span>`;
+    return `<span class="delta ${d === 0 ? "" : mieux ? "mieux" : "pire"}">${d > 0 ? "+" : d < 0 ? "−" : ""}${Math.abs(d)} %</span>`;
   };
   return `<div class="w-entete"><h3 class="w-titre">Sur ${periode} jours</h3><div class="segments" role="group" aria-label="Période">${[7, 30, 90].map(n => `<button data-periode="${n}" aria-pressed="${periode === n}">${n} j</button>`).join("")}</div></div>
   <div class="trio">
     <div><small>${V("sortiesMot")}</small><b>${argent(s)}</b>${delta(s, sAvant, true)}</div>
     <div><small>Cassé ou perdu</small><b style="color:var(--alerte)">${argent(vp)}</b>${delta(vp, pAvant, false)}</div>
     ${(S.metier || "loueur") === "loueur" ? `<div><small>Refacturable</small><b>${argent(refac)}</b><span class="delta">${vp ? Math.round(refac / vp * 100) : 0} % des pertes</span></div>` : `<div><small>Taux de perte</small><b>${(s ? Math.round(vp / (s + vp) * 1000) / 10 : 0).toLocaleString("fr-FR")} %</b><span class="delta">de la valeur sortie</span></div>`}
-  </div>`;
+  </div>
+  ${sAvant || pAvant ? `<p class="w-note trio-note">Les pourcentages comparent aux ${periode} jours d'avant.</p>` : ""}`;
 }
 function wDecider() {
   const l = S.commandes.filter(c => c.statut === "À valider");
+  // Rien à décider : le voyant « à décider » du panneau le dit déjà, le bloc ne prend pas de place.
+  if (!l.length) return "";
   return `<h3 class="w-titre">À décider ${l.length ? `<span class="compte">${l.length}</span>` : ""}</h3>
   ${l.length ? l.map(c => `<div class="bon"><header><b>${esc(c.fournisseur)}</b><span>${argent(c.total)} HT</span></header><p class="sous">${c.lignes.map(x => x.qte + " × " + esc(art(x.id).nom)).join(", ")}</p><button class="btn plein" data-valider="${c.id}">Valider la commande</button></div>`).join("") : `<p class="vide" style="padding:4px 0">Rien n'attend votre accord.</p>`}`;
 }
@@ -281,6 +324,8 @@ function wChiffres() {
   </div>`;
 }
 function wAlertes() {
+  // Aucune alerte envoyée : le bloc ne s'affiche pas (ce qui est à commander a déjà son voyant et sa tâche).
+  if (!S.alertes.length && !S.messages.length) return "";
   return `<h3 class="w-titre">Alertes</h3>${S.alertes.length ? `<ul class="b-liste">${S.alertes.slice(0, 5).map(x => { const a = art(x.article); return `<li><button class="l" data-objet="${a.id}">${img(a)}<span><b>${esc(x.txt)}</b><small>${quand(x.date)}</small></span><span></span></button></li>`; }).join("")}</ul>` : `<p class="vide" style="padding:4px 0">Pas d'alerte depuis le début de la démo.</p>`}
   ${S.messages.length ? S.messages.slice(0, 2).map(m => `<div class="msg"><small>${m.canal} · ${quand(m.date)} · simulation</small>${esc(m.txt)}</div>`).join("") : ""}`;
 }
@@ -292,11 +337,44 @@ function wAssistance() {
   const inst = S.installation || { livreLe: Date.now(), heuresUtilisees: 0 };
   const jours = Math.max(0, Math.ceil((inst.livreLe + OFFRE.jours * J_MS - Date.now()) / J_MS)), h = Math.max(0, OFFRE.heures - inst.heuresUtilisees);
   const enCours = jours > 0 && h > 0;
+  // Sur l'accueil, l'assistance ne se montre que lorsqu'elle approche de sa fin (10 jours ou 1 heure), ou vient de se terminer (15 jours).
+  // Le reste du temps, elle se lit dans l'écran Installation.
+  const finLe = inst.livreLe + OFFRE.jours * J_MS, depuisPeu = Date.now() - finLe < 15 * J_MS;
+  if (enCours ? jours > 10 && h > 1 : !depuisPeu) return "";
   return `<button class="w-plein" data-aller="installation"><small>Assistance incluse</small><b class="w-moyen">${enCours ? String(h).replace(".", ",") + " h restantes" : "Terminée"}</b><small>${enCours ? `encore ${jours} jour${jours > 1 ? "s" : ""}` : "interventions sur devis"}</small></button>`;
 }
 
 /* Page Analyses : les courbes choisies pour ce rôle et ce métier */
-const vAnalyses = () => `<h1>Analyses</h1><p class="sous">Les courbes choisies pour votre activité. Touchez une barre ou un point pour lire la valeur.</p>${bento(cfg().analyses)}`;
+// En tête, les trois chiffres de la période : le premier en grand, posé sur le fond, les deux autres en lignes.
+// Ensuite une question par courbe : on touche la question, sa courbe s'ouvre (une seule à la fois).
+function trioAnalyses() {
+  const [s, sAvant] = periodeSur(m => m.type === "Prêt" || m.type === "Sortie");
+  const [vp, pAvant] = periodeSur(m => m.type === "Perte");
+  const [refac] = periodeSur(m => m.type === "Perte" && m.refac);
+  const ecart = (a, b) => { if (!b) return ""; const d = Math.round((a - b) / b * 100); return d === 0 ? `Autant que les ${periode} jours d'avant` : `${Math.abs(d)} % de ${d > 0 ? "plus" : "moins"} que les ${periode} jours d'avant`; };
+  const chiffre = argent(s), taux = (s ? Math.round(vp / (s + vp) * 1000) / 10 : 0).toLocaleString("fr-FR") + " %";
+  const lignes = [piLigne({ c: "alerte", t: "Cassé ou perdu", s: ecart(vp, pAvant), v: argent(vp) }),
+    (S.metier || "loueur") === "loueur" ? piLigne({ c: "neutre", t: "Refacturable", s: `${vp ? Math.round(refac / vp * 100) : 0} % des pertes`, v: argent(refac) })
+      : piLigne({ c: "neutre", t: "Taux de perte", s: "De la valeur sortie", v: taux })];
+  return `<div class="segments" role="group" aria-label="Période">${[7, 30, 90].map(n => `<button data-periode="${n}" aria-pressed="${periode === n}">${n} jours</button>`).join("")}</div>
+  <div class="trio pi-trio"><div class="es-hero"><small>${esc(V("sortiesMot"))} en ${periode} jours</small><b class="es-chiffre${chiffre.length > 11 ? " es-long" : ""}">${chiffre}</b><p>${ecart(s, sAvant)}</p></div>
+  ${piCarte("", lignes)}</div>`;
+}
+function vAnalyses() {
+  const l = (cfg().analyses || []).filter(([k]) => WIDGETS[k] && (!WIDGETS[k].si || WIDGETS[k].si()));
+  if (entree) courbeOuverte = null;
+  let rendus;
+  modeQuestions = true;
+  try { rendus = l.filter(([k]) => k !== "trio").map(([k, t]) => [k, t, WIDGETS[k].r()]).filter(x => x[2]); } finally { modeQuestions = false; }
+  const courbes = rendus.filter(x => x[2].startsWith('<details class="pi-q"')), autres = rendus.filter(x => !courbes.includes(x));
+  if (courbeOuverte === null || (courbeOuverte && !courbes.some(([k]) => k === courbeOuverte))) courbeOuverte = courbes.length ? courbes[0][0] : "";
+  return `<h1>Analyses</h1><div class="pi-page">
+  ${l.some(([k]) => k === "trio") ? `<div class="bento pi-an-tete"><section class="w w-l nu" data-w="trio">${trioAnalyses()}</section></div>` : ""}
+  ${courbes.length ? `<div class="bento pi-courbes"><h2>Touchez une question pour voir sa courbe</h2>${courbes.map(([k, , h]) => `<section class="w w-l nu" data-w="${k}">${h.replace('<details class="pi-q"', `<details class="pi-q" data-courbe="${k}"${k === courbeOuverte ? " open" : ""}`)}</section>`).join("")}</div>
+  <p class="pi-note">Touchez une barre ou un point pour lire sa valeur.</p>` : ""}
+  ${autres.length ? `<div class="pi-autres">${bento(autres.map(([k, t]) => [k, t]))}</div>` : ""}
+  ${l.length ? "" : `<p class="es-etat">Rien à afficher ici pour l'instant.</p>`}</div>`;
+}
 
 /* =================================================================
    ESPACE INSTALLATEUR : ce que nous réglons chez chaque client
@@ -324,6 +402,9 @@ function vInstallateur(dansEspace) {
   <h2>Taille de l'équipe</h2>
   <p class="sous">Un modèle règle d'un coup les rôles, les blocs et les droits. On ajuste ensuite les détails plus bas.</p>
   <div class="tailles">${Object.entries(TAILLES_EQUIPE).map(([k, t]) => `<button data-taille="${k}" aria-pressed="${(S.taille || "bureau") === k}"><b>${t.nom}</b><small>${t.detail}</small></button>`).join("")}</div>
+  <h2>Présentation de l'accueil</h2>
+  <p class="sous">Ce que le gérant et le responsable voient en ouvrant l'appli. Le magasinier et le chauffeur gardent leur accueil.</p>
+  <div class="tailles deux">${Object.entries(PRESENTATIONS).map(([k, t]) => `<button data-presentation="${k}" aria-pressed="${presentation() === k}"><b>${t.nom}</b><small>${t.detail}</small></button>`).join("")}</div>
   <h2>Niveau de détail</h2>
   <p class="sous">Ce que les documents demandent et affichent. Le dépôt n'a jamais plus à remplir : c'est le bureau qui complète.</p>
   <div class="tailles">${Object.entries(NIVEAUX).map(([k, n]) => `<button data-niveau="${k}" aria-pressed="${(S.detail || "complet") === k}"><b>${n.nom}</b><small>${n.detail}</small></button>`).join("")}</div>
@@ -374,5 +455,6 @@ function brancherConfig() {
   $$("[data-w-retirer]").forEach(b => b.onclick = () => { const [cle, i] = b.dataset.wRetirer.split("|"); c()[cle].splice(+i, 1); sauver(); rendre(); });
   $$("[data-w-ajouter]").forEach(s => s.onchange = () => { if (!s.value) return; c()[s.dataset.wAjouter].push([s.value, WIDGETS[s.value].tailles.includes("m") ? "m" : WIDGETS[s.value].tailles[0]]); sauver(); rendre(); });
   $$("[data-droit]").forEach(x => x.onchange = () => { c().droits[x.dataset.droit] = x.checked ? 1 : 0; sauver(); rendre(); });
+  $$("[data-presentation]").forEach(b => b.onclick = () => { reglerPresentation(b.dataset.presentation); rendre(); toast(`Présentation de l'accueil : ${PRESENTATIONS[presentation()].nom}.`); });
   $$("[data-apercu]").forEach(b => b.onclick = () => ouvrirSession(S.equipe.find(u => u.id === b.dataset.apercu)));
 }

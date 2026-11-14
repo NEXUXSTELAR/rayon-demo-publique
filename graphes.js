@@ -13,7 +13,7 @@ const JOUR = 86400000;
 // Sur téléphone on dessine plus étroit pour que le texte reste lisible (12 px réels).
 // Dans un bloc d'une demi-largeur (ordinateur), on dessine pour la moitié de la page.
 const LARGE = () => {
-  const m = document.querySelector("main"), w = (m ? m.clientWidth : Math.min(window.innerWidth, 1160)) - 34;
+  const m = document.querySelector("main"), w = (m ? m.clientWidth : Math.min(window.innerWidth, 1160)) - (modeQuestions ? 64 : 34);
   return Math.max(300, Math.min(600, window.largeurDemi ? w / 2 - 8 : w));
 };
 const court = (t, n) => t.length > n ? t.slice(0, n - 1) + "…" : t;
@@ -21,7 +21,19 @@ const debutJour = t => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d
 const jourCourt = t => new Date(t).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" });
 const entier = n => Math.round(n).toLocaleString("fr-FR");
 const legende = l => `<div class="legende">${l.map(([c, t]) => `<span><i style="background:${c}"></i>${t}</span>`).join("")}</div>`;
-const cadre = (titre, question, corps) => `<section class="graphe"><h3>${titre}</h3><p class="q">${question}</p>${corps}</section>`;
+// La question tient en une ligne. Quand elle vient avec une explication ([question, explication]), celle-ci s'ouvre par le bouton « ? ».
+// Sur l'écran Analyses (modeQuestions), une courbe est repliée derrière sa question : la question se touche, la courbe s'ouvre,
+// et l'explication se lit dessous.
+let modeQuestions = false, courbeOuverte = null;
+const cadre = (titre, question, corps) => modeQuestions
+  ? `<details class="pi-q"><summary class="es-ligne"><span>${Array.isArray(question) ? question[0] : titre}</span><span class="chev">${I.chevron}</span></summary><div class="graphe"><h3>${titre}</h3>${corps}<p class="q">${Array.isArray(question) ? question[1] : question}</p></div></details>`
+  : `<section class="graphe"><h3>${titre}</h3>${Array.isArray(question) ? sousAide(question[0], question[1]).replace('class="aide"', 'class="aide q"') : `<p class="q">${question}</p>`}${corps}</section>`;
+// Une seule courbe ouverte à la fois ; l'écran se souvient de laquelle quand on change de période.
+document.addEventListener("toggle", e => {
+  const d = e.target; if (!d.matches || !d.matches("details.pi-q")) return;
+  if (d.open) { courbeOuverte = d.dataset.courbe; document.querySelectorAll("details.pi-q[open]").forEach(x => { if (x !== d) x.open = false; }); }
+  else if (courbeOuverte === d.dataset.courbe) courbeOuverte = "";
+}, true);
 // Barre aux extrémités arrondies du côté opposé à la ligne de base
 function barre(x, y, w, h, coul, vers, tip) {
   if (h <= 0) return "";
@@ -52,7 +64,7 @@ function gMouvements14() {
     svg += `<rect x="${x - 3}" y="${mid - haut}" width="${pas}" height="${haut * 2}" fill="transparent" data-tip="${esc(tip)}"/>`;
     if ((W < 500 ? i % 3 === 1 : i % 2 === 1) || i === 13) svg += `<text x="${x + bw / 2}" y="${H - 4}" text-anchor="middle">${jourCourt(j.t)}</text>`;
   });
-  return cadre(aDesPrets() ? "Départs et retours, 14 derniers jours" : "Sorties et entrées, 14 derniers jours", "Quels jours le stock bouge le plus ? Utile pour prévoir les équipes et les livraisons.",
+  return cadre(aDesPrets() ? "Départs et retours, 14 derniers jours" : "Sorties et entrées, 14 derniers jours", ["Quels jours le stock bouge-t-il le plus ?", "Utile pour prévoir les équipes et les livraisons."],
     legende([[C.sortie, "Sorties"], [C.retour, aDesPrets() ? "Retours" : "Entrées"]]) + `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Départs et retours par jour">${svg}</svg>`);
 }
 
@@ -72,7 +84,7 @@ function gDepotClients() {
     if (w2 > 0) svg += `<rect x="${g + w1 + 1}" y="${y + 2}" width="${Math.max(2, w2 - 1)}" height="18" rx="3" fill="${C.sortie}" data-tip="${esc(tip)}"/>`;
     svg += `<text x="${W - 4}" y="${y + 15}" text-anchor="end" class="v">${Math.round(l.part * 100)} %</text>`;
   });
-  return cadre("Où est le matériel en ce moment", estLoueur() ? "Pourcentage de chaque objet parti chez les clients. En haut de la liste : ce qui risque de manquer." : `Part de chaque objet qui est dehors (${V("chez").toLowerCase()}). En haut de la liste : ce qui risque de manquer.`,
+  return cadre("Où est le matériel en ce moment", ["Qu'est-ce qui risque de manquer ?", `La part de chaque objet qui est dehors (${esc((V("chez") || "sorti").toLowerCase())}). En haut de la liste : ce qui risque de manquer.`],
     legende([[C.depot, "Au dépôt"], [C.sortie, V("chez")]]) + `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Répartition dépôt et clients par objet">${svg}</svg>`);
 }
 
@@ -96,7 +108,7 @@ function gPertes8() {
     svg += `<rect x="${g + i * pas}" y="${base - haut}" width="${pas}" height="${haut}" fill="transparent" data-tip="${esc(tip)}"/>`;
     if (W >= 500 || i % 2 === 0) svg += `<text x="${x + bw / 2}" y="${H - 8}" text-anchor="middle">${new Date(s.t).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</text>`;
   });
-  return cadre("Pertes et casse par semaine", "Combien la casse nous coûte vraiment, et quelle part on peut refacturer aux clients.",
+  return cadre("Pertes et casse par semaine", ["Combien coûte la casse, et combien est refacturable ?", "Ce que la casse coûte vraiment, et la part que l'on peut refacturer aux clients."],
     legende([[C.alerte, "À notre charge"], [C.neutre, "Refacturable au client"]]) + `<svg viewBox="0 0 ${W} ${H + 8}" role="img" aria-label="Pertes par semaine">${svg}</svg>`);
 }
 
@@ -132,7 +144,7 @@ function gUtilisation() {
   svg += `<circle cx="${x(pts.length - 1)}" cy="${y(der.p)}" r="4" fill="${C.bleu}" stroke="${C.carte}" stroke-width="2"/>`;
   pts.forEach((p, i) => { svg += `<rect x="${x(i) - 5}" y="${base - haut}" width="10" height="${haut}" fill="transparent" data-tip="${esc(jourCourt(p.t) + " : " + Math.round(p.p * 100) + (estLoueur() ? " % du parc loué" : " % du parc dehors") + " en moyenne sur 7 jours")}"/>`; });
   [0, 30, pts.length - 1].forEach(i => { svg += `<text x="${x(i)}" y="${H - 6}" text-anchor="${i === 0 ? "start" : i === pts.length - 1 ? "end" : "middle"}">${new Date(pts[i].t).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</text>`; });
-  return cadre(estLoueur() ? "Part du parc en location" : "Part du parc dehors", estLoueur() ? "Valeur du matériel chez les clients rapportée à tout le parc, en moyenne sur 7 jours. Plus c'est haut, plus le matériel rapporte." : `Valeur du matériel dehors (${V("chez").toLowerCase()}) rapportée à tout le parc, en moyenne sur 7 jours. Plus c'est haut, plus le matériel travaille.`,
+  return cadre(estLoueur() ? "Part du parc en location" : "Part du parc dehors", ["Mon matériel travaille-t-il ?", `La valeur du matériel dehors (${esc((V("chez") || "sorti").toLowerCase())}) rapportée à tout le parc, en moyenne sur 7 jours. Plus c'est haut, plus le matériel ${estLoueur() ? "rapporte" : "travaille"}.`],
     `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Taux d'utilisation du parc sur 60 jours">${svg}</svg>`);
 }
 
@@ -151,7 +163,7 @@ function gTopLoues() {
     svg += `<path d="M${g},${y + 2}H${g + w - 4}Q${g + w},${y + 2} ${g + w},${y + 6}V${y + 16}Q${g + w},${y + 20} ${g + w - 4},${y + 20}H${g}Z" fill="${C.sortie}" data-tip="${esc(x.a.nom + " : " + entier(x.n) + (estLoueur() ? " pièces louées" : " pièces sorties") + " en 30 jours")}"/>`;
     svg += `<text x="${g + w + 6}" y="${y + 15}" class="v">${entier(x.n)}</text>`;
   });
-  return cadre(estLoueur() ? "Ce qui se loue, et ce qui dort" : "Ce qui sort le plus, et ce qui dort", (estLoueur() ? "Pièces louées" : "Pièces sorties") + " sur 30 jours. Ce qui ne sort jamais immobilise de l'argent : à vendre ou à mettre en avant.",
+  return cadre(estLoueur() ? "Ce qui se loue, et ce qui dort" : "Ce qui sort le plus, et ce qui dort", ["Que racheter, que vendre ?", (estLoueur() ? "Pièces louées" : "Pièces sorties") + " sur 30 jours. Ce qui ne sort jamais immobilise de l'argent : à vendre ou à mettre en avant."],
     `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Objets qui sortent le plus">${svg}</svg>` +
     (dorment.length ? `<p class="q" style="margin-top:10px"><b style="color:var(--encre)">Pas sorti depuis 30 jours :</b> ${dorment.map(x => esc(x.a.nom)).join(", ")}.</p>` : ""));
 }
@@ -172,7 +184,7 @@ function gImputations() {
     svg += `<text x="${g + w + 6}" y="${y + 15}" class="v">${argent(val)}</text>`;
   });
   const mot = (V("imp") || "affectation").toLowerCase();
-  return cadre(`Ce qui sort, par ${mot}`, `Valeur sortie du stock sur 30 jours. Où part l'argent, ${mot} par ${mot} ?`,
+  return cadre(`Ce qui sort, par ${mot}`, [`Où part l'argent, ${mot} par ${mot} ?`, "La valeur sortie du stock sur 30 jours."],
     `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Valeur sortie par ${esc(mot)}">${svg}</svg>`);
 }
 
@@ -202,7 +214,10 @@ function gValeurStock() {
   pts.forEach((p, i) => { svg += `<rect x="${x(i) - 5}" y="${base - haut}" width="10" height="${haut}" fill="transparent" data-tip="${esc(jourCourt(p.t) + " : " + argent(p.v) + " au dépôt")}"/>`; });
   [0, 30, pts.length - 1].forEach(i => { svg += `<text x="${x(i)}" y="${H - 6}" text-anchor="${i === 0 ? "start" : i === pts.length - 1 ? "end" : "middle"}">${new Date(pts[i].t).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</text>`; });
   const d = prem.v ? Math.round((der.v - prem.v) / prem.v * 100) : 0;
-  return cadre("Valeur du stock, 60 jours", `Combien d'argent dort au dépôt. ${d === 0 ? "Stable" : (d > 0 ? "+" : "") + d + " %"} depuis le ${new Date(prem.t).toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}.`,
+  const depuis = `depuis le ${new Date(prem.t).toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}`;
+  return cadre("Valeur du stock, 60 jours", modeQuestions
+      ? ["Combien d'argent dort au dépôt ?", d === 0 ? `La valeur est stable ${depuis}.` : `${Math.abs(d)} % de ${d > 0 ? "plus" : "moins"} ${depuis}.`]
+      : `Combien d'argent dort au dépôt. ${d === 0 ? "Stable" : (d > 0 ? "+" : "") + d + " %"} ${depuis}.`,
     `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Valeur du stock sur 60 jours">${svg}</svg>`);
 }
 

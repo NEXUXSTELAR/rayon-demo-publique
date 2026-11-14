@@ -35,13 +35,25 @@ function ligneFiche(id, motif) {
   return mv;
 }
 
+/* ---------------- Les pièces communes des pages du stock (stock, fiche, journal, commandes, lieux, contrôles) ----------------
+   Elles reprennent le dessin de l'accueil « essentiel » : raccourcis ronds, listes en lignes, la suite derrière un toucher. */
+// Le repère qui tient la page dans une colonne (styles.css : main:has(> .st-col))
+const ST_COL = `<i class="st-col" hidden></i>`;
+// Une rangée de raccourcis ronds : [{ a: attributs du bouton, i: pictogramme, t: libellé }]
+const stRonds = (l, cls) => l.length ? `<div class="es-raccourcis st-ronds${cls ? " " + cls : ""}" style="--n:${Math.min(l.length, 5)}">${l.map(x => `<button ${x.a}><span class="es-rond">${x.i}</span><span>${esc(x.t)}</span></button>`).join("")}</div>` : "";
+// Une liste longue montre ses premières lignes ; le reste attend un toucher (les lignes cachées le sont par styles.css : .st-replie)
+const stSuite = (reste, plusieurs, un) => `<p class="st-suite"><button class="es-lien" data-st-suite>${reste > 1 ? `Afficher les ${reste} ${plusieurs || "autres"}` : `Afficher ${un || "la dernière ligne"}`}</button></p>`;
+const ST_LIGNES = 8;
+let stockEntier = false; // la liste du stock a été dépliée : elle le reste jusqu'à la fermeture
+
 /* ---------------- Ce qui s'ajoute aux écrans existants ---------------- */
-// En haut du stock : le bouton, et les ajouts demandés par le dépôt
+// Sur la ligne de la recherche du stock : un geste rare, donc un bouton à contour. L'accent reste au filtre choisi.
+const boutonNouvelArticle = () => peutArticles() ? `<button class="btn petit art-nouveau" data-article-nouveau>Nouvel article</button>` : "";
+// En haut du stock : les ajouts demandés par le dépôt
 function outilsArticles() {
   if (!peutArticles()) return "";
   const d = S.demandesArticles || [];
-  return `<div class="art-outils"><button class="btn petit plein" data-article-nouveau>Nouvel article</button></div>
-  ${d.length ? `<ul class="b-liste art-demandes">${d.map(x => `<li><button class="l" data-demande-article="${x.id}">${pic(I.etiquette)}<span><b>Ajout demandé · ${esc(x.nom)}</b><small>Par ${esc(x.qui)} · ${quand(x.date)}</small></span><span class="statut">à voir</span></button></li>`).join("")}</ul>` : ""}`;
+  return `${d.length ? `<ul class="b-liste art-demandes">${d.map(x => `<li><button class="l" data-demande-article="${x.id}">${pic(I.etiquette)}<span><b>Ajout demandé · ${esc(x.nom)}</b><small>Par ${esc(x.qui)} · ${quand(x.date)}</small></span><span class="statut">à voir</span></button></li>`).join("")}</ul>` : ""}`;
 }
 // Sous une recherche qui ne trouve rien
 const boutonCreerRecherche = () => `<button type="button" class="btn petit plein" data-article-recherche style="margin-top:10px">${peutArticles() ? "Créer cet article" : "Demander l'ajout"}</button>`;
@@ -107,7 +119,7 @@ function vArticle(arg) {
   const prop = neuf ? niveauxProposes(b.qte === undefined ? 1 : b.qte, lg === "pret") : null;
   return `<form data-form="article" data-id="${neuf ? "" : a.id}" class="art-form" novalidate>
     <h1>${neuf ? "Nouvel article" : "Modifier l'article"}</h1>
-    <p class="sous">${neuf ? `Il recevra le code <span class="code">${esc(b.code || prochainCode())}</span>. Un code n'est jamais réutilisé.` : `<span class="code">${a.id}</span> · le code ne change pas. La quantité se corrige avec « Compter », pas ici.`}</p>
+    ${neuf ? sousAide(`Il recevra le code <span class="code">${esc(b.code || prochainCode())}</span>.`, "Un code n'est jamais réutilisé, même après le retrait d'un article.") : sousAide(`<span class="code">${a.id}</span> · ${esc(a.nom)}`, "Le code ne change pas. La quantité se corrige avec « Compter », pas ici.")}
     ${dem ? `<p class="art-note">Demandé par ${esc(dem.qui)} le ${quand(dem.date)}${dem.ou ? ` · rangé : ${esc(dem.ou)}` : ""}. <button type="button" class="lien" data-demande-refuser="${dem.id}">Refuser la demande</button></p>` : ""}
     ${champ("Nom", texte("nom", neuf ? b.nom || "" : a.nom, 60, "required"))}
     ${neuf && deuxLogiques ? `<p class="choix-titre">Cet article</p><div class="choix" role="radiogroup" aria-label="Cet article">
@@ -133,7 +145,7 @@ function vArticle(arg) {
       <p class="sous" data-photo-etat role="status" style="margin:6px 0 0">${photoArticle ? "Photo jointe." : "Facultative. Elle est réduite avant d'être gardée."}</p>
     </details>
     <div class="valider"><button type="button" class="btn" data-act="retour">Annuler</button><button class="btn plein">${neuf ? "Créer l'article" : "Enregistrer"}</button></div>
-    ${neuf ? "" : `<p style="margin-top:14px"><button type="button" class="btn" data-aller="etiquettes" data-arg="${a.id}">${I.etiquette}Imprimer son étiquette</button></p>`}
+    ${neuf ? "" : `<p class="st-suite"><button type="button" class="es-lien" data-aller="etiquettes" data-arg="${a.id}">${I.etiquette}Imprimer son étiquette</button></p>`}
   </form>`;
 }
 // L'emplacement ou le fournisseur choisi dans le formulaire ; créé s'il est nouveau. Rend son identifiant, ou null si le nom manque.
@@ -266,16 +278,22 @@ const noteRetire = a => `<p class="art-note retire">Cet article a été retiré 
 // L'étiquette d'un article retiré, scannée
 const objetRetire = a => `<div class="t-objet">${img(a)}<span class="code">${a.id}</span><h1>${esc(a.nom)}</h1></div>
   <div class="t-actions">${noteRetire(a)}${permis("materiel") ? `<button class="btn" data-fiche="${a.id}">${I.materiel}Voir son historique</button>` : ""}</div>`;
-const ficheRetiree = a => `<div class="fiche">${img(a)}<div><div class="entete"><div><span class="code">${a.id}</span><h1>${esc(a.nom)}</h1><span class="etat zero"><i></i>Retiré</span></div></div>
-  ${noteRetire(a)}</div></div>
-  <h2>Historique</h2>${tableMouvements(S.mouvements.filter(m => m.article === a.id).slice(-15).reverse(), false)}`;
+const ficheRetiree = a => `${ST_COL}<div class="fiche st-fiche"><div class="st-tete">${img(a)}<div><h1>${esc(a.nom)}</h1><p class="st-sousnom"><span class="etat zero"><i></i>Retiré</span> · <span class="code">${a.id}</span></p></div></div>
+  ${noteRetire(a)}</div>
+  ${stHistorique(a.id, 15)}`;
+// L'historique d'un objet : cinq lignes, la suite au toucher, et tout le reste dans le journal
+function stHistorique(id, n) {
+  const l = S.mouvements.filter(m => m.article === id).slice(-n).reverse();
+  return `<h2>Historique</h2><div class="${l.length > 5 ? "st-replie" : ""}" data-st-replie>${tableMouvements(l, false)}${l.length > 5 ? stSuite(l.length - 5, "mouvements suivants", "le mouvement suivant") : ""}</div>
+  ${permis("journal") && l.length ? `<p class="st-suite"><button class="es-lien" data-st-journal="${id}">Tout son historique dans le journal</button></p>` : ""}`;
+}
 // Le filtre « Retirés » du stock
 function vRetires() {
   const l = (S.retires || []).slice().sort((x, y) => y.retire.le - x.retire.le);
-  return `<h1>${esc(titreSection("materiel"))}</h1>
+  return `<h1>${esc(titreSection("materiel"))}</h1>${ST_COL}
+  ${sousAide(`${nbEs(l.length, "article retiré", "articles retirés")} du stock.`, "Ils ne sont plus proposés, comptés ni commandés. Leur historique reste dans le journal, et vous pouvez les remettre.")}
   <div class="outils-liste"><div class="filtres"><button data-filtre-materiel="tous" aria-pressed="false">Tout</button><button data-filtre-materiel="retires" aria-pressed="true">Retirés<span class="nb">${l.length}</span></button></div></div>
-  <p class="sous">Retirés du stock : ils ne sont plus proposés, comptés ni commandés. Leur historique reste dans le journal.</p>
-  <ul class="b-liste">${l.map(a => `<li><button class="l" data-fiche="${a.id}">${img(a)}<span><b>${esc(a.nom)}</b><small><span class="code">${a.id}</span> · retiré le ${jourRetrait(a)} par ${esc(a.retire.par)}</small></span><span class="statut">Retiré</span></button></li>`).join("") || `<li class="vide">Aucun article retiré.</li>`}</ul>`;
+  <ul class="b-liste st-liste">${l.map(a => `<li><button class="l" data-fiche="${a.id}">${img(a)}<span><b>${esc(a.nom)}</b><small>Retiré le ${jourRetrait(a)} par ${esc(a.retire.par)}<span class="st-code"> · <span class="code">${a.id}</span></span></small></span><span class="chev">${I.chevron}</span></button></li>`).join("") || `<li class="vide">Aucun article retiré.</li>`}</ul>`;
 }
 
 function brancherArticles() {
@@ -286,6 +304,11 @@ function brancherArticles() {
   $$("[data-article-remettre]").forEach(b => b.onclick = () => { if (peutArticles()) remettreArticle(b.dataset.articleRemettre); });
   $$("[data-demande-article]").forEach(b => b.onclick = () => { const d = (S.demandesArticles || []).find(x => x.id === b.dataset.demandeArticle); if (d) nouvelArticle({ nom: d.nom, qte: d.qte, code: d.code, demande: d.id }); });
   $$("[data-demande-refuser]").forEach(b => b.onclick = () => { S.demandesArticles = (S.demandesArticles || []).filter(x => x.id !== b.dataset.demandeRefuser); brouillonArticle = {}; sauver(); ACTIONS.retour(); toast("Demande refusée. Prévenez la personne qui l'avait faite."); });
+  // Pages du stock : déplier une liste, ouvrir le journal sur un objet. Une recherche dans le stock porte sur toute la liste.
+  const deplier = b => { const z = b.closest("[data-st-replie]"); if (!z) return; z.classList.remove("st-replie"); if (z.querySelector("#liste-materiel")) stockEntier = true; const p = b.closest(".st-suite"); if (p) p.remove(); };
+  $$("[data-st-suite]").forEach(b => b.onclick = () => deplier(b));
+  $$("[data-st-journal]").forEach(b => b.onclick = () => { const id = b.dataset.stJournal; aller("journal"); jr.q = id; rendre(); });
+  const cs = $('[data-filtre="#liste-materiel"]'); if (cs) cs.addEventListener("input", () => { const s = $("[data-st-replie] [data-st-suite]"); if (s && cs.value.trim()) { const z = s.closest("[data-st-replie]"); z.classList.remove("st-replie"); s.closest(".st-suite").remove(); } });
   const f = $('[data-form="article"]'); if (!f) return;
   f.onsubmit = e => { e.preventDefault(); validerArticle(f); };
   ["emp", "fou"].forEach(n => { const s = f.elements[n], l = f.querySelector(`[data-si="${n}"]`), maj = () => { l.hidden = s.value !== "__nouveau"; }; s.onchange = maj; maj(); });

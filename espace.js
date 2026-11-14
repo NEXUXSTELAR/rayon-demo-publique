@@ -58,13 +58,13 @@ function pilotageDemo() {
   const J = 86400000, n = Date.now(), fait = (ids, il) => Object.fromEntries(ids.map(k => [k, n - il * J]));
   const tout = ETAPES_ORIGINE.map(e => e.id);
   return { clients: [
-    { id: "C-01", nom: "Location Fêtes (démo)", metier: "loueur", pays: "SN", ville: "Dakar", contact: "Mme Ndiaye", tel: "+221 70 000 00 01", offre: "complet", modules: ["MO-RES", "MO-KIT"], relais: 2, apporteur: true, devisLe: n - 45 * J, livreLe: n - 20 * J, etapes: fait(tout, 21), heuresEstimees: 14, heuresPassees: 16.5,
-      interventions: [{ date: n - 9 * J, h: 0.75, t: "Ajout de deux kits", statut: "incluse" }, { date: n - 3 * J, h: 0.75, t: "Nouveau magasinier : identifiant et formation", statut: "incluse" }], notes: "Client pilote au Sénégal, par la société partenaire." },
+    { id: "C-01", nom: "Location Fêtes (démo)", metier: "loueur", pays: "FR", mode: "place", ville: "Toulouse", contact: "Mme Ndiaye", tel: "06 00 00 00 11", offre: "complet", modules: ["MO-RES", "MO-KIT"], relais: 2, apporteur: true, devisLe: n - 45 * J, livreLe: n - 20 * J, etapes: fait(tout, 21), heuresEstimees: 14, heuresPassees: 16.5,
+      interventions: [{ date: n - 9 * J, h: 0.75, t: "Ajout de deux kits", statut: "incluse" }, { date: n - 3 * J, h: 0.75, t: "Nouveau magasinier : identifiant et formation", statut: "incluse" }], notes: "Client pilote." },
     { id: "C-02", nom: "Atelier Élec (démo)", metier: "artisan", pays: "FR", ville: "Toulouse", contact: "M. Martin", tel: "06 00 00 00 21", offre: "demarrage", mode: "place", modules: [], devisLe: n - 12 * J, prevuLe: isoJour(n + 5 * J), etapes: fait(["devis", "acompte", "articles", "google"], 4), heuresEstimees: 8, heuresPassees: 2, interventions: [], notes: "" },
     { id: "C-03", nom: "Le Comptoir (démo)", metier: "restaurant", pays: "FR", ville: "Montreuil", contact: "Mme Bernard", tel: "06 00 00 00 31", offre: "complet", mode: "distance", essaiDeduit: true, modules: ["AL-WA"], devisLe: n - 9 * J, etapes: {}, heuresEstimees: 13, heuresPassees: 1, interventions: [], notes: "Veut les dates limites et la consommation par service." },
-    { id: "C-04", nom: "Projet Santé Solidaire (démo)", metier: "ong", pays: "SN", ville: "Thiès", contact: "Mme Faye", tel: "+221 77 000 00 41", offre: "mesure", prixEur: 4400, modules: [], devisLe: n - 130 * J, livreLe: n - 100 * J, etapes: fait(tout, 101), heuresEstimees: 32, heuresPassees: 38,
-      interventions: [{ date: n - 70 * J, h: 2, t: "Rapport par bailleur", statut: "incluse" }, { date: n - 6 * J, h: 1.5, t: "Nouvel entrepôt à Kaolack", statut: "facturée" }], notes: "" },
-    { id: "C-05", nom: "Quincaillerie du Centre (démo)", metier: "distribution", pays: "SN", ville: "Dakar", contact: "M. Sow", tel: "+221 76 000 00 51", offre: "demarrage", modules: [], devisLe: n - 70 * J, livreLe: n - 50 * J, etapes: fait(tout.filter(k => k !== "note"), 50), heuresEstimees: 8, heuresPassees: 9,
+    { id: "C-04", nom: "Projet Santé Solidaire (démo)", metier: "ong", pays: "FR", mode: "distance", ville: "Lyon", contact: "Mme Faye", tel: "06 00 00 00 41", offre: "mesure", prixEur: 4400, modules: [], devisLe: n - 130 * J, livreLe: n - 100 * J, etapes: fait(tout, 101), heuresEstimees: 32, heuresPassees: 38,
+      interventions: [{ date: n - 70 * J, h: 2, t: "Rapport par bailleur", statut: "incluse" }, { date: n - 6 * J, h: 1.5, t: "Nouvel entrepôt à Nantes", statut: "facturée" }], notes: "" },
+    { id: "C-05", nom: "Quincaillerie du Centre (démo)", metier: "distribution", pays: "FR", mode: "place", ville: "Bordeaux", contact: "M. Sow", tel: "06 00 00 00 51", offre: "demarrage", modules: [], devisLe: n - 70 * J, livreLe: n - 50 * J, etapes: fait(tout.filter(k => k !== "note"), 50), heuresEstimees: 8, heuresPassees: 9,
       interventions: [{ date: n - 2 * J, h: 1, t: "Import de 120 nouvelles références", statut: "à facturer" }], notes: "" },
   ] };
 }
@@ -99,7 +99,9 @@ function normaliserP(s) {
   });
   return s;
 }
-let P_ = normaliserP((() => { try { const s = JSON.parse(localStorage.getItem(CLE_PILOTAGE)); if (s && s.clients) return s; } catch (e) { /* stockage bloqué */ } return pilotageDemo(); })());
+// France seulement : un client enregistré comme sénégalais est traité comme un client français (rien n'est effacé).
+const franceSeuleP = p => { if (FRANCE_SEULE) (p.clients || []).forEach(c => { if (c.pays === "SN") { c.paysAvant = "SN"; c.pays = "FR"; c.mode = c.mode || "distance"; } }); return p; };
+let P_ = franceSeuleP(normaliserP((() => { try { const s = JSON.parse(localStorage.getItem(CLE_PILOTAGE)); if (s && s.clients) return s; } catch (e) { /* stockage bloqué */ } return pilotageDemo(); })()));
 // Sur un appareil où Mon espace est ouvert, le tarif réglé sert aussi au devis et à l'écran d'offre de la démo (TARIF_INTERVENTION).
 // Pour un visiteur de la démo, qui n'a jamais ouvert Mon espace, rien ne change : les valeurs de data.js restent.
 function appliquerTarifP() { if (ESPACE) { TARIF_INTERVENTION.eur = P_.reglages.tarifEur; TARIF_INTERVENTION.xof = P_.reglages.tarifXof; } }
@@ -339,7 +341,7 @@ function eChiffres() {
   const signe = P_.clients.filter(c => c.etapes.devis).reduce((t, c) => t + enEur(c, prixVente(c).total) * partNous(c), 0);
   const enc = P_.clients.reduce((t, c) => t + encaisse(c).total * partNous(c), 0);
   const h = P_.clients.reduce((t, c) => t + c.heuresPassees, 0), net = P_.clients.reduce((t, c) => t + gainHeure(c) * c.heuresPassees, 0);
-  return `<h1>Chiffres</h1><p class="sous">Ce qui nous revient : au Sénégal, après le relais payé au partenaire et sa commission quand il a apporté le client (${hTexte(r.commission)} %). Le gain net de l'heure compte aussi le portage en France (${hTexte(r.netPortage)} % net). <button class="lien" data-e="mesreglages" data-racine-e>Changer ces taux</button></p>
+  return `<h1>Chiffres</h1><p class="sous">${FRANCE_SEULE ? "Ce qui nous revient." : `Ce qui nous revient : au Sénégal, après le relais payé au partenaire et sa commission quand il a apporté le client (${hTexte(r.commission)} %).`} Le gain net de l'heure compte le portage${FRANCE_SEULE ? "" : " en France"} (${hTexte(r.netPortage)} % net). <button class="lien" data-e="mesreglages" data-racine-e>Changer ces taux</button></p>
   <div class="trio"><div><small>Signé</small><b>${fmtEur(signe)}</b><span class="delta">${P_.clients.filter(c => c.etapes.devis).length} clients</span></div><div><small>Encaissé</small><b>${fmtEur(enc)}</b><span class="delta">dont interventions ${fmtEur(P_.clients.reduce((t, c) => t + encaisse(c).interv * partNous(c), 0))}</span></div><div><small>Gain net de l'heure</small><b>${h ? fmtEur(net / h) : "—"}</b><span class="delta">${hTexte(Math.round(h * 10) / 10)} h passées</span></div></div>
   <div class="bento" style="margin-top:14px"><section class="w w-l nu">${gVentesMois()}</section>
   <section class="w w-l"><h3 class="w-titre">Par client</h3><div class="defile"><table class="t"><thead><tr><th>Client</th><th class="n">Pour nous</th><th class="n">Heures prévues</th><th class="n">Heures passées</th><th class="n">Net de l'heure</th></tr></thead><tbody>
@@ -381,11 +383,11 @@ const copieP = x => JSON.parse(JSON.stringify(x));
 function clientEnReglage() {
   const c = P_.enReglage && clientP(P_.enReglage);
   if (!c || c.metier !== metierDemo() || (S.entreprise || {}).nom !== c.nom) { if (P_.enReglage) { delete P_.enReglage; sauverP(); } return null; }
-  const a = { metier: c.metier, taille: S.taille || "bureau", detail: S.detail || "complet", config: config() }, avant = c.appli || {};
-  if (JSON.stringify(a) !== JSON.stringify({ metier: avant.metier, taille: avant.taille, detail: avant.detail, config: avant.config })) { c.appli = Object.assign(copieP(a), { le: Date.now() }); sauverP(); }
+  const a = { metier: c.metier, taille: S.taille || "bureau", detail: S.detail || "complet", presentation: presentation(), config: config() }, avant = c.appli || {};
+  if (JSON.stringify(a) !== JSON.stringify({ metier: avant.metier, taille: avant.taille, detail: avant.detail, presentation: avant.presentation || "essentiel", config: avant.config })) { c.appli = Object.assign(copieP(a), { le: Date.now() }); sauverP(); }
   return c;
 }
-function appliquerAppliP(a) { S.taille = a.taille; S.detail = a.detail; S.config = copieP(a.config); }
+function appliquerAppliP(a) { S.taille = a.taille; S.detail = a.detail; S.presentation = a.presentation || "essentiel"; S.config = copieP(a.config); }
 // Dans la démo, l'appli prend le métier du client, les modules de son offre, son nom, sa monnaie, et son réglage s'il en a déjà un
 function reglerAppliP(id) {
   const c = clientP(id); if (!c) return;
@@ -426,10 +428,10 @@ function eMesReglages() {
   <p class="sous">Ce qui se change ici vaut pour tous les clients, tout de suite, et se garde dans ce navigateur. Les prix des offres et des modules ne se changent pas ici : ils suivent le modèle de devis (docs/23).</p>
   <h2>Mes taux</h2>
   <div class="bloc regl-bloc"><div class="regl-deux">
-    ${champ("commission", "Commission d'apporteur au Sénégal, en %", nombre, "Part du total laissée au partenaire quand il a apporté le client.")}
+    ${FRANCE_SEULE ? "" : champ("commission", "Commission d'apporteur au Sénégal, en %", nombre, "Part du total laissée au partenaire quand il a apporté le client.")}
     ${champ("netPortage", "Ce qui reste après le portage en France, en %", nombre, "Sert au gain net de l'heure des clients en France.")}
     ${champ("tarifEur", "Heure d'intervention en France, en € HT", 'type="number" inputmode="decimal" min="1" max="1000" step="1"', `Valeur de départ : ${fmtEur(TARIF_ORIGINE.eur)}.`)}
-    ${champ("tarifXof", "Heure d'intervention au Sénégal, en FCFA HT", 'type="number" inputmode="numeric" min="500" max="1000000" step="500"', `Valeur de départ : ${fmtXof(TARIF_ORIGINE.xof)}.`)}</div>
+    ${FRANCE_SEULE ? "" : champ("tarifXof", "Heure d'intervention au Sénégal, en FCFA HT", 'type="number" inputmode="numeric" min="500" max="1000000" step="500"', `Valeur de départ : ${fmtXof(TARIF_ORIGINE.xof)}.`)}</div>
     <p class="w-note">Le tarif de l'heure sert aux interventions à facturer, à l'encaissé, et s'écrit sur les devis faits depuis cet appareil.</p></div>
   <h2>Mes rappels</h2>
   <div class="bloc regl-bloc"><div class="regl-deux">
@@ -444,7 +446,7 @@ function eMesReglages() {
     ${champ("nom", "Mon nom", 'maxlength="60" autocomplete="off"')}
     ${champ("compte", "Mon adresse e-mail", 'type="email" maxlength="80" autocomplete="off"')}</div>
     ${champ("vendeurFR", "Vendeur en France", 'maxlength="120" autocomplete="off" placeholder="Société de portage : nom, SIRET"', "Vide : le devis affiche « [Vendeur, à compléter : docs/17] ».")}
-    ${champ("mentionSN", "Mentions au Sénégal", 'maxlength="120" autocomplete="off" placeholder="RCCM et NINEA"', "Vide : le devis affiche « RCCM et NINEA à compléter (docs/24) ».")}</div>
+    ${FRANCE_SEULE ? "" : champ("mentionSN", "Mentions au Sénégal", 'maxlength="120" autocomplete="off" placeholder="RCCM et NINEA"', "Vide : le devis affiche « RCCM et NINEA à compléter (docs/24) ».")}</div>
   <h2>Étapes de l'installation <small class="compte-ph">${r.etapes.length}</small></h2>
   <p class="sous">La même liste pour tous les clients. « Marquer livré » apparaît quand « Avant » et « Sur place » sont cochées. Une étape retirée disparaît de toutes les installations ; ce qui était coché reste en mémoire si vous la remettez.</p>
   ${PHASES.map(ph => { const l = r.etapes.filter(e => e.phase === ph);
@@ -489,7 +491,7 @@ function feuilleClientP(id, modele) {
     <h2>L'entreprise</h2>
     <label class="champ">Nom de l'entreprise<input name="nom" maxlength="60" autocomplete="off" value="${esc(c.nom || "")}"></label>
     <label class="champ">Métier<select name="metier">${Object.entries(METIERS).map(([k, m]) => `<option value="${k}" ${c.metier === k ? "selected" : ""}>${m.nom}</option>`).join("")}</select></label>
-    <div class="dispo-dates"><label class="champ">Pays<select name="pays"><option value="FR" ${c.pays === "FR" ? "selected" : ""}>France</option><option value="SN" ${c.pays === "SN" ? "selected" : ""}>Sénégal</option></select></label><label class="champ">Ville<input name="ville" maxlength="40" value="${esc(c.ville || "")}"></label></div>
+    <div class="dispo-dates">${FRANCE_SEULE ? `<input type="hidden" name="pays" value="FR">` : `<label class="champ">Pays<select name="pays"><option value="FR" ${c.pays === "FR" ? "selected" : ""}>France</option><option value="SN" ${c.pays === "SN" ? "selected" : ""}>Sénégal</option></select></label>`}<label class="champ">Ville<input name="ville" maxlength="40" value="${esc(c.ville || "")}"></label></div>
     <div class="dispo-dates"><label class="champ">Contact<input name="contact" maxlength="50" value="${esc(c.contact || "")}"></label><label class="champ">Téléphone<input name="tel" type="tel" maxlength="20" value="${esc(c.tel || "")}"></label></div>
     <label class="champ">E-mail<input name="email" type="email" inputmode="email" maxlength="80" autocomplete="off" value="${esc(c.email || "")}"></label>
     <h2>L'offre</h2>
@@ -718,6 +720,6 @@ function brancherEspace() {
   brancherListeP();
   $$("[data-demo-p]").forEach(b => b.onclick = () => {
     if (!confirm(`Remplacer les ${P_.clients.length} clients actuels par les cinq clients de démonstration ? Vos réglages sont gardés.`)) return;
-    P_.clients = normaliserP({ clients: pilotageDemo().clients, reglages: reglP() }).clients; delete P_.enReglage; sauverP(); rendre(); toast("Clients de démonstration remis.");
+    P_.clients = franceSeuleP(normaliserP({ clients: pilotageDemo().clients, reglages: reglP() })).clients; delete P_.enReglage; sauverP(); rendre(); toast("Clients de démonstration remis.");
   });
 }

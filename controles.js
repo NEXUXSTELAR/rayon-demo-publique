@@ -55,10 +55,10 @@ function detailsControle(a) {
   return `${a.ctrlLe ? `<div><dt>${esc(nomControle(a))} à faire avant le</dt><dd>${dateCtrl(a.ctrlLe)}${a.ctrlMois ? `<small class="ctrl-rythme">${esc(rythmeControle(a))}</small>` : ""}</dd></div>` : ""}
     ${a.ctrlFait ? `<div><dt>Dernier contrôle</dt><dd>${dateCtrl(a.ctrlFait)}${a.ctrlQui ? `<small class="ctrl-rythme">par ${esc(a.ctrlQui)}</small>` : ""}</dd></div>` : ""}`;
 }
-function boutonsControle(a) {
+function boutonsControle(a, sansFait) {
   if (!suiviControles()) return "";
   const suivi = a.ctrlLe || a.ctrlFait;
-  return `${boutonControleFait(a, true)}<button class="btn petit" data-ctrl-regler="${a.id}">${suivi ? "Régler le contrôle" : "Suivre un contrôle"}</button>`;
+  return `${sansFait ? "" : boutonControleFait(a, true)}<button class="btn petit" data-ctrl-regler="${a.id}">${suivi ? "Régler le contrôle" : "Suivre un contrôle"}</button>`;
 }
 
 /* À faire : les contrôles s'ajoutent à la liste des personnes qui voient le stock. En retard en tête, à venir à la fin. */
@@ -193,7 +193,17 @@ function vRegistreControles() {
   if (!suiviControles()) return bDocs(); // rien à montrer pour une entreprise qui ne suit aucun contrôle
   const l = S.articles.filter(a => a.ctrlLe || a.ctrlFait).sort((x, y) => (x.ctrlLe || "9999").localeCompare(y.ctrlLe || "9999"));
   const mot = { retard: "En retard", bientot: "À faire", ok: "À jour" };
-  return `${retourDocs}<div class="feuille-doc">${enTeteDoc()}<h1>Registre des contrôles</h1><p>Édité le ${new Date().toLocaleDateString("fr-FR")} · ${l.length} objet${l.length > 1 ? "s" : ""} suivi${l.length > 1 ? "s" : ""}</p>
+  // À l'écran : une phrase d'état, deux raccourcis et une ligne par objet. Le registre lui-même ne s'affiche qu'à l'impression, inchangé.
+  const nR = l.filter(a => (etatControle(a) || {}).c === "retard").length, nB = l.filter(a => (etatControle(a) || {}).c === "bientot").length;
+  const puce = { retard: "zero", bientot: "bas", ok: "" }, ouvre = permis("materiel");
+  const ligne = a => { const e = etatControle(a), corps = `${img(a)}<span><b>${esc(a.nom)}</b><small>${esc(nomControle(a))}${a.ctrlMois ? " · " + esc(rythmeControle(a)) : ""}</small><small>${e ? `<span class="etat ${puce[e.c]}"><i></i>${esc(e.s)}</span>` : `Dernier contrôle le ${dateCtrl(a.ctrlFait)}, pas de prochaine échéance`}</small></span>`;
+    return `<li>${ouvre ? `<button class="l" data-fiche="${a.id}">${corps}<span class="chev">${I.chevron}</span></button>` : `<div class="l">${corps}</div>`}</li>`; };
+  const ecran = `${ST_COL}<div class="pas-imprimer">
+  <p class="es-etat st-etat">${l.length ? `${nbEs(l.length, "objet suivi", "objets suivis")} · ${nR ? `${nR} en retard` : nB ? `${nB} à faire sous 30 jours` : "tout est à jour"}.` : "Aucun objet n'a de contrôle suivi."}</p>
+  ${stRonds([{ a: `data-act="imprimer"`, i: I.imprimer, t: "Imprimer le registre" }].concat(permis("docs") ? [{ a: `data-aller="docs"`, i: I.docs, t: "Documents" }] : [], ouvre && aControler().length ? [{ a: `data-aller="materiel" data-arg="controle"`, i: PICTO_CONTROLE, t: "À contrôler" }] : []))}
+  ${l.length ? `<div class="${l.length > ST_LIGNES + 2 ? "st-replie" : ""}" data-st-replie><ul class="b-liste st-liste st-ctrl">${l.map(ligne).join("")}</ul>${l.length > ST_LIGNES + 2 ? stSuite(l.length - ST_LIGNES, "autres objets") : ""}</div>` : `<p class="es-rien">Ouvrez la fiche d'un objet, puis « Suivre un contrôle ».</p>`}
+  ${sousAide("Chaque contrôle noté reste dans le journal.", "Avec sa date et le prénom de la personne. Le registre imprimé ne remplace pas le certificat ou le rapport remis par l'organisme de contrôle.")}</div>`;
+  return `${ecran}<div class="feuille-doc st-papier">${enTeteDoc()}<h1>Registre des contrôles</h1><p>Édité le ${new Date().toLocaleDateString("fr-FR")} · ${l.length} objet${l.length > 1 ? "s" : ""} suivi${l.length > 1 ? "s" : ""}</p>
   <div class="defile"><table class="registre etroit"><thead><tr><th>Objet</th><th>Contrôle</th><th>Dernier</th><th>Prochaine échéance</th></tr></thead><tbody>
   ${l.map(a => { const e = etatControle(a); return `<tr><td><b>${esc(a.nom)}</b><br><small>${a.id}${a.serie ? " · n° " + esc(a.serie) : ""}</small></td>
     <td>${esc(nomControle(a))}${a.ctrlMois ? `<br><small>${esc(rythmeControle(a))}</small>` : ""}</td>

@@ -28,38 +28,49 @@ const dispoSur = (id, d1, d2, sauf) => possede(id) - prisSur(id, d1, d2, sauf).t
 
 /* ---------------- Bureau : réservations ---------------- */
 let rechercheDispo = null; // { d1, d2 }
+// Une question (« est-ce libre ? ») et sa réponse en lignes, puis ce qui est déjà réservé. Six lignes d'abord, la suite d'un toucher.
+const RESA_VUES = 6, PUCE_RESA = { "Confirmée": "neutre", "Préparée": "compter", "Partie": "sortie", "Revenue": "retour" };
+let dispoTout = false, resasTout = false;
+const periodeResa = (d1, d2, court) => { const f = court ? dateCourte : dateLongue; return d2 && d2 !== d1 ? `Du ${f(d1)} au ${f(d2)}` : `Le ${f(d1)}`; };
 function bReservations() {
   const d1 = (rechercheDispo && rechercheDispo.d1) || isoJour(Date.now() + 3 * JOUR_MS);
   const d2 = (rechercheDispo && rechercheDispo.d2) || d1;
-  const avenir = S.reservations.filter(r => r.fin >= aujourdHui() && r.statut !== "Revenue").sort((a, b) => a.debut.localeCompare(b.debut));
-  return `<h1>Réservations</h1>
-  <p class="sous">« ${esc(V("question") || "Avez-vous 300 chaises le 14 ?")} » Choisissez les dates : la réponse tient compte de ce qui est déjà réservé et de ce qui revient d'ici là.</p>
-  <form class="dispo-dates" data-form="dispo">
-    <label class="champ">Du<input type="date" name="d1" value="${d1}" min="${aujourdHui()}"></label>
-    <label class="champ">Au<input type="date" name="d2" value="${d2}" min="${aujourdHui()}"></label>
-    <button class="btn plein">Voir ce qui est libre</button>
-  </form>
-  <div class="defile"><table class="t dispo"><thead><tr><th>Objet</th><th class="n masque-mobile">Possédé</th><th class="n">Déjà pris</th><th class="n">Libre</th></tr></thead><tbody>
-  ${S.articles.map(a => { const p = prisSur(a.id, d1, d2), libre = possede(a.id) - p.total;
-    return `<tr><td><span class="ligne-objet">${img(a)}<span>${esc(a.nom)}${p.qui.length ? `<small>${p.qui.map(x => `${x.q} · ${esc(x.nom)}`).join("<br>")}</small>` : ""}</span></span></td><td class="n masque-mobile">${possede(a.id)}</td><td class="n">${p.total || "—"}</td><td class="n"><b class="${libre <= 0 ? "rouge" : ""}">${Math.max(0, libre)}</b></td></tr>`; }).join("")}
-  </tbody></table></div>
-  <p style="margin-top:14px"><button class="btn plein" data-nouvelle-resa="${d1}|${d2}">${I.jour}Réserver pour ces dates</button></p>
-  <h2>À venir</h2>
-  ${avenir.length ? `<ul class="b-liste">${avenir.map(r => `<li><button class="l" data-resa="${r.id}">${pic(I.jour)}<span><b>${esc(r.nom)}</b><small>${dateCourte(r.debut)}${r.fin !== r.debut ? " → " + dateCourte(r.fin) : ""} · ${r.lignes.reduce((t, l) => t + l[1], 0)} pièces</small></span><span class="statut s-${r.statut.toLowerCase().replace(/[^a-z]/g, "")}">${r.statut}</span></button></li>`).join("")}</ul>` : `<p class="vide">Aucune réservation à venir.</p>`}`;
+  if (entree) { dispoTout = false; resasTout = false; }
+  const avenir = S.reservations.filter(r => r.fin >= aujourdHui() && r.statut !== "Revenue").sort((a, b) => a.debut.localeCompare(b.debut)), n = avenir.length;
+  const suite = (reste, attr, mot) => reste > 0 ? `<li><button class="es-ligne es-suite" ${attr}><span>${reste > 1 ? `Afficher les ${reste} ${mot}` : "Afficher la dernière ligne"}</span><span class="chev">${I.chevron}</span></button></li>` : "";
+  const libres = S.articles.map(a => { const p = prisSur(a.id, d1, d2), tout = possede(a.id), libre = Math.max(0, tout - p.total);
+    return piLigne({ g: img(a), t: esc(a.nom), s: (p.qui.length ? p.qui.map(x => `${x.q} pour ${esc(x.nom)}`).join(", ") : p.total ? `${p.total} déjà pris` : "Rien de pris") + ` · ${tout} en tout`, v: `<span class="${libre ? "" : "pi-rouge"}">${libre}</span><small>${libre > 1 ? "libres" : "libre"}</small>` }); });
+  const venir = avenir.map(r => piLigne({ c: PUCE_RESA[r.statut] || "neutre", t: esc(r.nom), s: `${esc(r.statut)} · ${periodeResa(r.debut, r.fin, true).replace(/^(Du|Le) /, "").replace(" au ", " → ")} · ${r.lignes.reduce((t, l) => t + l[1], 0)} pièces`, a: `data-resa="${r.id}"` }));
+  const vusL = dispoTout || libres.length <= RESA_VUES + 1 ? libres : libres.slice(0, RESA_VUES), vusV = resasTout || venir.length <= RESA_VUES + 1 ? venir : venir.slice(0, RESA_VUES);
+  return `<h1>Réservations</h1><div class="pi-page">
+  ${sousAide(!n ? "Aucune réservation à venir." : `${n === 1 ? "Une réservation" : (EN_LETTRES[n] || n) + " réservations"} à venir.`, `Un client demande « ${esc(V("question") || "Avez-vous 300 chaises le 14 ?")} » Choisissez les dates : la réponse tient compte de ce qui est déjà réservé et de ce qui revient d'ici là.`)}
+  <section class="es-carte pi-carte pi-dispo"><h2>Qu'est-ce qui est libre ?</h2>
+    <form class="dispo-dates" data-form="dispo">
+      <label class="champ">Du<input type="date" name="d1" value="${d1}" min="${aujourdHui()}"></label>
+      <label class="champ">Au<input type="date" name="d2" value="${d2}" min="${aujourdHui()}"></label>
+      <button class="btn">Voir ce qui est libre</button>
+    </form>
+    <ul class="es-lignes">${vusL.join("")}${suite(libres.length - vusL.length, "data-dispo-tout", "autres objets")}</ul>
+  </section>
+  <div class="pi-boutons"><button class="btn plein" data-nouvelle-resa="${d1}|${d2}">${I.jour}Réserver pour ces dates</button></div>
+  <section class="es-carte pi-carte"><h2>À venir</h2>${venir.length ? `<ul class="es-lignes">${vusV.join("")}${suite(venir.length - vusV.length, "data-resas-tout", "autres réservations")}</ul>` : `<p class="es-rien">Aucune réservation à venir.</p>`}</section></div>`;
 }
 function bReservation(id) {
-  const r = S.reservations.find(x => x.id === id); if (!r) return "<p>Réservation introuvable.</p>";
-  return `<p class="pas-imprimer"><button class="lien" data-aller="reservations">← Réservations</button></p>
-  <h1>${esc(r.nom)}</h1><p class="sous">${dateLongue(r.debut)}${r.fin !== r.debut ? " au " + dateLongue(r.fin) : ""} · <span class="statut s-${r.statut.toLowerCase().replace(/[^a-z]/g, "")}">${r.statut}</span></p>
-  <div class="resa-infos"><div><small>Client</small>${clientDe(r.nom) ? `<button class="lien" data-client="${clientDe(r.nom).id}">${esc(clientDe(r.nom).nom)}</button>` : "à indiquer"}</div>${complet() ? `<div><small>Lieu</small>${esc(r.adresse || "à indiquer")}</div><div><small>Contact sur place</small>${esc(r.contact || "à indiquer")}</div>` : ""}</div>
-  <div class="boutons" style="margin-bottom:14px">${aDesPrixLocation() ? `<button class="btn petit plein" data-aller="devisLoc" data-arg="${r.id}">${I.bon}Devis de location</button>` : ""}<button class="btn petit" data-infos-ev="${esc(r.nom)}">Client, dates, lieu</button></div>
-  <div class="defile"><table class="t"><thead><tr><th>Objet</th><th class="n">Réservé</th><th class="n">Libre ces jours-là</th></tr></thead><tbody>
-  ${r.lignes.map(([aid, q]) => { const libre = dispoSur(aid, r.debut, r.fin, r.id); return `<tr><td>${esc(art(aid).nom)}</td><td class="n">${q}</td><td class="n"><b class="${libre < q ? "rouge" : ""}">${libre}</b>${libre < q ? `<br><small class="rouge">il en manque ${q - libre}</small>` : ""}</td></tr>`; }).join("")}
-  </tbody></table></div>
-  ${r.statut === "Confirmée" ? `<p class="sous" style="margin-top:12px">Le jour du départ, cette réservation devient la liste de préparation du dépôt.</p><p><button class="btn" data-annuler-resa="${r.id}">Annuler la réservation</button></p>` : ""}`;
+  const r = S.reservations.find(x => x.id === id); if (!r) return `<h1>Réservation</h1><div class="pi-page"><p class="es-etat">Réservation introuvable.</p></div>`;
+  const cl = clientDe(r.nom), aIndiquer = `<span class="pi-gris">à indiquer</span>`;
+  const infos = [piLigne({ t: "Client", v: cl ? esc(cl.nom) : aIndiquer, a: cl ? `data-client="${cl.id}"` : `data-infos-ev="${esc(r.nom)}"` })]
+    .concat(complet() ? [piLigne({ t: "Lieu", v: r.adresse ? esc(r.adresse) : aIndiquer }), piLigne({ t: "Contact sur place", v: r.contact ? esc(r.contact) : aIndiquer })] : []);
+  const objets = r.lignes.map(([aid, q]) => { const libre = dispoSur(aid, r.debut, r.fin, r.id), a = art(aid);
+    return piLigne({ g: img(a), t: esc(a.nom), s: libre < q ? `<span class="pi-rouge">Il en manque ${q - libre}</span>` : `${libre} ${libre > 1 ? "libres" : "libre"} ces jours-là`, v: q }); });
+  return `<h1>${esc(r.nom)}</h1><div class="pi-page">
+  <p class="es-etat">${periodeResa(r.debut, r.fin)} · <span class="pi-etatl" style="--c:var(--${PUCE_RESA[r.statut] || "neutre"})">${esc(r.statut)}</span></p>
+  ${piCarte("", infos, "", "pi-infos")}
+  <div class="pi-boutons">${aDesPrixLocation() ? `<button class="btn plein" data-aller="devisLoc" data-arg="${r.id}">${I.bon}Devis de location</button>` : ""}<button class="btn" data-infos-ev="${esc(r.nom)}">Client, dates, lieu</button></div>
+  ${piCarte("Matériel réservé", objets)}
+  ${r.statut === "Confirmée" ? `<p class="pi-note">Le jour du départ, cette réservation devient la liste de préparation du dépôt.</p><p class="es-pied"><button class="es-lien" data-annuler-resa="${r.id}">Annuler la réservation</button></p>` : ""}</div>`;
 }
 function feuilleReservation(d1, d2) {
-  const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="trz"><h1 id="trz" style="font-size:26px">Nouvelle réservation</h1>
+  const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="trz" class="pi-f"><h1 id="trz">Nouvelle réservation</h1>
     <label class="champ">Client<select name="client"><option value="">Sans fiche client</option>${(S.clientsLoc || []).map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join("")}</select></label>
     <label class="champ">Événement<input name="nom" maxlength="60" placeholder="Mariage · samedi, Séminaire…" autocomplete="off"></label>
     ${complet() ? `<label class="champ">Lieu ou adresse<input name="adresse" maxlength="120" autocomplete="off"></label><label class="champ">Contact sur place<input name="contact" maxlength="80" placeholder="Nom et téléphone" autocomplete="off"></label>` : ""}
@@ -99,20 +110,27 @@ function feuilleReservation(d1, d2) {
 /* ---------------- Terrain : liste de préparation ---------------- */
 function tPreparer() {
   const l = S.reservations.filter(r => ["Confirmée", "Préparée"].includes(r.statut) && r.debut <= isoJour(Date.now() + 10 * JOUR_MS)).sort((a, b) => a.debut.localeCompare(b.debut));
-  return `<h1>Préparer un départ</h1><p class="sous">Choisissez ${esc(V("leDepart") || "l'événement")}. Scannez chaque ${esc(V("chaque") || "caisse")} en ${V("chaque") === "fût" ? "le" : "la"} chargeant : l'appli dit ce qui manque avant que le camion parte.</p>
-  <ul class="t-liste">${l.map(r => { const tot = r.lignes.reduce((t, x) => t + x[1], 0), ch = r.lignes.reduce((t, x) => t + Math.min(x[1], r.charge[x[0]] || 0), 0);
+  return `<h1>Préparer un départ</h1><p class="sous">Choisissez ${esc(V("leDepart") || "le départ")}.</p>
+  <ul class="t-liste dp">${l.map(r => { const tot = r.lignes.reduce((t, x) => t + x[1], 0), ch = r.lignes.reduce((t, x) => t + Math.min(x[1], r.charge[x[0]] || 0), 0);
     return `<li><button data-prep="${r.id}">${pic(I.camion)}<span><b>${esc(r.nom)}</b><small>${dateCourte(r.debut)} · ${ch} / ${tot} pièces chargées</small></span><span class="n">${Math.round(ch / tot * 100)} %</span></button></li>`; }).join("") || `<li class="vide">Aucun départ prévu dans les 10 jours.</li>`}</ul>`;
 }
 function tPreparation(id) {
   const r = S.reservations.find(x => x.id === id); if (!r) return tPreparer();
-  const reste = r.lignes.filter(([aid, q]) => (r.charge[aid] || 0) < q);
+  const reste = r.lignes.filter(([aid, q]) => (r.charge[aid] || 0) < q), faites = r.lignes.filter(([aid, q]) => (r.charge[aid] || 0) >= q);
+  const tot = r.lignes.reduce((t, x) => t + x[1], 0), ch = r.lignes.reduce((t, x) => t + Math.min(x[1], r.charge[x[0]] || 0), 0);
+  // Une ligne pas commencée n'a ni liseré ni bouton « − » : rien à retirer, rien à signaler.
+  const ligne = ([aid, q]) => { const a = art(aid), c = r.charge[aid] || 0, lot = a.lot || 1, ok = c >= q;
+    return `<li><div class="prep-ligne ${ok ? "ok" : c ? "" : "vide"}">${img(a)}<span><b>${esc(a.nom)}</b><small>${c} / ${q}${lot > 1 ? ` · 1 scan = ${lot}` : ""}</small><i class="barre"><i style="width:${Math.min(100, c / q * 100)}%"></i></i></span>
+      <span class="prep-boutons">${c ? `<button class="btn petit" data-charge="${aid}|${-lot}" aria-label="Retirer ${lot}">−</button>` : ""}${ok ? "" : `<button class="btn petit plein" data-charge="${aid}|${lot}" aria-label="Ajouter ${lot}">+${lot}</button>`}</span></div></li>`; };
+  // Le bilan est un compte, pas une alerte : ce qui manque n'est nommé que lorsqu'il reste peu de lignes, et « Le camion part » le redemande.
+  const bilan = !reste.length ? "Tout est chargé."
+    : `<b>${ch} / ${tot}</b> chargés<i class="barre"><i style="width:${tot ? Math.round(ch / tot * 100) : 0}%"></i></i>${ch && reste.length <= 2 ? `<small>Reste : ${reste.map(([aid, q]) => `${q - (r.charge[aid] || 0)} ${esc(art(aid).nom.toLowerCase())}`).join(", ")}</small>` : ""}`;
   return `<h1>${esc(r.nom)}</h1><p class="sous">Départ ${dateLongue(r.debut)}</p>
-  <button class="t-scan petit" data-act="scanRafale">${I.scan}<b>Scanner en chargeant</b><span>La caméra reste ouverte : un bip par caisse</span></button>
-  <ul class="t-liste prep">${r.lignes.map(([aid, q]) => { const a = art(aid), c = r.charge[aid] || 0, lot = a.lot || 1, ok = c >= q;
-    return `<li><div class="prep-ligne ${ok ? "ok" : ""}">${img(a)}<span><b>${esc(a.nom)}</b><small>${c} / ${q}${lot > 1 ? ` · 1 scan = ${lot}` : ""}</small><i class="barre"><i style="width:${Math.min(100, c / q * 100)}%"></i></i></span>
-      <span class="prep-boutons"><button class="btn petit" data-charge="${aid}|${-lot}" aria-label="Retirer ${lot}">−</button><button class="btn petit plein" data-charge="${aid}|${lot}" aria-label="Ajouter ${lot}">+${lot}</button></span></div></li>`; }).join("")}</ul>
-  <div class="prep-bilan ${reste.length ? "manque" : "complet"}" role="status">${reste.length ? `Il manque encore : ${reste.map(([aid, q]) => `${q - (r.charge[aid] || 0)} ${esc(art(aid).nom.toLowerCase())}`).join(", ")}` : "Tout est chargé."}</div>
-  <div class="t-actions"><button class="t-action sortie" data-act="camionPart">${I.sortie}<span>Le camion part<small>Crée le bon de sortie</small></span></button></div>`;
+  <div class="prep-bilan dp ${reste.length ? "encours" : "complet"}" role="status">${bilan}</div>
+  <button class="t-scan petit" data-act="scanRafale">${I.scan}<b>Scanner en chargeant</b><span>Un bip par ${esc(V("chaque") || "caisse")}</span></button>
+  ${reste.length ? `<ul class="t-liste prep dp">${reste.map(ligne).join("")}</ul>` : ""}
+  ${faites.length ? `<details class="prep-faites dp"><summary>${faites.length} ligne${faites.length > 1 ? "s" : ""} complète${faites.length > 1 ? "s" : ""}</summary><ul class="t-liste prep dp">${faites.map(ligne).join("")}</ul></details>` : ""}
+  <div class="t-actions prep-depart"><button class="t-action sortie" data-act="camionPart">${I.sortie}<span>Le camion part<small>Crée le bon de sortie</small></span></button></div>`;
 }
 function charger1(r, aid, delta) {
   const q = (r.lignes.find(l => l[0] === aid) || [0, 0])[1];
@@ -133,7 +151,9 @@ function camionPart() {
   const lignes = r.lignes.map(([aid]) => [aid, Math.min(r.charge[aid] || 0, Math.max(0, stock(aid)))]).filter(l => l[1] > 0);
   const manque = r.lignes.filter(([aid, q]) => (r.charge[aid] || 0) < q);
   if (!lignes.length) return toast("Rien n'est chargé.");
-  if (manque.length && !confirm("Il manque encore des objets. Le camion part quand même ?")) return;
+  // C'est ici, au moment de partir, que l'appli nomme ce qui manque.
+  const detail = manque.slice(0, 4).map(([aid, q]) => `${q - (r.charge[aid] || 0)} ${art(aid).nom.toLowerCase()}`).join(", ") + (manque.length > 4 ? ` et ${manque.length - 4} autre${manque.length > 5 ? "s" : ""}` : "");
+  if (manque.length && !confirm(`Il manque encore : ${detail}. Le camion part quand même ?`)) return;
   lignes.forEach(([aid, q]) => mouvement(aid, "Prêt", q, { evenement: r.nom }));
   r.statut = "Partie";
   aller("bon", creerBon({ type: "sortie", evenement: r.nom, date: Date.now(), lignes }));
@@ -152,12 +172,12 @@ function creerBon(b) {
 const bonDe = arg => typeof arg === "string" ? S.bons.find(b => b.id === arg) : arg;
 function feuilleSignature(bid) {
   const b = S.bons.find(x => x.id === bid);
-  const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="tsg"><h1 id="tsg" style="font-size:26px">Signature du client</h1>
+  const f = ouvrirFeuille(`<div class="f-geste" role="dialog" aria-modal="true" aria-labelledby="tsg"><h1 id="tsg" style="font-size:26px">Signature du client</h1>
     <p class="sous">${b.type === "sortie" ? "Le client confirme avoir reçu le matériel ci-dessus." : "Le client confirme le retour et les manquants indiqués."}</p>
     <label class="champ">Nom du signataire<input name="nom" maxlength="50" autocomplete="off"></label>
     <canvas class="signature" width="600" height="220" aria-label="Zone de signature"></canvas>
-    <div class="valider"><button class="btn" data-effacer>Effacer</button><button class="btn plein" data-ok>Valider la signature</button></div>
-    <p><button class="lien" data-x>Annuler</button></p></div>`);
+    <p class="dp-effacer"><button class="btn petit" data-effacer>Effacer</button></p>
+    <div class="valider colle"><button class="btn" data-x>Annuler</button><button class="btn plein" data-ok>Valider la signature</button></div></div>`);
   f.onclick = null;
   const cv = f.querySelector("canvas"), cx = cv.getContext("2d");
   cx.lineWidth = 3.2; cx.lineCap = "round"; cx.strokeStyle = "#101418";
@@ -201,7 +221,7 @@ function ajouterPhotos(bid, fichiers) {
 let tour = null;
 function connecterRole(role) {
   const u = S.equipe.find(x => x.role === role && x.actif);
-  session = { uid: u.id, nom: u.nom, profil: u.role, admin: !!u.admin }; verrouille = false; installateur = false; pile = [];
+  session = { uid: u.id, nom: u.nom, profil: u.role, admin: !!u.admin }; verrouille = false; installateur = false; pile = []; tableauEntier = false;
 }
 const ETAPES = [
   { t: "Ousmane, magasinier, prépare le mariage de samedi. La réservation est devenue sa liste de préparation.", f: () => { connecterRole("terrain"); aller("preparation", "R-001"); } },
@@ -217,7 +237,7 @@ const ETAPES = [
       aller("bon", creerBon({ type: "retour", evenement: r.nom, date: Date.now(), lignes: rendus, manquants: [["ART-0001", 6]] })); } },
   { t: "La facture de casse est prête à envoyer : plus de dispute sur la caution.", f: () => aller("facture", S.reservations.find(x => x.id === "R-001").nom) },
   { t: "Karim, au bureau, reçoit un appel : « Vous avez 350 chaises dans quinze jours ? » Il choisit la date et voit tout de suite combien sont libres, en tenant compte des autres réservations.", f: () => { connecterRole("bureau"); const d = isoJour(Date.now() + 15 * JOUR_MS); rechercheDispo = { d1: d, d2: d }; aller("reservations"); } },
-  { t: "Awa, la gérante, pilote : valeur du parc et sa tendance, part louée, pertes et ce qu'elle récupère.", f: () => { connecterRole("direction"); aller("accueil", null, true); } },
+  { get t() { return presentation() === "essentiel" ? "Awa, la gérante, ouvre son accueil : la valeur de son matériel, puis ce qui demande son accord ou un regard aujourd'hui. Les courbes et l'équipe sont à un geste." : "Awa, la gérante, pilote : valeur du parc et sa tendance, part louée, pertes et ce qu'elle récupère."; }, f: () => { connecterRole("direction"); aller("accueil", null, true); } },
   ESPACE && { t: "Tout se règle pour votre entreprise : taille de l'équipe, écrans, blocs, droits de chacun. C'est nous qui le faisons, d'après votre devis.", f: () => { session = null; installateur = true; vueE = { nom: "reglages", arg: null }; entree = true; rendre(); window.scrollTo(0, 0); } },
 ];
 function demarrerTour() {
@@ -255,6 +275,8 @@ function brancherPlus() {
   $$("[data-facture]").forEach(b => b.onclick = () => aller("facture", b.dataset.facture));
   $$("[data-partager-facture]").forEach(b => b.onclick = () => partagerTexte(texteFacture(b.dataset.partagerFacture)));
   const fd = $('[data-form="dispo"]'); if (fd) fd.onsubmit = e => { e.preventDefault(); const d1 = fd.d1.value, d2 = fd.d2.value < fd.d1.value ? fd.d1.value : fd.d2.value; rechercheDispo = { d1, d2 }; rendre(); };
+  $$("[data-dispo-tout]").forEach(b => b.onclick = () => { dispoTout = true; rendre(); });
+  $$("[data-resas-tout]").forEach(b => b.onclick = () => { resasTout = true; rendre(); });
 }
 async function partagerTexte(t) {
   if (navigator.share) { try { await navigator.share({ title: "Document", text: t }); } catch (e) { /* partage annulé */ } }

@@ -69,7 +69,7 @@ function boutonTransfert(a, petit) {
 function blocLieuxFiche(a) {
   if (!lieuxActifs() || !reparti(a)) return "";
   const p = parLieu(a.id);
-  return `<h2>Où il se trouve</h2><table class="t"><tbody><tr><td>${esc(nomDepot())}</td><td class="n">${Math.max(0, stockIci(a.id))}</td></tr>
+  return `<h2>Où il se trouve</h2><table class="t st-lignes"><tbody><tr><td>${esc(nomDepot())}</td><td class="n">${Math.max(0, stockIci(a.id))}</td></tr>
   ${S.lieux.filter(x => (p[x.id] || 0) > 0 || dotation(x.id, a.id) > 0).map(x => { const d = dotation(x.id, a.id), q = Math.max(0, p[x.id] || 0); const pl = lotProche(a, x.id); return `<tr><td>${esc(x.nom)}${d ? `<br><small>dotation ${d}${q < d ? ` · il en manque ${d - q}` : ""}</small>` : ""}${pl ? `<br><small>${texteLot(pl)}</small>` : ""}</td><td class="n">${q}</td></tr>`; }).join("")}</tbody></table>`;
 }
 
@@ -185,21 +185,24 @@ function feuilleDotation(lieu) {
 function vLieux() {
   if (!lieuxActifs()) return vDepot();
   const mien = monLieu();
-  return `<h1>${esc(motLieux())}</h1><p class="sous">Ce que contient chaque lieu, et ce qui manque à sa dotation. Le reste est au ${esc(nomDepot().toLowerCase())}.</p>
-  <ul class="t-liste">${S.lieux.map(x => { const l = articlesDuLieu(x.id), m = manquesLieu(x.id).length, pieces = l.reduce((t, a) => t + Math.max(0, stockLieu(a.id, x.id)), 0);
+  return `<h1>${esc(motLieux())}</h1>${sousAide("Le contenu de chaque lieu, et ce qui lui manque.", `Ce que contient chaque lieu, et ce qui manque à sa dotation. Le reste est au ${esc(nomDepot().toLowerCase())}.`)}
+  <ul class="b-liste st-liste st-lieux">${S.lieux.map(x => { const l = articlesDuLieu(x.id), m = manquesLieu(x.id).length, pieces = l.reduce((t, a) => t + Math.max(0, stockLieu(a.id, x.id)), 0);
     const np = perimesLieu(x.id).length;
-    return `<li><button data-lieu="${x.id}">${pic(pictoLieu())}<span><b>${esc(x.nom)}</b><small>${pieces} pièce${pieces > 1 ? "s" : ""} · ${m ? `${m} objet${m > 1 ? "s" : ""} sous la dotation` : Object.keys(x.dot || {}).length ? "dotation complète" : "pas de dotation"}${np ? ` · ${np} date${np > 1 ? "s" : ""} limite${np > 1 ? "s" : ""} proche${np > 1 ? "s" : ""}` : ""}</small>${x.id === mien ? `<small class="zone-tour">Votre lieu habituel</small>` : ""}</span><span class="etat ${np ? "zero" : m ? "bas" : ""}"><i></i></span></button></li>`; }).join("")}</ul>`;
+    return `<li><button class="l" data-lieu="${x.id}">${pic(pictoLieu())}<span><b>${esc(x.nom)}</b><small>${pieces} pièce${pieces > 1 ? "s" : ""} · ${m ? `<span class="etat bas"><i></i>${m} objet${m > 1 ? "s" : ""} sous la dotation</span>` : Object.keys(x.dot || {}).length ? "dotation complète" : "pas de dotation"}${np ? ` · <span class="etat zero"><i></i>${np} date${np > 1 ? "s" : ""} limite${np > 1 ? "s" : ""} proche${np > 1 ? "s" : ""}</span>` : ""}</small>${x.id === mien ? `<small>Votre lieu habituel</small>` : ""}</span><span class="chev">${I.chevron}</span></button></li>`; }).join("")}</ul>`;
 }
 function vLieu(id) {
   const L = lieuDe(id); if (!L) return vLieux();
   const l = articlesDuLieu(id), m = manquesLieu(id), mien = monLieu() === id, np = perimesLieu(id).length;
-  return `<h1>${esc(L.nom)}</h1><p class="sous">${m.length ? `${m.length} objet${m.length > 1 ? "s" : ""} sous la dotation.` : Object.keys(L.dot || {}).length ? "La dotation est complète." : "Pas de dotation réglée pour ce lieu."}${np ? ` ${np} objet${np > 1 ? "s" : ""} à date limite proche ou dépassée.` : ""}${mien ? " C'est votre lieu habituel : vos sorties en partent." : ""}</p>
-  <div class="t-actions">${m.length ? `<button class="t-action retour conseil" data-reappro="${id}">${I.retour}<span>Réapprovisionner<small>${m.length} objet${m.length > 1 ? "s" : ""} à compléter depuis le ${esc(nomDepot().toLowerCase())}</small></span></button>` : ""}
-    <button class="t-action compter" data-zone="${id}">${I.compter}<span>Compter ce lieu<small>Je vérifie ce qu'il contient</small></span></button></div>
-  <ul class="t-liste" style="margin-top:14px">${l.map(a => { const q = Math.max(0, stockLieu(a.id, id)), d = dotation(id, a.id);
+  // Une phrase d'état, le geste conseillé s'il manque quelque chose, les autres gestes en raccourcis ronds, puis le contenu en lignes.
+  const etatLieu = [m.length ? `${m.length} objet${m.length > 1 ? "s" : ""} sous la dotation` : Object.keys(L.dot || {}).length ? "La dotation est complète" : "Pas de dotation réglée", np ? `${np} date${np > 1 ? "s" : ""} limite${np > 1 ? "s" : ""} proche${np > 1 ? "s" : ""}` : "", mien ? "votre lieu habituel" : ""].filter(Boolean).join(" · ");
+  const ronds = [{ a: `data-zone="${id}"`, i: I.compter, t: "Compter ce lieu" }].concat(droit("stock") ? [{ a: `data-dotation="${id}"`, i: I.reglages, t: "Régler la dotation" }] : [], [{ a: `data-aller="ficheLieu" data-arg="${id}"`, i: I.imprimer, t: "Fiche à imprimer" }], mien ? [] : [{ a: `data-mon-lieu="${id}"`, i: pictoLieu(), t: "C'est mon lieu habituel" }]);
+  return `<h1>${esc(L.nom)}</h1><p class="es-etat st-etat">${etatLieu}.</p>
+  ${m.length ? `<div class="t-actions"><button class="t-action retour conseil" data-reappro="${id}">${I.retour}<span>Réapprovisionner<small>${m.length} objet${m.length > 1 ? "s" : ""} à compléter depuis le ${esc(nomDepot().toLowerCase())}</small></span></button></div>` : ""}
+  ${stRonds(ronds)}
+  <div class="${l.length > ST_LIGNES + 2 ? "st-replie" : ""}" data-st-replie><ul class="b-liste st-liste st-contenu">${l.map(a => { const q = Math.max(0, stockLieu(a.id, id)), d = dotation(id, a.id);
     const p = lotProche(a, id);
-    return `<li><button data-objet="${a.id}">${img(a)}<span><b>${esc(a.nom)}</b><small>${d ? `dotation ${d}${q < d ? ` · il en manque ${d - q}` : ""}` : "hors dotation"}</small>${p ? `<small class="lot-lieu ${p.c}">${texteLot(p)}</small>` : ""}</span><span class="n">${q}</span></button></li>`; }).join("") || `<li class="vide">Ce lieu est vide. Scannez un objet au ${esc(nomDepot().toLowerCase())}, puis « ${esc(S.gesteLieu || "Déplacer vers un autre lieu")} ».</li>`}</ul>
-  <div class="boutons" style="margin-top:14px">${mien ? "" : `<button class="btn petit" data-mon-lieu="${id}">C'est mon lieu habituel</button>`}${droit("stock") ? `<button class="btn petit" data-dotation="${id}">Régler la dotation</button>` : ""}<button class="btn petit" data-aller="ficheLieu" data-arg="${id}">Fiche à imprimer</button></div>`;
+    return `<li><button class="l" data-objet="${a.id}">${img(a)}<span><b>${esc(a.nom)}</b><small>${d ? `dotation ${d}${q < d ? ` · <span class="etat bas"><i></i>il en manque ${d - q}</span>` : ""}` : "hors dotation"}</small>${p ? `<small class="lot-lieu ${p.c}">${texteLot(p)}</small>` : ""}</span><span class="n">${q}</span></button></li>`; }).join("") || `<li class="vide">Ce lieu est vide. Scannez un objet au ${esc(nomDepot().toLowerCase())}, puis « ${esc(S.gesteLieu || "Déplacer vers un autre lieu")} ».</li>`}</ul>
+  ${l.length > ST_LIGNES + 2 ? stSuite(l.length - ST_LIGNES, "autres objets") : ""}</div>`;
 }
 // Fiche d'un lieu, à imprimer et à laisser dans le véhicule : présent, dotation, manquant
 function vFicheLieu(id) {

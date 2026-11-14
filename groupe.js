@@ -95,7 +95,10 @@ function dansEtab(id, f) {
 // Ouvrir un autre établissement : celui qu'on quitte est rangé, l'autre devient l'état courant.
 function changerEtab(id) {
   const g = groupe(); if (!g || id === g.actif || !g.etats[id]) return false;
+  const avant = S;
   g.etats[g.actif] = S; S = g.etats[id]; g.etats[id] = null; g.actif = id;
+  // La personne qui passe d'un établissement à l'autre garde sa photo.
+  if (session) { const de = avant.equipe.find(x => x.id === session.uid), vers = S.equipe.find(x => x.id === session.uid); if (de && vers && de.nom === vers.nom) { if (de.photo) vers.photo = de.photo; else delete vers.photo; } }
   persisterGroupe(); sauver();
   if (session) { const u = S.equipe.find(x => x.id === session.uid); if (u) session.nom = u.nom; }
   if (typeof garderPhotos === "function") garderPhotos();
@@ -349,12 +352,12 @@ const pourcent = x => (Math.round(x * 1000) / 10).toLocaleString("fr-FR") + " %"
 function lignesComparaison(c0) {
   return [
     { k: "valeur", t: "Valeur du stock", f: argentCourt },
-    { k: "sorties", t: `${c0.mots.sorties} en ${periode} j`, f: argentCourt },
-    { k: "pertes", t: `Cassé ou perdu en ${periode} j`, f: argentCourt, mauvais: true },
+    { k: "sorties", t: `${c0.mots.sorties} en ${periode} jours`, f: argentCourt },
+    { k: "pertes", t: `Cassé ou perdu en ${periode} jours`, f: argentCourt, mauvais: true },
     { k: "taux", t: "Part perdue de ce qui sort", f: pourcent, mauvais: true },
-    { k: "dort", t: "Stock qui dort depuis 30 j", f: argentCourt, mauvais: true },
-    { k: "recu", t: `Reçu des fournisseurs en ${periode} j`, f: argentCourt },
-    { k: "ecarts", t: `Écarts d'inventaire en ${periode} j`, f: argentCourt, mauvais: true },
+    { k: "dort", t: "Stock qui dort depuis 30 jours", f: argentCourt, mauvais: true },
+    { k: "recu", t: `Reçu des fournisseurs en ${periode} jours`, f: argentCourt },
+    { k: "ecarts", t: `Écarts d'inventaire en ${periode} jours`, f: argentCourt, mauvais: true },
     { k: "aCommander", t: "Références à commander", f: n => n.toLocaleString("fr-FR"), mauvais: true },
     { k: "dehors", t: c0.mots.chez, f: n => n.toLocaleString("fr-FR") },
     { k: "retard", t: c0.mots.retard, f: n => n.toLocaleString("fr-FR"), mauvais: true },
@@ -435,35 +438,36 @@ function vGroupe() {
     const r = remarquesEtab(e, l), v = (t, val, cl) => `<div${cl ? ` class="${cl}"` : ""}><dt>${t}</dt><dd>${val}</dd></div>`;
     return `<article class="etab-carte${e.id === g.actif ? " ouvert" : ""}">
       <header><div><h3>${esc(nomEtab(e.id))}</h3><small>${[e.enseigne ? "Enseigne " + esc(e.enseigne) : "", esc(e.ville)].filter(Boolean).join(" · ")}</small></div>${e.id === g.actif ? `<span class="statut">ouvert</span>` : ""}</header>
-      <dl class="etab-voyants">${v("Valeur du stock", argent(Math.round(e.c.valeur)), "large")}${v("À commander", e.c.aCommander, e.c.aCommander ? "attention" : "")}${v(esc(e.c.mots.chez), e.c.dehors)}${v(`Pertes en ${periode} j`, argent(Math.round(e.c.pertes)), e.c.pertes ? "alerte" : "")}${v(esc(e.c.mots.retard), e.c.retard, e.c.retard ? "alerte" : "")}</dl>
+      <dl class="etab-voyants">${v("Valeur du stock", argent(Math.round(e.c.valeur)), "large")}${v("À commander", e.c.aCommander, e.c.aCommander ? "attention" : "")}${v(esc(e.c.mots.chez), e.c.dehors)}${v(`Pertes en ${periode} jours`, argent(Math.round(e.c.pertes)), e.c.pertes ? "alerte" : "")}${v(esc(e.c.mots.retard), e.c.retard, e.c.retard ? "alerte" : "")}</dl>
       ${r.length ? `<ul class="etab-remarques">${r.map(([c, t]) => `<li class="${c}"><i></i>${esc(t)}</li>`).join("")}</ul>` : `<p class="etab-rien">Rien ne ressort par rapport aux autres.</p>`}
-      <button class="btn plein" data-etab-entrer="${e.id}">Entrer dans ${esc(g.mot.ce)}</button></article>`;
+      <button class="btn" data-etab-entrer="${e.id}">Entrer dans ${esc(g.mot.ce)}</button></article>`;
   };
   const fleche = k => triGroupe.k === k ? (triGroupe.sens < 0 ? " ▼" : " ▲") : "";
   window.largeurDemi = window.innerWidth >= 1100;
   const graphes = gGroupeValeur(l) + gGroupePertes(l) + gGroupeSorties(l);
   window.largeurDemi = false;
   const tr = g.transferts.slice().reverse().slice(0, 6);
-  return `<h1>${esc(g.nom)}</h1>
-  <p class="sous">${g.etabs.length} ${esc(g.mot.p)}${enseignes > 1 ? `, ${enseignes} enseignes` : ""}. Chacun a son stock et son équipe ; vous seul voyez tout. Entrez dans ${esc(g.mot.un)} pour y travailler, « Groupe » vous ramène ici.</p>
-  <div class="w-entete"><h2 class="g-titre">Le groupe en ce moment</h2><div class="segments" role="group" aria-label="Période">${[7, 30, 90].map(n => `<button data-periode="${n}" aria-pressed="${periode === n}">${n} j</button>`).join("")}</div></div>
-  <div class="voyants g-totaux">
-    ${total("var(--depot)", argentCourt(tot("valeur")), "Valeur du stock", g.mot.tous)}
-    ${total("var(--attention)", tot("aCommander"), "À commander", "références sous le seuil")}
-    ${total("var(--alerte)", argentCourt(tot("pertes")), "Cassé ou perdu", `en ${periode} jours`)}
-    ${total("var(--alerte)", tot("retard"), "En retard", esc(l[0].c.mots.retard.toLowerCase()))}
+  // Un seul chiffre en grand (la valeur du stock du groupe), puis trois lignes ; le reste de l'écran montre la même chose qu'avant.
+  return `<h1>${esc(g.nom)}</h1><div class="pi-groupe">
+  ${sousAide(`${g.etabs.length} ${esc(g.mot.p)}${enseignes > 1 ? `, ${enseignes} enseignes` : ""}. Vous seul voyez tout.`, `Chacun a son stock et son équipe. Entrez dans ${esc(g.mot.un)} pour y travailler, « Groupe » vous ramène ici.`)}
+  <div class="g-tete">
+    <div class="es-hero"><small>Valeur du stock, ${esc(g.mot.tous)}</small><b class="es-chiffre">${argent(Math.round(tot("valeur")))}</b></div>
+    <div class="segments" role="group" aria-label="Période">${[7, 30, 90].map(n => `<button data-periode="${n}" aria-pressed="${periode === n}">${n} jours</button>`).join("")}</div>
+    ${piCarte("", [piLigne({ c: "attention", t: "À commander", s: "Références sous le seuil", v: tot("aCommander") }),
+      piLigne({ c: "alerte", t: "Cassé ou perdu", s: `En ${periode} jours`, v: argent(Math.round(tot("pertes"))) }),
+      piLigne({ c: "alerte", t: "En retard", s: esc(l[0].c.mots.retard), v: tot("retard") })], "", "g-totaux")}
   </div>
   <h2>${esc(g.mot.tous.replace(/^l/, "L"))}, côte à côte</h2>
   <div class="etabs n${l.length}">${ordre.map(carte).join("")}</div>
   <h2>Comparer</h2>
-  <p class="sous">Touchez une ligne pour classer ${esc(g.mot.tous)} sur ce chiffre. Le point rouge signale le chiffre le plus élevé quand c'est un mauvais signe.</p>
+  ${sousAide(`Touchez une ligne pour classer ${esc(g.mot.tous)}.`, "Le point rouge signale le chiffre le plus élevé quand c'est un mauvais signe.")}
   <div class="defile"><table class="t comparer"><thead><tr><th scope="col">Sur ${periode} jours</th>${ordre.map(e => `<th scope="col" class="n">${esc(e.court)}</th>`).join("")}</tr></thead><tbody>
   ${lignes.map(x => { const p = pire(x); return `<tr><th scope="row"><button data-etab-tri="${x.k}" aria-pressed="${triGroupe.k === x.k}">${esc(x.t)}${fleche(x.k)}</button></th>${ordre.map(e => `<td class="n${p !== null && e.c[x.k] === p ? " pire" : ""}">${p !== null && e.c[x.k] === p ? `<i aria-label="le plus élevé"></i>` : ""}${x.f(e.c[x.k])}</td>`).join("")}</tr>`; }).join("")}</tbody></table></div>
   <h2>Courbes comparées</h2>
   <div class="graphes g-graphes">${graphes}</div>
   <h2>${esc(g.mot.entre)}</h2>
-  <p class="sous">Un responsable envoie un objet ou une quantité depuis la fiche de l'objet. L'autre équipe confirme à l'arrivée. Chaque journal garde sa ligne.</p>
-  ${tr.length ? `<ul class="b-liste g-transferts">${tr.map(t => `<li><button class="l" data-etab-tr="${t.id}"><span><b>${t.qte} × ${esc(t.nom)}</b><small>${esc(courtEtab(t.de))} → ${esc(courtEtab(t.vers))} · ${quand(t.date)} · ${esc(t.qui)}</small></span>${statutTransfert(t)}</button></li>`).join("")}</ul>` : `<p class="vide">Aucun envoi pour l'instant.</p>`}`;
+  ${sousAide("Un envoi part de la fiche de l'objet.", "Un responsable envoie un objet ou une quantité depuis la fiche de l'objet. L'autre équipe confirme à l'arrivée. Chaque journal garde sa ligne.")}
+  ${tr.length ? `<ul class="b-liste g-transferts">${tr.map(t => `<li><button class="l" data-etab-tr="${t.id}"><span><b>${t.qte} × ${esc(t.nom)}</b><small>${esc(courtEtab(t.de))} → ${esc(courtEtab(t.vers))} · ${quand(t.date)} · ${esc(t.qui)}</small></span>${statutTransfert(t)}</button></li>`).join("")}</ul>` : `<p class="es-rien">Aucun envoi pour l'instant.</p>`}</div>`;
 }
 
 /* ---------------- Ce qui s'affiche ailleurs, pour la direction d'un groupe seulement ---------------- */
@@ -476,7 +480,7 @@ function bandeauEtab() {
 const navGroupe = courant => voitGroupe() ? `<button data-racine="groupe" ${courant("groupe")}>${I.grille}<span>Groupe</span></button>` : "";
 function feuilleEtabs() {
   const g = groupe(); if (!g || !voitGroupe()) return;
-  const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="tce2"><h1 id="tce2" style="font-size:26px">Où voulez-vous aller ?</h1>
+  const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="tce2" class="pi-f"><h1 id="tce2">Où voulez-vous aller ?</h1>
     <p class="sous">Les menus ouvrent toujours ${esc(g.mot.affiche)} sous l'en-tête.</p>
     <div class="etab-choix"><button data-vers="groupe">${I.grille}<span><b>Le groupe</b><small>${esc(g.mot.tous.replace(/^l/, "L"))}, côte à côte</small></span></button>
     ${g.etabs.map(e => `<button data-vers="${e.id}" ${e.id === g.actif ? 'aria-current="true"' : ""}>${I.materiel}<span><b>${esc(nomEtab(e.id))}</b><small>${[e.enseigne ? "Enseigne " + esc(e.enseigne) : "", esc(e.ville), e.id === g.actif ? "ouvert" : ""].filter(Boolean).join(" · ")}</small></span></button>`).join("")}</div>

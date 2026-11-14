@@ -34,7 +34,7 @@ const evSansClient = () => [...new Set(dehors().map(d => d.evenement))].filter(e
 
 function feuilleEvenement(ev) {
   const i = infoEv(ev), cl = S.clientsLoc || [];
-  const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="tev"><h1 id="tev" style="font-size:24px">${esc(ev)}</h1>
+  const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="tev" class="pi-f"><h1 id="tev">${esc(ev)}</h1>
     <p class="sous">Ces informations s'impriment sur les bons, les factures et les exports. Le dépôt n'a rien à remplir.</p>
     <label class="champ">${esc(motClients().replace(/s$/, ""))}<select name="client"><option value="">Pas encore indiqué</option>${cl.map(c => `<option value="${c.id}" ${c.id === i.client ? "selected" : ""}>${esc(c.nom)}</option>`).join("")}<option value="__nouveau">Nouveau…</option></select></label>
     <div data-nouveau hidden><label class="champ">Nom<input name="cnom" maxlength="60" autocomplete="off"></label><label class="champ">Téléphone<input name="ctel" type="tel" maxlength="20" autocomplete="off"></label></div>
@@ -63,31 +63,35 @@ function feuilleEvenement(ev) {
 
 /* ---------------- Clients ---------------- */
 function bClients() {
-  const l = (S.clientsLoc || []).slice().sort((a, b) => a.nom.localeCompare(b.nom));
-  return `<h1>${motClients()}</h1><p class="sous">${complet() ? `Coordonnées, caution, ${motImps()} et casse de chacun. Tout s'imprime sur les bons et les factures.` : "Nom, téléphone et caution. La caution s'affiche sur la facture de casse."}</p>
-  <div class="clients">${l.map(c => {
+  const l = (S.clientsLoc || []).slice().sort((a, b) => a.nom.localeCompare(b.nom)), n = l.length;
+  const un = motClients().replace(/s$/, "").toLowerCase(), sans = complet() ? evSansClient() : [];
+  const lignes = l.map(c => {
     const evs = evenementsDe(c), casse = evs.reduce((t, ev) => t + casseDe(ev), 0);
-    return `<button class="client" data-client="${c.id}"><span class="avatar">${esc(initiales(c.nom))}</span><span><b>${esc(c.nom)}</b><small>${[c.tel, evs.length + " " + (evs.length > 1 ? motImps() : motImp())].filter(Boolean).map(esc).join(" · ")}</small></span>
-      <span class="client-chiffres">${c.caution ? `<small>Caution</small><b>${argent(c.caution)}</b>` : ""}${casse ? `<small class="rouge">Casse ${argent(casse)}</small>` : ""}</span></button>`;
-  }).join("") || `<p class="vide">Aucun client enregistré.</p>`}</div>
-  <p style="margin-top:12px"><button class="btn plein petit" data-act="nouveauClient">Ajouter</button>${complet() ? ` <button class="btn petit" data-act="exportClients">${I.excel}Exporter en Excel</button>` : ""}</p>
-  ${complet() && evSansClient().length ? `<h2>À compléter</h2><p class="sous">Du matériel est dehors sans client indiqué : les bons et les factures seraient incomplets.</p><div class="boutons">${evSansClient().map(ev => `<button class="btn petit" data-infos-ev="${esc(ev)}">${esc(ev)}</button>`).join("")}</div>` : ""}`;
+    return piLigne({ g: `<span class="avatar">${esc(initiales(c.nom))}</span>`, t: esc(c.nom), s: [c.tel, evs.length + " " + (evs.length > 1 ? motImps() : motImp()), casse ? "casse " + argent(casse) : ""].filter(Boolean).map(esc).join(" · "),
+      v: c.caution ? `${argent(c.caution)}<small>de caution</small>` : "", a: `data-client="${c.id}"` });
+  });
+  return `<h1>${motClients()}</h1><div class="pi-page">
+  ${sousAide(!n ? `Aucun ${un} enregistré.` : n === 1 ? `Un ${un} enregistré.` : `${EN_LETTRES[n] || n} ${motClients().toLowerCase()} enregistrés.`, complet() ? `Coordonnées, caution, ${motImps()} et casse de chacun. Tout s'imprime sur les bons et les factures.` : "Nom, téléphone et caution de chacun. La caution s'affiche sur la facture de casse.")}
+  ${n ? piCarte("", lignes) : ""}
+  <div class="pi-boutons"><button class="btn plein" data-act="nouveauClient">Ajouter un ${un}</button>${complet() && n ? `<button class="btn" data-act="exportClients">${I.excel}Exporter en Excel</button>` : ""}</div>
+  ${sans.length ? piCarte("À compléter : du matériel est dehors sans client indiqué", sans.map(ev => piLigne({ c: "attention", t: esc(ev), s: "Client à indiquer", a: `data-infos-ev="${esc(ev)}"` }))) : ""}</div>`;
 }
 function vClient(id) {
   const c = (S.clientsLoc || []).find(x => x.id === id); if (!c) return bClients();
   const evs = evenementsDe(c).map(ev => ({ ev, i: infoEv(ev), casse: casseDe(ev), bons: S.bons.filter(b => b.evenement === ev) })).sort((a, b) => (b.i.debut || "").localeCompare(a.i.debut || ""));
   const casse = evs.reduce((t, x) => t + x.casse, 0);
-  return `<div class="fiche-client"><span class="avatar grand">${esc(initiales(c.nom))}</span><div><h1>${esc(c.nom)}</h1><p class="sous">${[c.type, c.tel, c.email, c.adresse].filter(Boolean).map(esc).join(" · ") || "Coordonnées à compléter"}</p></div></div>
-  <div class="boutons">${c.tel ? `<a class="btn petit" href="tel:${esc(c.tel.replace(/\s/g, ""))}">Appeler</a><a class="btn petit" href="https://wa.me/${esc(c.tel.replace(/\D/g, "").replace(/^0/, "33"))}" target="_blank" rel="noopener">WhatsApp</a>` : ""}<button class="btn petit" data-modifier-client="${c.id}">Modifier</button></div>
-  <div class="trio" style="margin-top:14px"><div><small>Événements</small><b>${evs.length}</b></div><div><small>Caution versée</small><b>${c.caution ? argent(c.caution) : "aucune"}</b></div><div><small>Casse refacturable</small><b style="${casse ? "color:var(--alerte)" : ""}">${argent(casse)}</b></div></div>
-  ${c.notes ? `<p class="msg" style="margin-top:12px">${esc(c.notes)}</p>` : ""}
-  <h2>Ses ${motImps()}</h2>
-  ${evs.length ? `<ul class="b-liste">${evs.map(x => `<li><div class="l ev-ligne"><span><b>${esc(x.ev)}</b><small>${[x.i.debut ? dateDoc(x.i.debut) : "", x.i.adresse].filter(Boolean).map(esc).join(" · ")}</small></span>
-    <span class="boutons">${x.bons.map(b => `<button class="btn petit" data-aller="bon" data-arg="${b.id}">${b.type === "sortie" ? "Sortie" : "Retour"}${b.signature ? " ✓" : ""}</button>`).join("")}${x.casse ? `<button class="btn petit" data-facture="${esc(x.ev)}">Casse ${argentCourt(x.casse)}</button>` : ""}${x.i.resa && aDesPrixLocation() ? `<button class="btn petit" data-aller="devisLoc" data-arg="${x.i.resa.id}">Devis</button>` : ""}</span></div></li>`).join("")}</ul>` : `<p class="vide">Aucun événement pour l'instant.</p>`}`;
+  const chiffres = [piLigne({ t: esc(motImps().replace(/^./, x => x.toUpperCase())), v: evs.length }), piLigne({ t: "Caution versée", v: c.caution ? argent(c.caution) : `<span class="pi-gris">aucune</span>` }),
+    piLigne({ c: casse ? "alerte" : "", t: "Casse refacturable", v: argent(casse) })].concat(c.notes ? [piLigne({ t: "Notes", s: esc(c.notes) })] : []);
+  const doc = (attr, t) => `<button class="btn petit" ${attr}>${t}</button>`;
+  return `<div class="pi-page"><div class="fiche-client pi-tete"><span class="avatar grand">${esc(initiales(c.nom))}</span><div><h1>${esc(c.nom)}</h1><p class="es-etat">${[c.type, c.tel, c.email, c.adresse].filter(Boolean).map(esc).join(" · ") || "Coordonnées à compléter"}</p></div></div>
+  ${piRonds([c.tel && [I.telephone, "Appeler", `href="tel:${esc(c.tel.replace(/\s/g, ""))}"`, "a"], c.tel && [I.partager, "WhatsApp", `href="https://wa.me/${esc(c.tel.replace(/\D/g, "").replace(/^0/, "33"))}" target="_blank" rel="noopener"`, "a"], [I.crayon, "Modifier", `data-modifier-client="${c.id}"`]])}
+  ${piCarte("", chiffres)}
+  <section class="es-carte pi-carte"><h2>Ses ${motImps()}</h2>${evs.length ? `<ul class="es-lignes">${evs.map(x => { const docs = x.bons.map(b => doc(`data-aller="bon" data-arg="${b.id}"`, (b.type === "sortie" ? "Bon de sortie" : "Bon de retour") + (b.signature ? ", signé" : ""))).concat(x.casse ? [doc(`data-facture="${esc(x.ev)}"`, "Casse " + argentCourt(x.casse))] : [], x.i.resa && aDesPrixLocation() ? [doc(`data-aller="devisLoc" data-arg="${x.i.resa.id}"`, "Devis")] : []);
+    return `<li><div class="es-ligne"><span class="pi-txt">${esc(x.ev)}<small>${[x.i.debut ? dateDoc(x.i.debut) : "", x.i.adresse].filter(Boolean).map(esc).join(" · ")}</small></span></div>${docs.length ? `<div class="pi-ev-docs">${docs.join("")}</div>` : ""}</li>`; }).join("")}</ul>` : `<p class="es-rien">Rien pour l'instant.</p>`}</section></div>`;
 }
 function feuilleClient(id) {
   const c = id ? (S.clientsLoc || []).find(x => x.id === id) : {}, cp = complet();
-  const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="tcl"><h1 id="tcl" style="font-size:26px">${id ? "Modifier" : "Nouveau client"}</h1>
+  const f = ouvrirFeuille(`<div role="dialog" aria-modal="true" aria-labelledby="tcl" class="pi-f"><h1 id="tcl">${id ? "Modifier" : "Nouveau client"}</h1>
     <label class="champ">Nom<input name="nom" maxlength="60" autocomplete="off" value="${esc(c.nom || "")}"></label>
     ${cp ? `<label class="champ">Type<select name="type">${["Particulier", "Entreprise", "Association", "Collectivité"].map(t => `<option ${c.type === t ? "selected" : ""}>${t}</option>`).join("")}</select></label>` : ""}
     <label class="champ">Téléphone<input name="tel" type="tel" maxlength="20" autocomplete="off" value="${esc(c.tel || "")}"></label>
@@ -146,7 +150,7 @@ function tBon(arg) {
     ${table}${tableManq}${conditions}
     ${b.photos.length ? `<div class="photos">${b.photos.map(p => `<img src="${p}" alt="Photo jointe au bon">`).join("")}</div>` : ""}
     ${blocSignatures(`Pour ${esc((S.entreprise || {}).nom || "le loueur")}<br><b>${esc(loueur)}</b>`, `Pour le client${b.signature ? `<img class="sig" src="${b.signature}" alt="Signature du client"><b>${esc(b.signataire)}</b> · ${quand(b.signeLe)}` : ""}`)}</div>
-  <div class="t-actions pas-imprimer">
+  <div class="t-actions pas-imprimer bon-gestes">
     ${b.signature ? "" : `<button class="btn plein" data-signer="${b.id}">Faire signer le client</button>`}
     ${cp && !c && session.profil !== "terrain" ? `<button class="btn" data-infos-ev="${esc(b.evenement)}">Ajouter le client, les dates et le lieu</button>` : ""}
     ${b.photos.length < 4 ? `<label class="btn">Ajouter des photos<input type="file" accept="image/*" capture="environment" multiple data-photos="${b.id}" class="cache"></label>` : ""}

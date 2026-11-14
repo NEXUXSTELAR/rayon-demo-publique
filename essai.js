@@ -266,7 +266,9 @@ function brancherEssai() {
     co.classList.add("en-essai");
     const sous = co.querySelector(".c-tete .sous"); if (sous) sous.textContent = "Touchez un compte de démonstration ci-dessous pour entrer, sans rien taper.";
     // La visite guidée et le choix d'un métier montrent la démo générale : ils laissent la place au retour vers elle
-    const tour = pied.querySelector('[data-act="tour"]'); if (tour) tour.remove();
+    const tour = co.querySelector('[data-act="tour"]'); if (tour) tour.remove();
+    // Pendant un essai, les options de la démonstration (retour à la démo générale, remise à zéro) restent dépliées.
+    const options = co.querySelector("details.c-options"); if (options) { options.open = true; const s = options.querySelector("summary small"); if (s) s.textContent = "Votre démo d'essai"; }
     const metiers = pied.querySelector('[data-act="metiers"]'); if (metiers && metiers.closest("p")) metiers.closest("p").remove();
     ligne.innerHTML = `Démo d'essai : <b>${esc(p.entreprise)}</b> · <button type="button" class="lien" data-essai="quitter">Revenir à la démo générale</button>`;
     const zero = pied.querySelector('[data-act="reinit"]');

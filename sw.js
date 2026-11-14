@@ -1,10 +1,10 @@
 // Garde l'appli utilisable sans réseau, dans un dépôt ou un hangar.
-const VERSION = "rayon-v42";
-const FICHIERS = ["./", "index.html", "styles.css", "data.js", "metiers.js", "graphes.js", "plus.js", "outils.js", "config.js", "blocs.js", "controles.js", "lieux.js", "groupe.js", "articles.js", "visites.js", "xlsx.js", "documents.js", "etiquettes.js", "espace.js", "liste.js", "modele_liste_articles.xlsx", "app.js", "icone.svg", "manifest.webmanifest", "lib/jsQR.js", "lib/qrcode.js", "polices/atkinson-hyperlegible-next-latin.woff2", "polices/atkinson-hyperlegible-next-latin-ext.woff2", "polices/atkinson-hyperlegible-mono-latin.woff2", "polices/atkinson-hyperlegible-mono-latin-ext.woff2", "img/chaise.webp", "img/table.webp", "img/assiette.webp", "img/verre.webp", "img/nappe.webp", "img/enceinte.webp", "img/groupe.webp", "img/rallonge.webp", "img/housse.webp"];
+const VERSION = "rayon-v47";
+const FICHIERS = ["./", "index.html", "styles.css", "data.js", "metiers.js", "graphes.js", "plus.js", "outils.js", "config.js", "blocs.js", "controles.js", "lieux.js", "groupe.js", "articles.js", "equipe.js", "visites.js", "xlsx.js", "documents.js", "etiquettes.js", "espace.js", "liste.js", "modele_liste_articles.xlsx", "app.js", "icone.svg", "manifest.webmanifest", "lib/jsQR.js", "lib/qrcode.js", "polices/atkinson-hyperlegible-next-latin.woff2", "polices/atkinson-hyperlegible-next-latin-ext.woff2", "polices/atkinson-hyperlegible-mono-latin.woff2", "polices/atkinson-hyperlegible-mono-latin-ext.woff2", "img/chaise.webp", "img/table.webp", "img/assiette.webp", "img/verre.webp", "img/nappe.webp", "img/enceinte.webp", "img/groupe.webp", "img/rallonge.webp", "img/housse.webp"];
 
 // En plus, sans bloquer l'installation si un fichier manque : les icônes, la page d'essai.
 // Chaque fichier est ajouté à part ; un échec est ignoré, et le fichier sera mis en cache à sa première utilisation en ligne.
-const EN_PLUS = ["essai.js", "icone-192.png", "icone-512.png"];
+const EN_PLUS = ["essai.js", "icone-192.png", "icone-512.png", "icone-masque-512.png"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(VERSION)
